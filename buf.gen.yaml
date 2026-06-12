@@ -1,0 +1,9 @@
+# Generates from the vendored angzarr-project protos using THIS checkout's
+# generator — the self-check that the CLI emits valid wiring from the
+# canonical declarations (`just generate-check`). Output is disposable;
+# client repos own their own buf.gen.yaml and pin the CLI via go.mod.
+version: v2
+plugins:
+  - local: ["go", "run", ".", "codegen", "go"]
+    out: _gen
+    opt: paths=source_relative

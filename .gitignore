@@ -5,3 +5,6 @@
 
 # Coverage
 coverage.out
+
+# generate-check disposable output
+/_gen/

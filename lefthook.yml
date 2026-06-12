@@ -1,0 +1,31 @@
+# Lefthook configuration
+# https://github.com/evilmartians/lefthook
+#
+# Setup: lefthook install
+# Bypass: git commit --no-verify (or LEFTHOOK=0 git commit)
+
+# Plant the in-submodule pre-commit guard in .git/modules/<name>/hooks/
+# after every checkout/merge — an editor inside the submodule must not
+# sneak a commit past us (detached HEAD = silent data loss).
+post-checkout:
+  commands:
+    install-submodule-hooks:
+      run: just install-submodule-hooks
+
+post-merge:
+  commands:
+    install-submodule-hooks:
+      run: just install-submodule-hooks
+
+pre-commit:
+  parallel: false
+  commands:
+    # Block the parent commit if any submodule has uncommitted edits or
+    # untracked files. Pointer-only bumps still pass.
+    check-submodules-clean:
+      run: just check-submodules-clean
+    fmt:
+      run: just fmt-fix
+      stage_fixed: true
+    test:
+      run: just test
