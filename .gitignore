@@ -1,0 +1,7 @@
+# Binaries
+/angzarr
+/angzarr-cli
+/dist/
+
+# Coverage
+coverage.out
