@@ -2,8 +2,10 @@ package codegen_test
 
 // These tests build descriptor sets entirely in memory — including the
 // angzarr options file itself — proving the generator reads declarations
-// dynamically with no compiled options bindings, and that every
-// generation-time validation fires language-independently.
+// dynamically with no compiled options bindings, that it matches the
+// component/command/event extensions BY NUMBER (so the declaration package is
+// irrelevant), and that every generation-time validation fires
+// language-independently.
 
 import (
 	"strings"
@@ -21,10 +23,14 @@ import (
 	"github.com/angzarr-io/angzarr-cli/codegen"
 )
 
+// optionsPath is the import path the test proto declares; the options package
+// is parameterized to prove number-based (package-agnostic) matching.
 const (
-	optionsPath = "angzarr_client/proto/angzarr/v1/options.proto"
-	optionsPkg  = "angzarr_client.proto.angzarr.v1"
+	optionsPath = "io/angzarr/v1/options.proto"
+	ioPkg       = "io.angzarr.v1"
+	legacyPkg   = "angzarr_client.proto.angzarr.v1"
 	testPath    = "validation_test.proto"
+	testPkg     = "validation.test"
 )
 
 func str(s string) *string { return &s }
@@ -34,22 +40,43 @@ func enumValue(name string, number int32) *descriptorpb.EnumValueDescriptorProto
 	return &descriptorpb.EnumValueDescriptorProto{Name: str(name), Number: i32(number)}
 }
 
-func stringFieldProto(name string, number int32) *descriptorpb.FieldDescriptorProto {
+func field(name string, number int32, typ descriptorpb.FieldDescriptorProto_Type) *descriptorpb.FieldDescriptorProto {
 	return &descriptorpb.FieldDescriptorProto{
 		Name:     str(name),
 		Number:   i32(number),
 		Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-		Type:     descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+		Type:     typ.Enum(),
 		JsonName: str(name),
 	}
 }
 
-// optionsFDP reconstructs options.proto as a descriptor: the ComponentKind
-// enum, the three option messages, and the four extensions.
-func optionsFDP() *descriptorpb.FileDescriptorProto {
+func repeatedField(name string, number int32, typ descriptorpb.FieldDescriptorProto_Type) *descriptorpb.FieldDescriptorProto {
+	f := field(name, number, typ)
+	f.Label = descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum()
+	return f
+}
+
+func enumField(name string, number int32, enumPkg string) *descriptorpb.FieldDescriptorProto {
+	f := field(name, number, descriptorpb.FieldDescriptorProto_TYPE_ENUM)
+	f.TypeName = str("." + enumPkg + ".ComponentKind")
+	return f
+}
+
+func messageField(name string, number int32, msgPkg, msgName string) *descriptorpb.FieldDescriptorProto {
+	f := field(name, number, descriptorpb.FieldDescriptorProto_TYPE_MESSAGE)
+	f.TypeName = str("." + msgPkg + "." + msgName)
+	return f
+}
+
+// optionsFDP reconstructs options.proto as a descriptor under pkg: the
+// ComponentKind enum, the three option messages, and the three
+// MessageOptions extensions (component=50100, command=50104, event=50105).
+func optionsFDP(pkg string) *descriptorpb.FileDescriptorProto {
+	str_ := descriptorpb.FieldDescriptorProto_TYPE_STRING
+	bool_ := descriptorpb.FieldDescriptorProto_TYPE_BOOL
 	return &descriptorpb.FileDescriptorProto{
 		Name:       str(optionsPath),
-		Package:    str(optionsPkg),
+		Package:    str(pkg),
 		Syntax:     str("proto3"),
 		Dependency: []string{"google/protobuf/descriptor.proto"},
 		// protogen requires go_package on every request file, whatever
@@ -69,83 +96,71 @@ func optionsFDP() *descriptorpb.FileDescriptorProto {
 			{
 				Name: str("ComponentOptions"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{
-						Name:     str("kind"),
-						Number:   i32(1),
-						Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-						Type:     descriptorpb.FieldDescriptorProto_TYPE_ENUM.Enum(),
-						TypeName: str("." + optionsPkg + ".ComponentKind"),
-						JsonName: str("kind"),
-					},
-					stringFieldProto("input_domain", 2),
-					stringFieldProto("output_domain", 3),
-					stringFieldProto("state", 4),
+					enumField("kind", 1, pkg),
+					field("input_domain", 2, str_),
+					field("output_domain", 3, str_),
+					field("name", 4, str_),
+					repeatedField("compensates", 5, str_),
 				},
 			},
-			{Name: str("RejectedOptions"), Field: []*descriptorpb.FieldDescriptorProto{stringFieldProto("command", 1)}},
-			{Name: str("ReactsOptions"), Field: []*descriptorpb.FieldDescriptorProto{stringFieldProto("domain", 1)}},
+			{
+				Name: str("CommandOptions"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					field("component", 1, str_),
+					repeatedField("emits", 2, str_),
+				},
+			},
+			{
+				Name: str("EventConsumer"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					field("component", 1, str_),
+					field("domain", 2, str_),
+					field("applies", 3, bool_),
+				},
+			},
 		},
 		Extension: []*descriptorpb.FieldDescriptorProto{
-			{
-				Name:     str("component"),
-				Number:   i32(50100),
-				Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
-				TypeName: str("." + optionsPkg + ".ComponentOptions"),
-				Extendee: str(".google.protobuf.ServiceOptions"),
-				JsonName: str("component"),
-			},
-			{
-				Name:     str("rejected"),
-				Number:   i32(50101),
-				Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
-				TypeName: str("." + optionsPkg + ".RejectedOptions"),
-				Extendee: str(".google.protobuf.MethodOptions"),
-				JsonName: str("rejected"),
-			},
-			{
-				Name:     str("applies"),
-				Number:   i32(50102),
-				Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-				Type:     descriptorpb.FieldDescriptorProto_TYPE_BOOL.Enum(),
-				Extendee: str(".google.protobuf.MethodOptions"),
-				JsonName: str("applies"),
-			},
-			{
-				Name:     str("reacts"),
-				Number:   i32(50103),
-				Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
-				TypeName: str("." + optionsPkg + ".ReactsOptions"),
-				Extendee: str(".google.protobuf.MethodOptions"),
-				JsonName: str("reacts"),
-			},
+			func() *descriptorpb.FieldDescriptorProto {
+				f := messageField("component", 50100, pkg, "ComponentOptions")
+				f.Extendee = str(".google.protobuf.MessageOptions")
+				return f
+			}(),
+			func() *descriptorpb.FieldDescriptorProto {
+				f := messageField("command", 50104, pkg, "CommandOptions")
+				f.Extendee = str(".google.protobuf.MessageOptions")
+				return f
+			}(),
+			func() *descriptorpb.FieldDescriptorProto {
+				f := messageField("event", 50105, pkg, "EventConsumer")
+				f.Label = descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum()
+				f.Extendee = str(".google.protobuf.MessageOptions")
+				return f
+			}(),
 		},
 	}
 }
 
 // optionTypes materializes the extensions and option messages so tests can
-// stamp declarations onto services — through the same dynamic machinery
-// the generator itself uses.
+// stamp declarations onto messages — through the same dynamic machinery the
+// generator itself uses.
 type optionTypes struct {
-	component, rejected, applies, reacts protoreflect.ExtensionType
-	componentMsg, rejectedMsg, reactsMsg protoreflect.MessageType
+	component, command, event          protoreflect.ExtensionType
+	componentMsg, commandMsg, eventMsg protoreflect.MessageType
 }
 
-func buildOptionTypes(t *testing.T) optionTypes {
+func buildOptionTypes(t *testing.T, pkg string) optionTypes {
 	t.Helper()
 	files := &protoregistry.Files{}
 	if err := files.RegisterFile(descriptorpb.File_google_protobuf_descriptor_proto); err != nil {
 		t.Fatalf("register descriptor.proto: %v", err)
 	}
-	fd, err := protodesc.NewFile(optionsFDP(), files)
+	fd, err := protodesc.NewFile(optionsFDP(pkg), files)
 	if err != nil {
 		t.Fatalf("build options.proto descriptor: %v", err)
 	}
 	exts := fd.Extensions()
 	msgs := fd.Messages()
-	find := func(name string) protoreflect.ExtensionType {
+	findExt := func(name string) protoreflect.ExtensionType {
 		for i := 0; i < exts.Len(); i++ {
 			if string(exts.Get(i).Name()) == name {
 				return dynamicpb.NewExtensionType(exts.Get(i))
@@ -154,7 +169,7 @@ func buildOptionTypes(t *testing.T) optionTypes {
 		t.Fatalf("extension %q not found", name)
 		return nil
 	}
-	msg := func(name string) protoreflect.MessageType {
+	findMsg := func(name string) protoreflect.MessageType {
 		d := msgs.ByName(protoreflect.Name(name))
 		if d == nil {
 			t.Fatalf("message %q not found", name)
@@ -162,88 +177,122 @@ func buildOptionTypes(t *testing.T) optionTypes {
 		return dynamicpb.NewMessageType(d)
 	}
 	return optionTypes{
-		component:    find("component"),
-		rejected:     find("rejected"),
-		applies:      find("applies"),
-		reacts:       find("reacts"),
-		componentMsg: msg("ComponentOptions"),
-		rejectedMsg:  msg("RejectedOptions"),
-		reactsMsg:    msg("ReactsOptions"),
+		component:    findExt("component"),
+		command:      findExt("command"),
+		event:        findExt("event"),
+		componentMsg: findMsg("ComponentOptions"),
+		commandMsg:   findMsg("CommandOptions"),
+		eventMsg:     findMsg("EventConsumer"),
 	}
 }
 
-func (o optionTypes) componentDecl(t *testing.T, kind int32, inputDomain, outputDomain, state string) *descriptorpb.ServiceOptions {
-	t.Helper()
-	decl := o.componentMsg.New()
-	fields := decl.Descriptor().Fields()
-	decl.Set(fields.ByName("kind"), protoreflect.ValueOfEnum(protoreflect.EnumNumber(kind)))
+// componentDecl stamps an (io.angzarr.v1.component) onto a fresh MessageOptions.
+func (o optionTypes) componentDecl(kind int32, inputDomain, outputDomain, name string, compensates ...string) *descriptorpb.MessageOptions {
+	sub := o.componentMsg.New()
+	f := sub.Descriptor().Fields()
+	sub.Set(f.ByName("kind"), protoreflect.ValueOfEnum(protoreflect.EnumNumber(kind)))
 	if inputDomain != "" {
-		decl.Set(fields.ByName("input_domain"), protoreflect.ValueOfString(inputDomain))
+		sub.Set(f.ByName("input_domain"), protoreflect.ValueOfString(inputDomain))
 	}
 	if outputDomain != "" {
-		decl.Set(fields.ByName("output_domain"), protoreflect.ValueOfString(outputDomain))
+		sub.Set(f.ByName("output_domain"), protoreflect.ValueOfString(outputDomain))
 	}
-	if state != "" {
-		decl.Set(fields.ByName("state"), protoreflect.ValueOfString(state))
+	if name != "" {
+		sub.Set(f.ByName("name"), protoreflect.ValueOfString(name))
 	}
-	opts := &descriptorpb.ServiceOptions{}
-	proto.SetExtension(opts, o.component, decl.Interface())
+	if len(compensates) > 0 {
+		list := sub.Mutable(f.ByName("compensates")).List()
+		for _, c := range compensates {
+			list.Append(protoreflect.ValueOfString(c))
+		}
+	}
+	opts := &descriptorpb.MessageOptions{}
+	opts.ProtoReflect().Set(o.component.TypeDescriptor(), protoreflect.ValueOfMessage(sub))
 	return opts
 }
 
-func (o optionTypes) reactsRPC(t *testing.T, name, domain string) *descriptorpb.MethodDescriptorProto {
-	t.Helper()
-	m := handlerRPC(name)
-	decl := o.reactsMsg.New()
-	decl.Set(decl.Descriptor().Fields().ByName("domain"), protoreflect.ValueOfString(domain))
-	m.Options = &descriptorpb.MethodOptions{}
-	proto.SetExtension(m.Options, o.reacts, decl.Interface())
-	return m
-}
-
-func (o optionTypes) applierRPC(name string) *descriptorpb.MethodDescriptorProto {
-	m := handlerRPC(name)
-	m.Options = &descriptorpb.MethodOptions{}
-	proto.SetExtension(m.Options, o.applies, true)
-	return m
-}
-
-func handlerRPC(name string) *descriptorpb.MethodDescriptorProto {
-	return &descriptorpb.MethodDescriptorProto{
-		Name:       str(name),
-		InputType:  str(".validation.test.Cmd"),
-		OutputType: str(".validation.test.Evt"),
+// commandDecl stamps an (io.angzarr.v1.command) onto a fresh MessageOptions.
+func (o optionTypes) commandDecl(component string, emits ...string) *descriptorpb.MessageOptions {
+	sub := o.commandMsg.New()
+	f := sub.Descriptor().Fields()
+	sub.Set(f.ByName("component"), protoreflect.ValueOfString(component))
+	if len(emits) > 0 {
+		list := sub.Mutable(f.ByName("emits")).List()
+		for _, e := range emits {
+			list.Append(protoreflect.ValueOfString(e))
+		}
 	}
+	opts := &descriptorpb.MessageOptions{}
+	opts.ProtoReflect().Set(o.command.TypeDescriptor(), protoreflect.ValueOfMessage(sub))
+	return opts
 }
 
-// generate runs the real generator over a one-service descriptor set.
-func generate(t *testing.T, lang, serviceName string, svcOpts *descriptorpb.ServiceOptions, methods ...*descriptorpb.MethodDescriptorProto) (*pluginpb.CodeGeneratorResponse, error) {
+// eventEntry is one (io.angzarr.v1.event) consumer entry.
+type eventEntry struct {
+	component string
+	domain    string
+	applies   bool
+}
+
+// eventDecl stamps one or more repeated (io.angzarr.v1.event) entries onto a
+// fresh MessageOptions.
+func (o optionTypes) eventDecl(entries ...eventEntry) *descriptorpb.MessageOptions {
+	opts := &descriptorpb.MessageOptions{}
+	list := opts.ProtoReflect().Mutable(o.event.TypeDescriptor()).List()
+	for _, e := range entries {
+		ev := o.eventMsg.New()
+		f := ev.Descriptor().Fields()
+		ev.Set(f.ByName("component"), protoreflect.ValueOfString(e.component))
+		if e.domain != "" {
+			ev.Set(f.ByName("domain"), protoreflect.ValueOfString(e.domain))
+		}
+		if e.applies {
+			ev.Set(f.ByName("applies"), protoreflect.ValueOfBool(true))
+		}
+		list.Append(protoreflect.ValueOfMessage(ev))
+	}
+	return opts
+}
+
+// declMsg is a test message and its angzarr declaration option.
+type declMsg struct {
+	name string
+	opts *descriptorpb.MessageOptions
+}
+
+func fq(name string) string { return testPkg + "." + name }
+
+// buildGen assembles a protogen.Plugin over a descriptor set carrying the
+// given declared messages, with options.proto declared under optionsPkg.
+func buildGen(t *testing.T, optionsPkg string, msgs ...declMsg) (*protogen.Plugin, error) {
 	t.Helper()
+	var messageTypes []*descriptorpb.DescriptorProto
+	for _, m := range msgs {
+		messageTypes = append(messageTypes, &descriptorpb.DescriptorProto{Name: str(m.name), Options: m.opts})
+	}
 	testFile := &descriptorpb.FileDescriptorProto{
-		Name:       str(testPath),
-		Package:    str("validation.test"),
-		Syntax:     str("proto3"),
-		Dependency: []string{optionsPath},
-		Options:    &descriptorpb.FileOptions{GoPackage: str("example.test/validation;validationtest")},
-		MessageType: []*descriptorpb.DescriptorProto{
-			{Name: str("State")},
-			{Name: str("Cmd")},
-			{Name: str("Evt")},
-		},
-		Service: []*descriptorpb.ServiceDescriptorProto{{
-			Name:    str(serviceName),
-			Options: svcOpts,
-			Method:  methods,
-		}},
+		Name:        str(testPath),
+		Package:     str(testPkg),
+		Syntax:      str("proto3"),
+		Dependency:  []string{optionsPath},
+		Options:     &descriptorpb.FileOptions{GoPackage: str("example.test/validation;validationtest")},
+		MessageType: messageTypes,
 	}
-	gen, err := protogen.Options{}.New(&pluginpb.CodeGeneratorRequest{
+	return protogen.Options{}.New(&pluginpb.CodeGeneratorRequest{
 		FileToGenerate: []string{testPath},
 		ProtoFile: []*descriptorpb.FileDescriptorProto{
 			protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
-			optionsFDP(),
+			optionsFDP(optionsPkg),
 			testFile,
 		},
 	})
+}
+
+// generate runs the real generator over a descriptor set carrying the given
+// declared messages, with options.proto declared under optionsPkg.
+func generate(t *testing.T, lang, optionsPkg string, msgs ...declMsg) (*pluginpb.CodeGeneratorResponse, error) {
+	t.Helper()
+	gen, err := buildGen(t, optionsPkg, msgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -253,24 +302,96 @@ func generate(t *testing.T, lang, serviceName string, svcOpts *descriptorpb.Serv
 	return gen.Response(), nil
 }
 
+// scaffold runs the scaffold generator, skipping stubs for which exists
+// reports true.
+func scaffold(t *testing.T, lang, optionsPkg string, exists func(string) bool, msgs ...declMsg) (*pluginpb.CodeGeneratorResponse, error) {
+	t.Helper()
+	gen, err := buildGen(t, optionsPkg, msgs...)
+	if err != nil {
+		return nil, err
+	}
+	if err := codegen.GenerateScaffold(gen, lang, exists); err != nil {
+		return nil, err
+	}
+	return gen.Response(), nil
+}
+
+// orderAggregate is the canonical valid aggregate: a CreateOrder command
+// (typed-emit of OrderCreated) and an OrderCreated applier, anchored on State.
+func orderAggregate(o optionTypes) []declMsg {
+	return []declMsg{
+		{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		{"CreateOrder", o.commandDecl(fq("State"), fq("OrderCreated"))},
+		{"OrderCreated", o.eventDecl(eventEntry{component: fq("State")})},
+	}
+}
+
 func TestGenerate_ValidAggregate_EmitsStrictSeam(t *testing.T) {
-	o := buildOptionTypes(t)
-	resp, err := generate(t, "go", "OrderAggregate",
-		o.componentDecl(t, 1, "orders", "", "validation.test.State"),
-		handlerRPC("HandleCreate"), o.applierRPC("ApplyCreated"))
+	// Both packages must produce the same seam: matching is by extension
+	// number, so the declaration package is irrelevant (the KEY FIX).
+	for _, pkg := range []string{ioPkg, legacyPkg} {
+		t.Run(pkg, func(t *testing.T) {
+			o := buildOptionTypes(t, pkg)
+			resp, err := generate(t, "go", pkg, orderAggregate(o)...)
+			if err != nil {
+				t.Fatalf("Generate: %v", err)
+			}
+			if len(resp.File) != 1 {
+				t.Fatalf("generated %d files, want 1", len(resp.File))
+			}
+			content := resp.File[0].GetContent()
+			for _, want := range []string{
+				"type OrderAggregateHandler interface",
+				"CreateOrder(cmd *",    // command handler, method = command msg name
+				"([]*",                 // typed-emit: returns the emitted event slice
+				"OrderCreated(state *", // applier, method = event msg name
+				"func NewOrderAggregateDispatch(",
+				`OnCommand("validation.test.CreateOrder"`,
+				`Apply("validation.test.OrderCreated"`,
+				"func RegisterOrderAggregate(",
+			} {
+				if !strings.Contains(content, want) {
+					t.Errorf("generated file missing %q", want)
+				}
+			}
+		})
+	}
+}
+
+func TestGenerate_RawEventBookEscapeHatch(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	// A command with no declared emits returns the raw EventBook.
+	resp, err := generate(t, "go", ioPkg,
+		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
+	)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
-	if len(resp.File) != 1 {
-		t.Fatalf("generated %d files, want 1", len(resp.File))
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, "EventBook, error)") {
+		t.Errorf("escape-hatch handler should return a raw EventBook; got:\n%s", content)
+	}
+	if strings.Contains(content, "Pack(ev)") {
+		t.Errorf("escape-hatch handler must not build an EventBook from typed events")
+	}
+}
+
+func TestGenerate_ValidSaga_EmitsMethodRegister(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "go", ioPkg,
+		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
 	}
 	content := resp.File[0].GetContent()
 	for _, want := range []string{
-		"type OrderAggregateHandler interface",
-		"HandleCreate(cmd *",
-		"ApplyCreated(state *",
-		"func NewOrderAggregateDispatch(",
-		`OnCommand("validation.test.Cmd"`,
+		"type OrderSagaHandler interface",
+		"func NewOrderSagaDispatch(",
+		"r.RegisterSaga(NewOrderSagaDispatch(h))", // saga registers via a method
+		`OnEvent("validation.test.OrderPlaced"`,
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("generated file missing %q", want)
@@ -278,29 +399,95 @@ func TestGenerate_ValidAggregate_EmitsStrictSeam(t *testing.T) {
 	}
 }
 
+func TestGenerateScaffold_EmitsOwnedStub(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	// exists never fires: a fresh project gets its stub.
+	resp, err := scaffold(t, "go", ioPkg, func(string) bool { return false }, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("GenerateScaffold: %v", err)
+	}
+	if len(resp.File) != 1 {
+		t.Fatalf("scaffolded %d files, want 1", len(resp.File))
+	}
+	f := resp.File[0]
+	if !strings.HasSuffix(f.GetName(), "_angzarr_handler.go") {
+		t.Errorf("scaffold file name = %q, want *_angzarr_handler.go suffix", f.GetName())
+	}
+	content := f.GetContent()
+	for _, want := range []string{
+		"Regeneration will NOT overwrite this file",
+		"type OrderAggregate struct{}",
+		"var _ OrderAggregateHandler = OrderAggregate{}",
+		"func (OrderAggregate) CreateOrder(",
+		`panic("TODO: implement OrderAggregate.CreateOrder")`,
+		"func (OrderAggregate) OrderCreated(", // applier stub
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("scaffold missing %q", want)
+		}
+	}
+	// An applier returns nothing, so its stub is a TODO comment, not a panic.
+	if strings.Contains(content, `panic("TODO: implement OrderAggregate.OrderCreated")`) {
+		t.Errorf("no-result applier stub should not panic")
+	}
+}
+
+func TestGenerateScaffold_SkipsExistingStub(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	// exists always fires: the developer-owned stub is preserved (nothing emitted).
+	resp, err := scaffold(t, "go", ioPkg, func(string) bool { return true }, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("GenerateScaffold: %v", err)
+	}
+	if len(resp.File) != 0 {
+		t.Fatalf("scaffolded %d files over an existing stub, want 0", len(resp.File))
+	}
+}
+
 func TestGenerate_Validations_FailGeneration(t *testing.T) {
-	o := buildOptionTypes(t)
+	o := buildOptionTypes(t, ioPkg)
 	tests := []struct {
-		name    string
-		opts    *descriptorpb.ServiceOptions
-		methods []*descriptorpb.MethodDescriptorProto
+		name string
+		msgs []declMsg
 	}{
-		{"aggregate without state", o.componentDecl(t, 1, "orders", "", ""),
-			[]*descriptorpb.MethodDescriptorProto{handlerRPC("HandleCreate")}},
-		{"saga without target", o.componentDecl(t, 2, "orders", "", ""),
-			[]*descriptorpb.MethodDescriptorProto{handlerRPC("HandleEvt")}},
-		{"process manager without output domain", o.componentDecl(t, 3, "", "", "validation.test.State"),
-			[]*descriptorpb.MethodDescriptorProto{o.reactsRPC(t, "HandleEvt", "orders")}},
-		{"process manager handler without reacts", o.componentDecl(t, 3, "", "fulfillment", "validation.test.State"),
-			[]*descriptorpb.MethodDescriptorProto{handlerRPC("HandleEvt")}},
-		{"projector without domains", o.componentDecl(t, 4, "", "", "validation.test.State"),
-			[]*descriptorpb.MethodDescriptorProto{handlerRPC("HandleEvt")}},
-		{"unresolvable state", o.componentDecl(t, 1, "orders", "", "validation.test.Nope"),
-			[]*descriptorpb.MethodDescriptorProto{handlerRPC("HandleCreate")}},
+		{"aggregate without input domain", []declMsg{
+			{"State", o.componentDecl(1, "", "", "")},
+			{"CreateOrder", o.commandDecl(fq("State"))},
+		}},
+		{"saga without output domain", []declMsg{
+			{"OrderSaga", o.componentDecl(2, "orders", "", "")},
+		}},
+		{"process manager without output domain", []declMsg{
+			{"PMState", o.componentDecl(3, "", "", "")},
+		}},
+		{"process manager trigger without domain", []declMsg{
+			{"PMState", o.componentDecl(3, "", "fulfillment", "")},
+			{"Trig", o.eventDecl(eventEntry{component: fq("PMState")})},
+		}},
+		{"projector without domains", []declMsg{
+			{"ProjState", o.componentDecl(4, "", "", "")},
+		}},
+		{"command to unknown component", []declMsg{
+			{"CreateOrder", o.commandDecl(fq("Nope"))},
+		}},
+		{"command emits unresolvable", []declMsg{
+			{"State", o.componentDecl(1, "orders", "", "")},
+			{"CreateOrder", o.commandDecl(fq("State"), fq("Nope"))},
+		}},
+		{"event to unknown component", []declMsg{
+			{"OrderCreated", o.eventDecl(eventEntry{component: fq("Nope")})},
+		}},
+		{"compensates unresolvable", []declMsg{
+			{"State", o.componentDecl(1, "orders", "", "", fq("Nope"))},
+		}},
+		{"command handled by non-aggregate", []declMsg{
+			{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+			{"CreateOrder", o.commandDecl(fq("OrderSaga"))},
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := generate(t, "go", "X", tt.opts, tt.methods...); err == nil {
+			if _, err := generate(t, "go", ioPkg, tt.msgs...); err == nil {
 				t.Fatal("expected generation to fail")
 			}
 		})
@@ -308,9 +495,8 @@ func TestGenerate_Validations_FailGeneration(t *testing.T) {
 }
 
 func TestGenerate_UnknownLanguage_Fails(t *testing.T) {
-	o := buildOptionTypes(t)
-	_, err := generate(t, "cobol", "OrderAggregate",
-		o.componentDecl(t, 1, "orders", "", "validation.test.State"), handlerRPC("HandleCreate"))
+	o := buildOptionTypes(t, ioPkg)
+	_, err := generate(t, "cobol", ioPkg, orderAggregate(o)...)
 	if err == nil || !strings.Contains(err.Error(), "no emitter") {
 		t.Fatalf("err = %v, want no-emitter failure", err)
 	}
@@ -322,3 +508,7 @@ func TestLanguages_ListsGo(t *testing.T) {
 		t.Fatalf("Languages() = %v, want [go ...]", langs)
 	}
 }
+
+// ensure proto import is used (the option-message round-trips rely on it via
+// the generator; this keeps the import live for any future direct assertion).
+var _ = proto.Marshal
