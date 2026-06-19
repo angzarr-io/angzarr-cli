@@ -346,6 +346,7 @@ func TestGenerate_ValidAggregate_EmitsStrictSeam(t *testing.T) {
 				"([]*",                      // typed-emit: returns the emitted event slice
 				"ApplyOrderCreated(state *", // applier, method = Apply + event msg name
 				"func NewOrderAggregateDispatch(",
+				"rebuilder.WithSnapshot(", // snapshot loader for stateful kinds
 				`OnCommand("validation.test.CreateOrder"`,
 				`Apply("validation.test.OrderCreated"`,
 				"func RegisterOrderAggregate(",

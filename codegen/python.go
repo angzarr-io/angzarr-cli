@@ -323,6 +323,7 @@ func emitPyAggregateDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service
 	c := s.Component
 	g.P("def new_", snake(s.GoName), "_dispatch(handler: ", s.GoName, "Handler) -> ", pyAz, ".AggregateDispatch:")
 	g.P("    rebuilder = ", pyAz, ".Rebuilder(lambda: ", refs.ref(s.State), "())")
+	g.P("    rebuilder.with_snapshot(lambda state, payload: state.ParseFromString(payload.value))")
 	for _, a := range s.Appliers {
 		fn := "_apply_" + snake(a.MethodName)
 		g.P("    def ", fn, "(state, payload):")
@@ -359,6 +360,7 @@ func emitPyPMDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service) {
 	c := s.Component
 	g.P("def new_", snake(s.GoName), "_dispatch(handler: ", s.GoName, "Handler) -> ", pyAz, ".ProcessManagerDispatch:")
 	g.P("    rebuilder = ", pyAz, ".Rebuilder(lambda: ", refs.ref(s.State), "())")
+	g.P("    rebuilder.with_snapshot(lambda state, payload: state.ParseFromString(payload.value))")
 	for _, a := range s.Appliers {
 		fn := "_apply_" + snake(a.MethodName)
 		g.P("    def ", fn, "(state, payload):")

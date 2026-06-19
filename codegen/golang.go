@@ -307,6 +307,7 @@ func (e goEmitter) emitAggregate(g *protogen.GeneratedFile, s *Service) error {
 	g.P("// New", name, "Dispatch populates the aggregate table from the proto declaration.")
 	g.P("func New", name, "Dispatch(h ", name, "Handler) *", ident(g, angzarrPkg, "AggregateDispatch"), "[", statePtr, "] {")
 	g.P("\trebuilder := ", ident(g, angzarrPkg, "NewRebuilder"), "(func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
+	emitSnapshotLoader(g, s.State)
 	for _, a := range s.Appliers {
 		g.P("\trebuilder.Apply(", quote(string(a.Message.Desc.FullName())), ", func(state ", statePtr, ", payload *", ident(g, anypbPkg, "Any"), ") error {")
 		g.P("\t\tevent := &", g.QualifiedGoIdent(a.Message.GoIdent), "{}")
@@ -357,6 +358,7 @@ func (e goEmitter) emitPM(g *protogen.GeneratedFile, s *Service) error {
 	g.P("// New", name, "Dispatch populates the PM table from the proto declaration.")
 	g.P("func New", name, "Dispatch(h ", name, "Handler) *", ident(g, angzarrPkg, "ProcessManagerDispatch"), "[", statePtr, "] {")
 	g.P("\trebuilder := ", ident(g, angzarrPkg, "NewRebuilder"), "(func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
+	emitSnapshotLoader(g, s.State)
 	for _, a := range s.Appliers {
 		g.P("\trebuilder.Apply(", quote(string(a.Message.Desc.FullName())), ", func(state ", statePtr, ", payload *", ident(g, anypbPkg, "Any"), ") error {")
 		g.P("\t\tevent := &", g.QualifiedGoIdent(a.Message.GoIdent), "{}")
@@ -408,6 +410,16 @@ func (e goEmitter) emitProjector(g *protogen.GeneratedFile, s *Service) error {
 		g.P("\treturn ", ident(g, angzarrPkg, "RegisterProjector"), "(r, New", name, "Dispatch(h))")
 	})
 	return nil
+}
+
+// emitSnapshotLoader registers the rebuilder's snapshot loader. A snapshot
+// carries the component's own state message, so the loader unmarshals it into
+// the rebuilding state — generic, no business method needed.
+func emitSnapshotLoader(g *protogen.GeneratedFile, state *protogen.Message) {
+	statePtr := "*" + g.QualifiedGoIdent(state.GoIdent)
+	g.P("\trebuilder.WithSnapshot(func(state ", statePtr, ", payload *", ident(g, anypbPkg, "Any"), ") error {")
+	g.P("\t\treturn payload.UnmarshalTo(state)")
+	g.P("\t})")
 }
 
 // emitRegister writes the Register<Component> convenience that hides the
