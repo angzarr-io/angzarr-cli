@@ -342,9 +342,9 @@ func TestGenerate_ValidAggregate_EmitsStrictSeam(t *testing.T) {
 			content := resp.File[0].GetContent()
 			for _, want := range []string{
 				"type OrderAggregateHandler interface",
-				"CreateOrder(cmd *",    // command handler, method = command msg name
-				"([]*",                 // typed-emit: returns the emitted event slice
-				"OrderCreated(state *", // applier, method = event msg name
+				"CreateOrder(cmd *",         // command handler, method = command msg name
+				"([]*",                      // typed-emit: returns the emitted event slice
+				"ApplyOrderCreated(state *", // applier, method = Apply + event msg name
 				"func NewOrderAggregateDispatch(",
 				`OnCommand("validation.test.CreateOrder"`,
 				`Apply("validation.test.OrderCreated"`,
@@ -399,6 +399,35 @@ func TestGenerate_ValidSaga_EmitsMethodRegister(t *testing.T) {
 	}
 }
 
+func TestGenerate_PMSameEventApplierAndTrigger_NoMethodCollision(t *testing.T) {
+	// A process manager folds an event into its OWN state (applies) AND reacts
+	// to it (trigger). Both derive from the same event, so the applier must be
+	// renamed (Apply<Event>) to avoid a duplicate interface method.
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "go", ioPkg,
+		declMsg{"PMState", o.componentDecl(3, "", "fulfillment", "")},
+		declMsg{"Trig", o.eventDecl(
+			eventEntry{component: fq("PMState"), applies: true},
+			eventEntry{component: fq("PMState"), domain: "orders"},
+		)},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, "Trig(event *") {
+		t.Errorf("missing PM trigger handler method Trig")
+	}
+	if !strings.Contains(content, "ApplyTrig(state *") {
+		t.Errorf("missing PM applier method ApplyTrig (collision not avoided)")
+	}
+	// Belt-and-suspenders: the generated Go must compile, so the interface must
+	// not declare the same method name twice.
+	if strings.Count(content, "\tTrig(") > 1 {
+		t.Errorf("duplicate Trig method in generated interface")
+	}
+}
+
 func TestGeneratePython_EmitsProtocolSeam(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "python", ioPkg, orderAggregate(o)...)
@@ -417,7 +446,7 @@ func TestGeneratePython_EmitsProtocolSeam(t *testing.T) {
 		"import angzarr_router_ffi as _az",
 		"class OrderAggregateHandler(Protocol):",
 		"def create_order(self, cmd: _m0.CreateOrder, state: _m0.State, cctx: _az.CommandContext) -> list[_m0.OrderCreated]: ...",
-		"def order_created(self, state: _m0.State, event: _m0.OrderCreated) -> None: ...",
+		"def apply_order_created(self, state: _m0.State, event: _m0.OrderCreated) -> None: ...",
 		"def new_order_aggregate_dispatch(handler: OrderAggregateHandler) -> _az.AggregateDispatch:",
 		`dispatch.on_command("validation.test.CreateOrder"`,
 		"book.pages.add().event.CopyFrom(_az.pack(ev))", // typed-emit
@@ -513,7 +542,7 @@ func TestGenerateScaffold_EmitsOwnedStub(t *testing.T) {
 		"var _ OrderAggregateHandler = OrderAggregate{}",
 		"func (OrderAggregate) CreateOrder(",
 		`panic("TODO: implement OrderAggregate.CreateOrder")`,
-		"func (OrderAggregate) OrderCreated(", // applier stub
+		"func (OrderAggregate) ApplyOrderCreated(", // applier stub
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("scaffold missing %q", want)

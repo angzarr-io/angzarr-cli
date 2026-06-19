@@ -421,6 +421,15 @@ func resolveMessages(registry map[string]*protogen.Message, names []string, what
 	return out, nil
 }
 
+// applierName is the generated method name for an event applier: the event's
+// Go name prefixed with "Apply". The prefix keeps an applier distinct from a
+// handler for the SAME event — a process manager folds an event into its own
+// state (applier) AND reacts to it (handler), so the two methods must not
+// collide.
+func applierName(m *protogen.Message) string {
+	return "Apply" + m.GoIdent.GoName
+}
+
 // shortName returns the trailing segment of a fully-qualified type name.
 func shortName(fq string) string {
 	if i := strings.LastIndex(fq, "."); i >= 0 {
@@ -546,10 +555,10 @@ func attachEvent(services map[string]*Service, m *protogen.Message, ev eventCons
 	}
 	switch owner.Component.Kind {
 	case KindAggregate:
-		owner.Appliers = append(owner.Appliers, Applier{Message: m, MethodName: m.GoIdent.GoName})
+		owner.Appliers = append(owner.Appliers, Applier{Message: m, MethodName: applierName(m)})
 	case KindProcessManager:
 		if ev.Applies {
-			owner.Appliers = append(owner.Appliers, Applier{Message: m, MethodName: m.GoIdent.GoName})
+			owner.Appliers = append(owner.Appliers, Applier{Message: m, MethodName: applierName(m)})
 		} else {
 			if ev.Domain == "" {
 				return fmt.Errorf("%s: process-manager trigger for %q requires (event).domain", m.Desc.FullName(), ev.Component)
