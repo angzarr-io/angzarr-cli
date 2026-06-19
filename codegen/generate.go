@@ -31,6 +31,7 @@ type Emitter interface {
 // Emitter implementation and registering it here.
 var emitters = map[string]Emitter{
 	goEmitter{}.Lang(): goEmitter{},
+	pyEmitter{}.Lang(): pyEmitter{},
 }
 
 // Languages lists the registered target languages.

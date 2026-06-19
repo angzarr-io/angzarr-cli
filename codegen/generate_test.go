@@ -399,6 +399,99 @@ func TestGenerate_ValidSaga_EmitsMethodRegister(t *testing.T) {
 	}
 }
 
+func TestGeneratePython_EmitsProtocolSeam(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "python", ioPkg, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if len(resp.File) != 1 {
+		t.Fatalf("generated %d files, want 1", len(resp.File))
+	}
+	f := resp.File[0]
+	if !strings.HasSuffix(f.GetName(), "_angzarr.py") {
+		t.Errorf("wiring file name = %q, want *_angzarr.py", f.GetName())
+	}
+	content := f.GetContent()
+	for _, want := range []string{
+		"import angzarr_router_ffi as _az",
+		"class OrderAggregateHandler(Protocol):",
+		"def create_order(self, cmd: _m0.CreateOrder, state: _m0.State, cctx: _az.CommandContext) -> list[_m0.OrderCreated]: ...",
+		"def order_created(self, state: _m0.State, event: _m0.OrderCreated) -> None: ...",
+		"def new_order_aggregate_dispatch(handler: OrderAggregateHandler) -> _az.AggregateDispatch:",
+		`dispatch.on_command("validation.test.CreateOrder"`,
+		"book.pages.add().event.CopyFrom(_az.pack(ev))", // typed-emit
+		`raise _az.any_decode_error(cmd_any.type_url, exc)`,
+		"def register_order_aggregate(router: _az.Router, handler: OrderAggregateHandler) -> None:",
+		"router.register_aggregate(new_order_aggregate_dispatch(handler))",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("python wiring missing %q", want)
+		}
+	}
+}
+
+func TestGeneratePython_SagaUsesMethodRegister(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "python", ioPkg,
+		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	for _, want := range []string{
+		`_az.SagaDispatch("OrderSaga", "orders", targets=["fulfillment"])`,
+		`dispatch.on_event("validation.test.OrderPlaced"`,
+		"router.register_saga(new_order_saga_dispatch(handler))",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("python saga wiring missing %q", want)
+		}
+	}
+}
+
+func TestGeneratePython_RawEventBookEscapeHatch(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "python", ioPkg,
+		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, "-> Optional[_t.EventBook]") {
+		t.Errorf("escape-hatch handler should return Optional[EventBook]")
+	}
+	if strings.Contains(content, "_az.pack(") {
+		t.Errorf("escape-hatch handler must not pack typed events")
+	}
+}
+
+func TestGeneratePythonScaffold_EmitsOwnedStub(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := scaffold(t, "python", ioPkg, func(string) bool { return false }, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("GenerateScaffold: %v", err)
+	}
+	if len(resp.File) != 1 || !strings.HasSuffix(resp.File[0].GetName(), "_angzarr_handler.py") {
+		t.Fatalf("want one *_angzarr_handler.py file, got %v", resp.File)
+	}
+	content := resp.File[0].GetContent()
+	for _, want := range []string{
+		"Regeneration will NOT overwrite this file",
+		"class OrderAggregate:",
+		"def create_order(self, cmd: _m0.CreateOrder",
+		`raise NotImplementedError("TODO: implement OrderAggregate.create_order")`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("python scaffold missing %q", want)
+		}
+	}
+}
+
 func TestGenerateScaffold_EmitsOwnedStub(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	// exists never fires: a fresh project gets its stub.
@@ -502,10 +595,17 @@ func TestGenerate_UnknownLanguage_Fails(t *testing.T) {
 	}
 }
 
-func TestLanguages_ListsGo(t *testing.T) {
+func TestLanguages_ListsGoAndPython(t *testing.T) {
 	langs := codegen.Languages()
-	if len(langs) == 0 || langs[0] != "go" {
-		t.Fatalf("Languages() = %v, want [go ...]", langs)
+	have := map[string]bool{}
+	for _, l := range langs {
+		have[l] = true
+	}
+	if !have["go"] || !have["python"] {
+		t.Fatalf("Languages() = %v, want at least go and python", langs)
+	}
+	if langs[0] != "go" {
+		t.Errorf("Languages() not sorted: %v", langs)
 	}
 }
 
