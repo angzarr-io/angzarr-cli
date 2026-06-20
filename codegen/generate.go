@@ -30,8 +30,9 @@ type Emitter interface {
 // emitters is the language registry. Adding a language = adding an
 // Emitter implementation and registering it here.
 var emitters = map[string]Emitter{
-	goEmitter{}.Lang(): goEmitter{},
-	pyEmitter{}.Lang(): pyEmitter{},
+	goEmitter{}.Lang():   goEmitter{},
+	pyEmitter{}.Lang():   pyEmitter{},
+	javaEmitter{}.Lang(): javaEmitter{},
 }
 
 // Languages lists the registered target languages.
@@ -58,9 +59,9 @@ func Generate(gen *protogen.Plugin, lang string) error {
 	}
 	gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
-	model, err := buildModel(gen)
-	if err != nil {
-		return err
+	model, diags := analyze(gen)
+	if HasErrors(diags) {
+		return diagError(diags)
 	}
 
 	for _, fs := range model {
@@ -85,9 +86,9 @@ func GenerateScaffold(gen *protogen.Plugin, lang string, exists func(path string
 	}
 	gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
-	model, err := buildModel(gen)
-	if err != nil {
-		return err
+	model, diags := analyze(gen)
+	if HasErrors(diags) {
+		return diagError(diags)
 	}
 
 	for _, fs := range model {

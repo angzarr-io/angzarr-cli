@@ -617,6 +617,86 @@ func TestGenerate_Validations_FailGeneration(t *testing.T) {
 	}
 }
 
+func TestGenerateJava_EmitsNestedSeam(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "java", ioPkg, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if len(resp.File) != 1 {
+		t.Fatalf("generated %d files, want 1", len(resp.File))
+	}
+	f := resp.File[0]
+	if !strings.HasSuffix(f.GetName(), "_angzarr.java") {
+		t.Errorf("wiring file name = %q, want *_angzarr.java", f.GetName())
+	}
+	content := f.GetContent()
+	// The test proto is validation_test.proto, package validation.test, no java
+	// options → messages nest in the derived outer class ValidationTest.
+	for _, want := range []string{
+		"package validation.test;",
+		"public final class validation_test_angzarr {",
+		"public interface OrderAggregateHandler {",
+		// command handler: method = lowerFirst(message name), typed-emit return
+		"java.util.List<validation.test.ValidationTest.OrderCreated> createOrder(",
+		"validation.test.ValidationTest.CreateOrder cmd",
+		"validation.test.ValidationTest.State.Builder state, io.angzarr.router.CommandContext cctx) throws Exception;",
+		"void applyOrderCreated(validation.test.ValidationTest.State.Builder state, validation.test.ValidationTest.OrderCreated event);",
+		"public static io.angzarr.router.AggregateDispatch newOrderAggregateDispatch(OrderAggregateHandler h) {",
+		"new io.angzarr.router.Rebuilder(validation.test.ValidationTest.State::newBuilder)",
+		"rebuilder.withSnapshot(",
+		`.onCommand("validation.test.CreateOrder"`,
+		`rebuilder.apply("validation.test.OrderCreated"`,
+		"io.angzarr.EventPage.newBuilder().setEvent(io.angzarr.router.Pack.pack(ev))",
+		"public static void registerOrderAggregate(io.angzarr.router.Router r, OrderAggregateHandler h) {",
+		"r.registerAggregate(newOrderAggregateDispatch(h));",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("java wiring missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
+func TestGenerateJava_SagaUsesMethodRegisterAndTargets(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "java", ioPkg,
+		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	for _, want := range []string{
+		"public interface OrderSagaHandler {",
+		`new io.angzarr.router.SagaDispatch("OrderSaga", "orders", java.util.List.of("fulfillment"))`,
+		`.onEvent("validation.test.OrderPlaced"`,
+		"r.registerSaga(newOrderSagaDispatch(h));",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("java saga wiring missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
+func TestGenerateJava_RawEventBookEscapeHatch(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "java", ioPkg,
+		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, "io.angzarr.EventBook createOrder(") {
+		t.Errorf("escape-hatch handler should return a raw EventBook; got:\n%s", content)
+	}
+	if strings.Contains(content, "Pack.pack(ev)") {
+		t.Errorf("escape-hatch handler must not build an EventBook from typed events")
+	}
+}
+
 func TestGenerate_UnknownLanguage_Fails(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	_, err := generate(t, "cobol", ioPkg, orderAggregate(o)...)
