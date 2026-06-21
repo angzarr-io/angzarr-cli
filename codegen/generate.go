@@ -34,6 +34,7 @@ var emitters = map[string]Emitter{
 	pyEmitter{}.Lang():     pyEmitter{},
 	javaEmitter{}.Lang():   javaEmitter{},
 	csharpEmitter{}.Lang(): csharpEmitter{},
+	cppEmitter{}.Lang():    cppEmitter{},
 }
 
 // Languages lists the registered target languages.

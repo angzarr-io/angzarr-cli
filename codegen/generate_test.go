@@ -785,6 +785,84 @@ func TestGenerateCSharp_RawEventBookEscapeHatch(t *testing.T) {
 	}
 }
 
+func TestGenerateCpp_EmitsNestedSeam(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "cpp", ioPkg, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if len(resp.File) != 1 {
+		t.Fatalf("generated %d files, want 1", len(resp.File))
+	}
+	f := resp.File[0]
+	if !strings.HasSuffix(f.GetName(), "_angzarr.h") {
+		t.Errorf("wiring file name = %q, want *_angzarr.h", f.GetName())
+	}
+	content := f.GetContent()
+	// validation_test.proto, package validation.test → namespace validation::test.
+	for _, want := range []string{
+		"#pragma once",
+		"namespace validation::test {",
+		"class OrderAggregateHandler {",
+		"virtual ~OrderAggregateHandler() = default;",
+		// command handler: typed-emit return, const-ref command, ref state
+		"virtual std::vector<validation::test::OrderCreated> CreateOrder(const validation::test::CreateOrder& cmd, validation::test::State& state, const angzarr::router::CommandContext& cctx) = 0;",
+		"virtual void ApplyOrderCreated(validation::test::State& state, const validation::test::OrderCreated& ev) = 0;",
+		"inline angzarr::router::AggregateDispatch<validation::test::State> NewOrderAggregateDispatch(OrderAggregateHandler& h) {",
+		"angzarr::router::Rebuilder<validation::test::State> rebuilder;",
+		"rebuilder.WithSnapshot(",
+		`dispatch.OnCommand("validation.test.CreateOrder"`,
+		`rebuilder.Apply("validation.test.OrderCreated"`,
+		"*book.add_pages()->mutable_event() = angzarr::router::Pack::Wrap(ev);",
+		"inline void RegisterOrderAggregate(angzarr::router::Router& r, OrderAggregateHandler& h) {",
+		"r.RegisterAggregate(NewOrderAggregateDispatch(h));",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("cpp wiring missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
+func TestGenerateCpp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "cpp", ioPkg,
+		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	for _, want := range []string{
+		"class OrderSagaHandler {",
+		`angzarr::router::SagaDispatch dispatch("OrderSaga", "orders", {"fulfillment"});`,
+		`dispatch.OnEvent("validation.test.OrderPlaced"`,
+		"r.RegisterSaga(NewOrderSagaDispatch(h));",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("cpp saga wiring missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
+func TestGenerateCpp_RawEventBookEscapeHatch(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "cpp", ioPkg,
+		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, "io::angzarr::v1::EventBook CreateOrder(") {
+		t.Errorf("escape-hatch handler should return a raw EventBook; got:\n%s", content)
+	}
+	if strings.Contains(content, "Pack::Wrap(ev)") {
+		t.Errorf("escape-hatch handler must not build an EventBook from typed events")
+	}
+}
+
 func TestGenerate_UnknownLanguage_Fails(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	_, err := generate(t, "cobol", ioPkg, orderAggregate(o)...)
