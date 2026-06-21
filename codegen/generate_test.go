@@ -723,18 +723,25 @@ func TestGenerateCSharp_EmitsNestedSeam(t *testing.T) {
 		"Validation.Test.CreateOrder cmd, Validation.Test.State state, Angzarr.Router.CommandContext cctx)",
 		// applier: state is the mutable message itself (no Builder); ev param
 		"void ApplyOrderCreated(Validation.Test.State state, Validation.Test.OrderCreated ev)",
-		"public static Angzarr.Router.AggregateDispatch NewOrderAggregateDispatch(OrderAggregateHandler h)",
-		"var rebuilder = new Angzarr.Router.Rebuilder(() => new Validation.Test.State());",
-		"rebuilder.WithSnapshot((state, payload) => ((Validation.Test.State)state).MergeFrom(payload.Value));",
+		// dispatch surfaces are generic in the state message → cast-free wiring
+		"public static Angzarr.Router.AggregateDispatch<Validation.Test.State> NewOrderAggregateDispatch(OrderAggregateHandler h)",
+		"var rebuilder = new Angzarr.Router.Rebuilder<Validation.Test.State>(() => new Validation.Test.State());",
+		"rebuilder.WithSnapshot((state, payload) => Google.Protobuf.MessageExtensions.MergeFrom(state, payload.Value));",
 		`.OnCommand("validation.test.CreateOrder"`,
 		`rebuilder.Apply("validation.test.OrderCreated"`,
-		"book.Pages.Add(new Angzarr.EventPage { Event = Angzarr.Router.Pack.Pack(ev) });",
+		"var events = h.CreateOrder(cmd, state, cctx);",
+		"book.Pages.Add(new Angzarr.EventPage { Event = Angzarr.Router.Pack.Wrap(ev) });",
 		"public static void RegisterOrderAggregate(Angzarr.Router.Router r, OrderAggregateHandler h)",
 		"r.RegisterAggregate(NewOrderAggregateDispatch(h));",
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("csharp wiring missing %q\n---\n%s", want, content)
 		}
+	}
+	// The generic dispatch makes state typed, so no (State)state casts leak into
+	// the generated wiring.
+	if strings.Contains(content, "(Validation.Test.State)state") {
+		t.Errorf("generic wiring must be cast-free; found a (State)state cast\n---\n%s", content)
 	}
 }
 

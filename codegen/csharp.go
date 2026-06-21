@@ -218,35 +218,35 @@ func (e csharpEmitter) emitAggregate(g *protogen.GeneratedFile, s *Service) erro
 	e.emitInterface(g, s, s.GoName+" aggregate")
 	state := csType(s.State)
 	g.P("    /// <summary>Populates the aggregate table from the proto declaration.</summary>")
-	g.P("    public static ", csAggDispatch, " New", s.GoName, "Dispatch(", s.GoName, "Handler h)")
+	g.P("    public static ", csGeneric(csAggDispatch, state), " New", s.GoName, "Dispatch(", s.GoName, "Handler h)")
 	g.P("    {")
-	g.P("        var rebuilder = new ", csRebuilder, "(() => new ", state, "());")
-	g.P("        rebuilder.WithSnapshot((state, payload) => ((", state, ")state).MergeFrom(payload.Value));")
+	g.P("        var rebuilder = new ", csGeneric(csRebuilder, state), "(() => new ", state, "());")
+	g.P("        rebuilder.WithSnapshot((state, payload) => Google.Protobuf.MessageExtensions.MergeFrom(state, payload.Value));")
 	for _, a := range s.Appliers {
 		g.P("        rebuilder.Apply(", quote(a.fqType()), ", (state, payload) =>")
-		g.P("            h.", a.MethodName, "((", state, ")state, ", csParse(a.Message, "payload.Value"), "));")
+		g.P("            h.", a.MethodName, "(state, ", csParse(a.Message, "payload.Value"), "));")
 	}
-	g.P("        return new ", csAggDispatch, "(", quote(s.GoName), ", ", quote(s.Component.InputDomain), ", rebuilder)")
+	g.P("        return new ", csGeneric(csAggDispatch, state), "(", quote(s.GoName), ", ", quote(s.Component.InputDomain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		g.P("            .OnCommand(", quote(string(h.Message.Desc.FullName())), ", (cmdAny, state, cctx) =>")
 		g.P("            {")
 		g.P("                ", csType(h.Message), " cmd = ", csParseAny(h.Message, "cmdAny"), ";")
 		if h.TypedEmit() {
-			g.P("                var events = h.", h.MethodName, "(cmd, (", state, ")state, cctx);")
+			g.P("                var events = h.", h.MethodName, "(cmd, state, cctx);")
 			g.P("                var book = new ", csEventBook, "();")
 			g.P("                foreach (var ev in events)")
 			g.P("                {")
-			g.P("                    book.Pages.Add(new ", csEventPage, " { Event = ", csPack, ".Pack(ev) });")
+			g.P("                    book.Pages.Add(new ", csEventPage, " { Event = ", csPack, ".Wrap(ev) });")
 			g.P("                }")
 			g.P("                return book;")
 		} else {
-			g.P("                return h.", h.MethodName, "(cmd, (", state, ")state, cctx);")
+			g.P("                return h.", h.MethodName, "(cmd, state, cctx);")
 		}
 		g.P("            })")
 	}
 	for _, r := range s.Rejections {
 		g.P("            .OnRejected(", quote(r.Command), ", (n, rejection, state, cctx) =>")
-		g.P("                h.", r.MethodName, "(n, rejection, (", state, ")state, cctx))")
+		g.P("                h.", r.MethodName, "(n, rejection, state, cctx))")
 	}
 	g.P("            ;")
 	g.P("    }")
@@ -282,18 +282,18 @@ func (e csharpEmitter) emitProjector(g *protogen.GeneratedFile, s *Service) erro
 	e.emitInterface(g, s, s.GoName+" projector")
 	state := csType(s.State)
 	g.P("    /// <summary>Populates the projector table from the proto declaration.</summary>")
-	g.P("    public static ", csProjDispatch, " New", s.GoName, "Dispatch(", s.GoName, "Handler h)")
+	g.P("    public static ", csGeneric(csProjDispatch, state), " New", s.GoName, "Dispatch(", s.GoName, "Handler h)")
 	g.P("    {")
-	g.P("        return new ", csProjDispatch, "(", quote(s.GoName), ", () => new ", state, "())")
+	g.P("        return new ", csGeneric(csProjDispatch, state), "(", quote(s.GoName), ", () => new ", state, "())")
 	g.P("            .ForDomains(", quote(s.Component.InputDomain), ")")
 	for _, h := range s.Handlers {
 		g.P("            .OnEvent(", quote(string(h.Message.Desc.FullName())), ", (projection, eventAny) =>")
 		g.P("            {")
 		g.P("                ", csType(h.Message), " ev = ", csParseAny(h.Message, "eventAny"), ";")
-		g.P("                h.", h.MethodName, "((", state, ")projection, ev);")
+		g.P("                h.", h.MethodName, "(projection, ev);")
 		g.P("            })")
 	}
-	g.P("            .Finish((projection, events) => h.Finish((", state, ")projection, events));")
+	g.P("            .Finish((projection, events) => h.Finish(projection, events));")
 	g.P("    }")
 	g.P()
 	e.emitRegister(g, s, "RegisterProjector")
@@ -304,25 +304,25 @@ func (e csharpEmitter) emitPM(g *protogen.GeneratedFile, s *Service) error {
 	e.emitInterface(g, s, s.GoName+" process manager")
 	state := csType(s.State)
 	g.P("    /// <summary>Populates the PM table from the proto declaration.</summary>")
-	g.P("    public static ", csPmDispatch, " New", s.GoName, "Dispatch(", s.GoName, "Handler h)")
+	g.P("    public static ", csGeneric(csPmDispatch, state), " New", s.GoName, "Dispatch(", s.GoName, "Handler h)")
 	g.P("    {")
-	g.P("        var rebuilder = new ", csRebuilder, "(() => new ", state, "());")
-	g.P("        rebuilder.WithSnapshot((state, payload) => ((", state, ")state).MergeFrom(payload.Value));")
+	g.P("        var rebuilder = new ", csGeneric(csRebuilder, state), "(() => new ", state, "());")
+	g.P("        rebuilder.WithSnapshot((state, payload) => Google.Protobuf.MessageExtensions.MergeFrom(state, payload.Value));")
 	for _, a := range s.Appliers {
 		g.P("        rebuilder.Apply(", quote(a.fqType()), ", (state, payload) =>")
-		g.P("            h.", a.MethodName, "((", state, ")state, ", csParse(a.Message, "payload.Value"), "));")
+		g.P("            h.", a.MethodName, "(state, ", csParse(a.Message, "payload.Value"), "));")
 	}
-	g.P("        return new ", csPmDispatch, "(", quote(s.GoName), ", ", quote(s.Component.OutputDomain), ", rebuilder)")
+	g.P("        return new ", csGeneric(csPmDispatch, state), "(", quote(s.GoName), ", ", quote(s.Component.OutputDomain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		g.P("            .OnEvent(", quote(h.SourceDomain), ", ", quote(string(h.Message.Desc.FullName())), ", (eventAny, state, dests) =>")
 		g.P("            {")
 		g.P("                ", csType(h.Message), " ev = ", csParseAny(h.Message, "eventAny"), ";")
-		g.P("                return h.", h.MethodName, "(ev, (", state, ")state, dests);")
+		g.P("                return h.", h.MethodName, "(ev, state, dests);")
 		g.P("            })")
 	}
 	for _, r := range s.Rejections {
 		g.P("            .OnRejected(", quote(r.Command), ", (n, rejection, state) =>")
-		g.P("                h.", r.MethodName, "(n, rejection, (", state, ")state))")
+		g.P("                h.", r.MethodName, "(n, rejection, state))")
 	}
 	g.P("            ;")
 	g.P("    }")
@@ -383,6 +383,11 @@ func csParseAny(m *protogen.Message, anyVar string) string {
 // csParse parses a typed message directly from a ByteString (applier payloads).
 func csParse(m *protogen.Message, bytesVar string) string {
 	return csType(m) + ".Parser.ParseFrom(" + bytesVar + ")"
+}
+
+// csGeneric renders a generic type reference, e.g. AggregateDispatch<Ns.State>.
+func csGeneric(base, typeArg string) string {
+	return base + "<" + typeArg + ">"
 }
 
 func csWiringClass(file *protogen.File) string {
