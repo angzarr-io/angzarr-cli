@@ -8,6 +8,7 @@ package codegen_test
 // language-independently.
 
 import (
+	"sort"
 	"strings"
 	"testing"
 
@@ -697,6 +698,86 @@ func TestGenerateJava_RawEventBookEscapeHatch(t *testing.T) {
 	}
 }
 
+func TestGenerateCSharp_EmitsNestedSeam(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "csharp", ioPkg, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if len(resp.File) != 1 {
+		t.Fatalf("generated %d files, want 1", len(resp.File))
+	}
+	f := resp.File[0]
+	if !strings.HasSuffix(f.GetName(), "_angzarr.cs") {
+		t.Errorf("wiring file name = %q, want *_angzarr.cs", f.GetName())
+	}
+	content := f.GetContent()
+	// validation_test.proto, package validation.test, no csharp_namespace →
+	// derived namespace Validation.Test; messages are top-level (no .Types.).
+	for _, want := range []string{
+		"namespace Validation.Test;",
+		"public static class validation_test_angzarr",
+		"public interface OrderAggregateHandler",
+		// command handler: method = message name (PascalCase), typed-emit return
+		"System.Collections.Generic.IReadOnlyList<Validation.Test.OrderCreated> CreateOrder(",
+		"Validation.Test.CreateOrder cmd, Validation.Test.State state, Angzarr.Router.CommandContext cctx)",
+		// applier: state is the mutable message itself (no Builder); ev param
+		"void ApplyOrderCreated(Validation.Test.State state, Validation.Test.OrderCreated ev)",
+		"public static Angzarr.Router.AggregateDispatch NewOrderAggregateDispatch(OrderAggregateHandler h)",
+		"var rebuilder = new Angzarr.Router.Rebuilder(() => new Validation.Test.State());",
+		"rebuilder.WithSnapshot((state, payload) => ((Validation.Test.State)state).MergeFrom(payload.Value));",
+		`.OnCommand("validation.test.CreateOrder"`,
+		`rebuilder.Apply("validation.test.OrderCreated"`,
+		"book.Pages.Add(new Angzarr.EventPage { Event = Angzarr.Router.Pack.Pack(ev) });",
+		"public static void RegisterOrderAggregate(Angzarr.Router.Router r, OrderAggregateHandler h)",
+		"r.RegisterAggregate(NewOrderAggregateDispatch(h));",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("csharp wiring missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
+func TestGenerateCSharp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "csharp", ioPkg,
+		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	for _, want := range []string{
+		"public interface OrderSagaHandler",
+		`new Angzarr.Router.SagaDispatch("OrderSaga", "orders", "fulfillment")`,
+		`.OnEvent("validation.test.OrderPlaced"`,
+		"r.RegisterSaga(NewOrderSagaDispatch(h));",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("csharp saga wiring missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
+func TestGenerateCSharp_RawEventBookEscapeHatch(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "csharp", ioPkg,
+		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, "Angzarr.EventBook CreateOrder(") {
+		t.Errorf("escape-hatch handler should return a raw EventBook; got:\n%s", content)
+	}
+	if strings.Contains(content, "Pack.Pack(ev)") {
+		t.Errorf("escape-hatch handler must not build an EventBook from typed events")
+	}
+}
+
 func TestGenerate_UnknownLanguage_Fails(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	_, err := generate(t, "cobol", ioPkg, orderAggregate(o)...)
@@ -711,10 +792,12 @@ func TestLanguages_ListsGoAndPython(t *testing.T) {
 	for _, l := range langs {
 		have[l] = true
 	}
-	if !have["go"] || !have["python"] {
-		t.Fatalf("Languages() = %v, want at least go and python", langs)
+	for _, want := range []string{"csharp", "go", "java", "python"} {
+		if !have[want] {
+			t.Fatalf("Languages() = %v, want to include %q", langs, want)
+		}
 	}
-	if langs[0] != "go" {
+	if !sort.StringsAreSorted(langs) {
 		t.Errorf("Languages() not sorted: %v", langs)
 	}
 }

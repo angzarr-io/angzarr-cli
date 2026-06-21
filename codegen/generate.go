@@ -30,9 +30,10 @@ type Emitter interface {
 // emitters is the language registry. Adding a language = adding an
 // Emitter implementation and registering it here.
 var emitters = map[string]Emitter{
-	goEmitter{}.Lang():   goEmitter{},
-	pyEmitter{}.Lang():   pyEmitter{},
-	javaEmitter{}.Lang(): javaEmitter{},
+	goEmitter{}.Lang():     goEmitter{},
+	pyEmitter{}.Lang():     pyEmitter{},
+	javaEmitter{}.Lang():   javaEmitter{},
+	csharpEmitter{}.Lang(): csharpEmitter{},
 }
 
 // Languages lists the registered target languages.
