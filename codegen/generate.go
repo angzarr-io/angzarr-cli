@@ -2,29 +2,37 @@ package codegen
 
 import (
 	"fmt"
+	"path"
 	"sort"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
-// Emitter turns one proto file's validated component declarations into
-// generated source for one target language. The emitter owns the whole
-// file shape — header, imports, per-component wiring.
+// Emitter turns one validated component declaration into generated source for
+// one target language. Output is one file PER COMPONENT (per handler interface),
+// not per proto file: the emitter owns the whole file shape — header, imports,
+// the single component's wiring.
 type Emitter interface {
 	// Lang is the subcommand / plugin-option name ("go", "python", …).
 	Lang() string
-	// Suffix names the wiring file: <proto path prefix> + Suffix. The wiring
-	// file is regenerated wholesale every run.
-	Suffix() string
-	// EmitFile writes the wiring file for one proto file's components.
-	EmitFile(g *protogen.GeneratedFile, file *protogen.File, services []*Service) error
-	// ScaffoldSuffix names the generate-once handler stub file:
-	// <proto path prefix> + ScaffoldSuffix.
-	ScaffoldSuffix() string
-	// EmitScaffold writes the handler stub file for one proto file's
-	// components — generated once, then owned by the developer.
-	EmitScaffold(g *protogen.GeneratedFile, file *protogen.File, services []*Service) error
+	// WiringPath is the generated wiring file path for one component
+	// (response-relative). The wiring file is regenerated wholesale every run.
+	WiringPath(file *protogen.File, s *Service) string
+	// EmitComponent writes the wiring file for ONE component.
+	EmitComponent(g *protogen.GeneratedFile, file *protogen.File, s *Service) error
+	// ScaffoldPath is the generate-once handler stub file path for one component.
+	ScaffoldPath(file *protogen.File, s *Service) string
+	// EmitScaffoldComponent writes the handler stub for ONE component —
+	// generated once, then owned by the developer.
+	EmitScaffoldComponent(g *protogen.GeneratedFile, file *protogen.File, s *Service) error
+}
+
+// componentFile builds a per-component output path: the proto file's directory
+// (so generated wiring sits beside the messages, source_relative) joined with a
+// component-derived stem + suffix.
+func componentFile(file *protogen.File, stem, suffix string) string {
+	return path.Join(path.Dir(file.GeneratedFilenamePrefix), stem+suffix)
 }
 
 // emitters is the language registry. Adding a language = adding an
@@ -68,9 +76,11 @@ func Generate(gen *protogen.Plugin, lang string) error {
 	}
 
 	for _, fs := range model {
-		g := gen.NewGeneratedFile(fs.File.GeneratedFilenamePrefix+emitter.Suffix(), fs.File.GoImportPath)
-		if err := emitter.EmitFile(g, fs.File, fs.Services); err != nil {
-			return fmt.Errorf("%s: %w", fs.File.Desc.Path(), err)
+		for _, s := range fs.Services {
+			g := gen.NewGeneratedFile(emitter.WiringPath(fs.File, s), fs.File.GoImportPath)
+			if err := emitter.EmitComponent(g, fs.File, s); err != nil {
+				return fmt.Errorf("%s/%s: %w", fs.File.Desc.Path(), s.GoName, err)
+			}
 		}
 	}
 	return nil
@@ -95,13 +105,15 @@ func GenerateScaffold(gen *protogen.Plugin, lang string, exists func(path string
 	}
 
 	for _, fs := range model {
-		path := fs.File.GeneratedFilenamePrefix + emitter.ScaffoldSuffix()
-		if exists != nil && exists(path) {
-			continue
-		}
-		g := gen.NewGeneratedFile(path, fs.File.GoImportPath)
-		if err := emitter.EmitScaffold(g, fs.File, fs.Services); err != nil {
-			return fmt.Errorf("%s: %w", fs.File.Desc.Path(), err)
+		for _, s := range fs.Services {
+			stub := emitter.ScaffoldPath(fs.File, s)
+			if exists != nil && exists(stub) {
+				continue
+			}
+			g := gen.NewGeneratedFile(stub, fs.File.GoImportPath)
+			if err := emitter.EmitScaffoldComponent(g, fs.File, s); err != nil {
+				return fmt.Errorf("%s/%s: %w", fs.File.Desc.Path(), s.GoName, err)
+			}
 		}
 	}
 	return nil

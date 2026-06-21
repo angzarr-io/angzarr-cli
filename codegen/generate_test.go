@@ -628,15 +628,16 @@ func TestGenerateJava_EmitsNestedSeam(t *testing.T) {
 		t.Fatalf("generated %d files, want 1", len(resp.File))
 	}
 	f := resp.File[0]
-	if !strings.HasSuffix(f.GetName(), "_angzarr.java") {
-		t.Errorf("wiring file name = %q, want *_angzarr.java", f.GetName())
+	if !strings.HasSuffix(f.GetName(), "/OrderAggregateAngzarr.java") {
+		t.Errorf("wiring file name = %q, want */OrderAggregateAngzarr.java", f.GetName())
 	}
 	content := f.GetContent()
 	// The test proto is validation_test.proto, package validation.test, no java
-	// options → messages nest in the derived outer class ValidationTest.
+	// options → messages nest in the derived outer class ValidationTest. One file
+	// per component: the public class is <Component>Angzarr.
 	for _, want := range []string{
 		"package validation.test;",
-		"public final class validation_test_angzarr {",
+		"public final class OrderAggregateAngzarr {",
 		"public interface OrderAggregateHandler {",
 		// command handler: method = lowerFirst(message name), typed-emit return
 		"java.util.List<validation.test.ValidationTest.OrderCreated> createOrder(",
@@ -708,15 +709,16 @@ func TestGenerateCSharp_EmitsNestedSeam(t *testing.T) {
 		t.Fatalf("generated %d files, want 1", len(resp.File))
 	}
 	f := resp.File[0]
-	if !strings.HasSuffix(f.GetName(), "_angzarr.cs") {
-		t.Errorf("wiring file name = %q, want *_angzarr.cs", f.GetName())
+	if !strings.HasSuffix(f.GetName(), "/OrderAggregateAngzarr.cs") {
+		t.Errorf("wiring file name = %q, want */OrderAggregateAngzarr.cs", f.GetName())
 	}
 	content := f.GetContent()
 	// validation_test.proto, package validation.test, no csharp_namespace →
-	// derived namespace Validation.Test; messages are top-level (no .Types.).
+	// derived namespace Validation.Test; messages are top-level (no .Types.). One
+	// file per component: the public static class is <Component>Angzarr.
 	for _, want := range []string{
 		"namespace Validation.Test;",
-		"public static class validation_test_angzarr",
+		"public static class OrderAggregateAngzarr",
 		"public interface OrderAggregateHandler",
 		// command handler: method = message name (PascalCase), typed-emit return
 		"System.Collections.Generic.IReadOnlyList<Validation.Test.OrderCreated> CreateOrder(",
@@ -960,6 +962,38 @@ func TestGenerateTypeScriptScaffold_EmitsOwnedStub(t *testing.T) {
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("typescript scaffold missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
+func TestGenerate_FilePerComponent_OneFileEach(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	// Two components declared in one proto file → two generated wiring files.
+	resp, err := generate(t, "go", ioPkg,
+		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
+		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if len(resp.File) != 2 {
+		t.Fatalf("file-per-component: generated %d files, want 2", len(resp.File))
+	}
+	for _, want := range []string{"/order_aggregate_angzarr.pb.go", "/order_saga_angzarr.pb.go"} {
+		found := false
+		for _, f := range resp.File {
+			if strings.HasSuffix(f.GetName(), want) {
+				found = true
+			}
+		}
+		if !found {
+			var got []string
+			for _, f := range resp.File {
+				got = append(got, f.GetName())
+			}
+			t.Errorf("missing per-component file %q; got %v", want, got)
 		}
 	}
 }
