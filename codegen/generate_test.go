@@ -863,6 +863,107 @@ func TestGenerateCpp_RawEventBookEscapeHatch(t *testing.T) {
 	}
 }
 
+func TestGenerateTypeScript_EmitsStrictSeam(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "typescript", ioPkg, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if len(resp.File) != 1 {
+		t.Fatalf("generated %d files, want 1", len(resp.File))
+	}
+	f := resp.File[0]
+	if !strings.HasSuffix(f.GetName(), "_angzarr.ts") {
+		t.Errorf("wiring file name = %q, want *_angzarr.ts", f.GetName())
+	}
+	content := f.GetContent()
+	for _, want := range []string{
+		`import { create } from "@bufbuild/protobuf";`,
+		`from "@angzarr/router";`,
+		`from "./validation_test_pb";`,
+		"export interface OrderAggregateHandler {",
+		// command handler: lowerCamel method, typed-emit array return
+		"createOrder(cmd: CreateOrder, state: State, cctx: CommandContext): OrderCreated[];",
+		"applyOrderCreated(state: State, ev: OrderCreated): void;",
+		"export function newOrderAggregateDispatch(h: OrderAggregateHandler): AggregateDispatch<State> {",
+		"const rebuilder = new Rebuilder<State>(() => create(StateSchema));",
+		"rebuilder.withSnapshot((state, payload) => Pack.merge(StateSchema, state, payload));",
+		`dispatch.onCommand("validation.test.CreateOrder"`,
+		`rebuilder.apply("validation.test.OrderCreated"`,
+		"return Pack.eventBook(events.map((ev) => Pack.wrap(OrderCreatedSchema, ev)));",
+		"export function registerOrderAggregate(r: Router, h: OrderAggregateHandler): void {",
+		"r.registerAggregate(newOrderAggregateDispatch(h));",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("typescript wiring missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
+func TestGenerateTypeScript_SagaUsesFunctionRegisterAndTargets(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "typescript", ioPkg,
+		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	for _, want := range []string{
+		"export interface OrderSagaHandler {",
+		`const dispatch = new SagaDispatch("OrderSaga", "orders", ["fulfillment"]);`,
+		`dispatch.onEvent("validation.test.OrderPlaced"`,
+		"r.registerSaga(newOrderSagaDispatch(h));",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("typescript saga wiring missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
+func TestGenerateTypeScript_RawEventBookEscapeHatch(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "typescript", ioPkg,
+		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
+	)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, "createOrder(cmd: CreateOrder, state: State, cctx: CommandContext): EventBook;") {
+		t.Errorf("escape-hatch handler should return a raw EventBook; got:\n%s", content)
+	}
+	if strings.Contains(content, "Pack.wrap(") {
+		t.Errorf("escape-hatch handler must not build an EventBook from typed events")
+	}
+}
+
+func TestGenerateTypeScriptScaffold_EmitsOwnedStub(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := scaffold(t, "typescript", ioPkg, nil, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("GenerateScaffold: %v", err)
+	}
+	if len(resp.File) != 1 {
+		t.Fatalf("generated %d files, want 1", len(resp.File))
+	}
+	f := resp.File[0]
+	if !strings.HasSuffix(f.GetName(), "_angzarr_handler.ts") {
+		t.Errorf("scaffold file name = %q, want *_angzarr_handler.ts", f.GetName())
+	}
+	content := f.GetContent()
+	for _, want := range []string{
+		"export class OrderAggregate implements OrderAggregateHandler {",
+		`throw new Error("TODO: implement OrderAggregate.createOrder");`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("typescript scaffold missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
 func TestGenerate_UnknownLanguage_Fails(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	_, err := generate(t, "cobol", ioPkg, orderAggregate(o)...)
@@ -877,7 +978,7 @@ func TestLanguages_ListsGoAndPython(t *testing.T) {
 	for _, l := range langs {
 		have[l] = true
 	}
-	for _, want := range []string{"csharp", "go", "java", "python"} {
+	for _, want := range []string{"cpp", "csharp", "go", "java", "python", "typescript"} {
 		if !have[want] {
 			t.Fatalf("Languages() = %v, want to include %q", langs, want)
 		}
