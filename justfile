@@ -17,11 +17,18 @@ test:
 lint:
     go vet {{TOP}}/...
 
+# Lint the canonical component declarations before they are generated:
+# resolution errors block, coherence warnings are reported. Codegen also
+# gates on the same analysis internally, so this is the standalone surface
+# for CI and pre-commit.
+lint-proto:
+    buf build {{TOP}}/angzarr-project/proto -o - | go run {{TOP}} lint -
+
 # Generate from the vendored canonical protos and validate the output:
 # generation must succeed, emit wiring for every declared component, and
 # produce parseable Go (full compile validation lives in the client repos,
 # which own the engine the generated code targets).
-generate-check:
+generate-check: lint-proto
     #!/usr/bin/env bash
     set -euo pipefail
     cd "{{TOP}}"
