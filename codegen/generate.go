@@ -63,11 +63,29 @@ func Languages() []string {
 // declared by message annotations, and a component's commands/events may live
 // in other files than its anchor, so the model is built globally and then
 // grouped by the file each anchor lives in.
-func Generate(gen *protogen.Plugin, lang string) error {
+// Options carries language-specific codegen settings parsed from the plugin
+// parameter. PyFrameworkPackage, when set, is the package a python consumer
+// imports the angzarr framework protos from (see pyEmitter.frameworkPkg).
+type Options struct {
+	PyFrameworkPackage string
+}
+
+// withOptions returns the emitter configured for opts. Only the python emitter
+// has options today; others are returned unchanged.
+func withOptions(emitter Emitter, opts Options) Emitter {
+	if pe, ok := emitter.(pyEmitter); ok {
+		pe.frameworkPkg = opts.PyFrameworkPackage
+		return pe
+	}
+	return emitter
+}
+
+func Generate(gen *protogen.Plugin, lang string, opts Options) error {
 	emitter, ok := emitters[lang]
 	if !ok {
 		return fmt.Errorf("no emitter for language %q (have %v)", lang, Languages())
 	}
+	emitter = withOptions(emitter, opts)
 	gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
 	model, diags := analyze(gen)
@@ -92,11 +110,12 @@ func Generate(gen *protogen.Plugin, lang string) error {
 // writes nothing for it and the developer-owned stub is preserved untouched.
 // exists receives the response-relative file path; a nil predicate emits every
 // stub (overwriting), which callers should avoid in normal use.
-func GenerateScaffold(gen *protogen.Plugin, lang string, exists func(path string) bool) error {
+func GenerateScaffold(gen *protogen.Plugin, lang string, exists func(path string) bool, opts Options) error {
 	emitter, ok := emitters[lang]
 	if !ok {
 		return fmt.Errorf("no emitter for language %q (have %v)", lang, Languages())
 	}
+	emitter = withOptions(emitter, opts)
 	gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
 	model, diags := analyze(gen)

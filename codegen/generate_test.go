@@ -297,7 +297,7 @@ func generate(t *testing.T, lang, optionsPkg string, msgs ...declMsg) (*pluginpb
 	if err != nil {
 		return nil, err
 	}
-	if err := codegen.Generate(gen, lang); err != nil {
+	if err := codegen.Generate(gen, lang, codegen.Options{}); err != nil {
 		return nil, err
 	}
 	return gen.Response(), nil
@@ -311,7 +311,7 @@ func scaffold(t *testing.T, lang, optionsPkg string, exists func(string) bool, m
 	if err != nil {
 		return nil, err
 	}
-	if err := codegen.GenerateScaffold(gen, lang, exists); err != nil {
+	if err := codegen.GenerateScaffold(gen, lang, exists, codegen.Options{}); err != nil {
 		return nil, err
 	}
 	return gen.Response(), nil

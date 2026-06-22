@@ -70,11 +70,21 @@ func runScaffold(in io.Reader, out io.Writer, lang string) error {
 	if err := proto.Unmarshal(raw, req); err != nil {
 		return fmt.Errorf("parse CodeGeneratorRequest: %w", err)
 	}
-	gen, err := protogen.Options{}.New(req)
+	var opts codegen.Options
+	pgo := protogen.Options{
+		ParamFunc: func(name, value string) error {
+			if name == "py_framework_package" {
+				opts.PyFrameworkPackage = value
+				return nil
+			}
+			return fmt.Errorf("unknown parameter %q", name)
+		},
+	}
+	gen, err := pgo.New(req)
 	if err != nil {
 		return err
 	}
-	if err := codegen.GenerateScaffold(gen, lang, fileExists); err != nil {
+	if err := codegen.GenerateScaffold(gen, lang, fileExists, opts); err != nil {
 		gen.Error(err)
 	}
 	resp, err := proto.Marshal(gen.Response())
