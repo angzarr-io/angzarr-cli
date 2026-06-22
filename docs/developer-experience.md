@@ -143,22 +143,24 @@ currently `go` and `python`.)
   `paths=source_relative` so its existence check resolves against your source
   tree. The scaffold is optional; you can also hand-write the impl.
 
-### Shared framework protos: keep `go_package` native (Python)
+### Shared framework protos: generate them fully native (Python)
 
 The `go_package_prefix` override above is correct for **your own** protos. But
 if you also generate the **shared angzarr framework** protos (`io/angzarr/v1/*`,
 `sererr/*`) — which you do once the shared client package is no longer a
-dependency — managed mode must NOT rewrite their `go_package`.
+dependency — managed mode must not rewrite *any* of their file options.
 
 In Python, every party registers each `.proto` into the process-global
 `descriptor_pool.Default()`, keyed by file name; a file may appear once,
 *identically* (upb deduplicates byte-identical copies, but raises
-`duplicate file name` on any divergence). `go_package` is embedded in each
-pb2's serialized FileDescriptorProto, so a consumer-specific override makes your
-framework descriptors diverge from every other party (the router binding,
-another app) and collide in one process. The shared framework protos already
-declare a native `go_package`; let it pass through so every generator emits
-byte-identical descriptors:
+`duplicate file name` on any divergence). Every file option managed mode touches
+— `go_package`, but also `java_package`, `csharp_namespace`, `ruby_package`, … —
+is embedded in each pb2's serialized FileDescriptorProto. So any managed
+rewrite makes your framework descriptors diverge from a party that doesn't run
+managed mode (or runs it differently) and collide in one process. The shared
+framework protos already declare their options natively; turn managed mode OFF
+for those paths entirely so every generator emits byte-identical descriptors. A
+`disable` entry with only `path:` (no `file_option:`) disables all management:
 
 ```yaml
 managed:
@@ -166,12 +168,10 @@ managed:
   disable:
     - file_option: go_package
       path: google
-    # Shared framework contract: native go_package → byte-identical across
-    # every generator → coexists in descriptor_pool.Default().
-    - file_option: go_package
-      path: io/angzarr/v1
-    - file_option: go_package
-      path: sererr
+    # Shared framework contract: no managed rewrites at all → fully native →
+    # byte-identical across every generator → coexists in descriptor_pool.Default().
+    - path: io/angzarr/v1
+    - path: sererr
   override:
     - file_option: go_package_prefix
       value: example.com/myapp/gen   # applies to YOUR protos only
