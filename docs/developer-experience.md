@@ -143,6 +143,44 @@ currently `go` and `python`.)
   `paths=source_relative` so its existence check resolves against your source
   tree. The scaffold is optional; you can also hand-write the impl.
 
+### Shared framework protos: keep `go_package` native (Python)
+
+The `go_package_prefix` override above is correct for **your own** protos. But
+if you also generate the **shared angzarr framework** protos (`io/angzarr/v1/*`,
+`sererr/*`) — which you do once the shared client package is no longer a
+dependency — managed mode must NOT rewrite their `go_package`.
+
+In Python, every party registers each `.proto` into the process-global
+`descriptor_pool.Default()`, keyed by file name; a file may appear once,
+*identically* (upb deduplicates byte-identical copies, but raises
+`duplicate file name` on any divergence). `go_package` is embedded in each
+pb2's serialized FileDescriptorProto, so a consumer-specific override makes your
+framework descriptors diverge from every other party (the router binding,
+another app) and collide in one process. The shared framework protos already
+declare a native `go_package`; let it pass through so every generator emits
+byte-identical descriptors:
+
+```yaml
+managed:
+  enabled: true
+  disable:
+    - file_option: go_package
+      path: google
+    # Shared framework contract: native go_package → byte-identical across
+    # every generator → coexists in descriptor_pool.Default().
+    - file_option: go_package
+      path: io/angzarr/v1
+    - file_option: go_package
+      path: sererr
+  override:
+    - file_option: go_package_prefix
+      value: example.com/myapp/gen   # applies to YOUR protos only
+```
+
+Generate the shared contract through one pinned `protocolbuffers/python` plugin
+version everywhere so the bytes match. (This does not arise in Go: a Go binary
+links a single copy of the contract.)
+
 ---
 
 ## 3. What gets generated
