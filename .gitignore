@@ -8,3 +8,12 @@ coverage.out
 
 # generate-check disposable output
 /_gen/
+
+# ctxloom private working state (synced bundles, session/context, project id)
+*.ctxloom.bak
+.agents/
+.codex/config.toml
+
+# ctxloom private working state (synced bundles, session/context, project id)
+.ctxloom/ephemeral/
+.ctxloom/project-id
