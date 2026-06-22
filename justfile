@@ -34,14 +34,21 @@ generate-check: lint-proto
     cd "{{TOP}}"
     rm -rf _gen
     buf generate angzarr-project/proto
-    out="_gen/angzarr_client/proto/examples/v1/components_angzarr.pb.go"
-    test -f "$out" || { echo "FAIL: $out not generated"; exit 1; }
-    gofmt -l "$out" | tee /tmp/angzarr-cli-genfmt.out
+    # File-per-component: one wiring file per declared component (handler
+    # interface), emitted under the proto's source-relative package path.
+    expected=(
+        _gen/io/angzarr/examples/v1/table_aggregate_angzarr.pb.go
+        _gen/io/angzarr/examples/v1/table_hand_saga_angzarr.pb.go
+    )
+    for out in "${expected[@]}"; do
+        test -f "$out" || { echo "FAIL: $out not generated"; exit 1; }
+    done
+    gofmt -l _gen | tee /tmp/angzarr-cli-genfmt.out
     test ! -s /tmp/angzarr-cli-genfmt.out || { echo "FAIL: generated Go does not parse/format"; exit 1; }
     for sym in TableAggregateHandler NewTableAggregateDispatch TableHandSagaHandler NewTableHandSagaDispatch; do
-        grep -q "$sym" "$out" || { echo "FAIL: generated wiring missing $sym"; exit 1; }
+        grep -rq "$sym" _gen || { echo "FAIL: generated wiring missing $sym"; exit 1; }
     done
-    echo "generate-check OK: $(grep -c 'func New' "$out") constructors emitted"
+    echo "generate-check OK: $(grep -rh 'func New' _gen | wc -l) constructors across $(find _gen -name '*_angzarr.pb.go' | wc -l) component files"
 
 # Validate against the test client: regenerate client-go's dispatch
 # wiring with THIS checkout of the CLI (a throwaway go.work makes the
