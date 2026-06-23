@@ -453,10 +453,27 @@ func emitPyPMDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service) {
 }
 
 func emitPyProjectorDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service) {
-	c := s.Component
 	g.P("def new_", snake(s.GoName), "_dispatch(handler: ", s.GoName, "Handler) -> ", pyAz, ".ProjectorDispatch:")
 	g.P("    dispatch = ", pyAz, ".ProjectorDispatch(", pyQuote(s.GoName), ", lambda: ", refs.ref(s.State), "())")
-	g.P("    dispatch.for_domains(", pyQuote(c.InputDomain), ")")
+	// A projector consumes events from every domain its handlers source from
+	// (a display can fold table, hand and player events) — not a single input
+	// domain. Restrict folding to that exact set; empty means consume all.
+	seen := map[string]bool{}
+	var domains []string
+	for _, h := range s.Handlers {
+		if h.SourceDomain != "" && !seen[h.SourceDomain] {
+			seen[h.SourceDomain] = true
+			domains = append(domains, h.SourceDomain)
+		}
+	}
+	sort.Strings(domains)
+	if len(domains) > 0 {
+		quoted := make([]string, len(domains))
+		for i, d := range domains {
+			quoted[i] = pyQuote(d)
+		}
+		g.P("    dispatch.for_domains(", strings.Join(quoted, ", "), ")")
+	}
 	for _, h := range s.Handlers {
 		fn := "_on_" + snake(h.MethodName)
 		g.P("    def ", fn, "(projection, event_any):")
