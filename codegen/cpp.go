@@ -36,6 +36,7 @@ const (
 	cppSagaEmission = "angzarr::router::SagaEmission"
 	cppPmRejection  = "angzarr::router::PmRejection"
 	cppAny          = "google::protobuf::Any"
+	cppCover        = "io::angzarr::v1::Cover"
 	cppEventBook    = "io::angzarr::v1::EventBook"
 	cppEventPage    = "io::angzarr::v1::EventPage"
 	cppBusinessResp = "io::angzarr::v1::BusinessResponse"
@@ -162,7 +163,7 @@ func (e cppEmitter) sagaMethods(s *Service) []cppMethod {
 	for _, h := range s.Handlers {
 		out = append(out, cppMethod{
 			name:    h.MethodName,
-			params:  "const " + cppType(h.Message) + "& ev, const " + cppDestinations + "& dests",
+			params:  "const " + cppType(h.Message) + "& ev, const " + cppDestinations + "& dests, const " + cppCover + "& sourceCover",
 			results: cppSagaEmission,
 		})
 	}
@@ -268,9 +269,9 @@ func (e cppEmitter) emitSaga(g *protogen.GeneratedFile, s *Service) error {
 	g.P("inline ", cppSagaDispatch, " New", s.GoName, "Dispatch(", s.GoName, "Handler& h) {")
 	g.P("  ", cppSagaDispatch, " dispatch(", cppQuote(s.GoName), ", ", cppQuote(s.Component.InputDomain), ", {", cppQuote(s.Component.OutputDomain), "});")
 	for _, h := range s.Handlers {
-		g.P("  dispatch.OnEvent(", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& eventAny, const ", cppDestinations, "& dests) {")
+		g.P("  dispatch.OnEvent(", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& eventAny, const ", cppDestinations, "& dests, const ", cppCover, "& sourceCover) {")
 		g.P("    auto ev = ", cppParse(h.Message, "eventAny"), ";")
-		g.P("    return h.", h.MethodName, "(ev, dests);")
+		g.P("    return h.", h.MethodName, "(ev, dests, sourceCover);")
 		g.P("  });")
 	}
 	for _, r := range s.Rejections {

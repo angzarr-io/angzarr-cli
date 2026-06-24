@@ -58,6 +58,7 @@ const (
 
 	tsEventBook    = "EventBook"
 	tsCommandBook  = "CommandBook"
+	tsCover        = "Cover"
 	tsNotification = "Notification"
 	tsRejNotif     = "RejectionNotification"
 	tsBusinessResp = "BusinessResponse"
@@ -250,7 +251,7 @@ func (e tsEmitter) sagaSigs(refs *tsRefs, s *Service) []tsSig {
 	for _, h := range s.Handlers {
 		out = append(out, tsSig{
 			name:    lowerFirst(h.MethodName),
-			params:  "ev: " + refs.ref(h.Message) + ", dests: " + refs.use(tsDestinations),
+			params:  "ev: " + refs.ref(h.Message) + ", dests: " + refs.use(tsDestinations) + ", sourceCover?: " + refs.use(tsCover),
 			returns: refs.use(tsSagaEmission),
 		})
 	}
@@ -355,9 +356,9 @@ func (e tsEmitter) sagaDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Serv
 		g.P("export function new", s.GoName, "Dispatch(h: ", s.GoName, "Handler): ", disp, " {")
 		g.P("  const dispatch = new ", tsSagaDispatch, "(", tsQuote(s.GoName), ", ", tsQuote(s.Component.InputDomain), ", [", tsQuote(s.Component.OutputDomain), "]);")
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onEvent(", tsQuote(fqName(h.Message)), ", (eventAny, dests) => {")
+			g.P("  dispatch.onEvent(", tsQuote(fqName(h.Message)), ", (eventAny, dests, sourceCover) => {")
 			g.P("    const ev = ", tsParseAny, "(", refs.schema(h.Message), ", eventAny);")
-			g.P("    return h.", lowerFirst(h.MethodName), "(ev, dests);")
+			g.P("    return h.", lowerFirst(h.MethodName), "(ev, dests, sourceCover);")
 			g.P("  });")
 		}
 		for _, r := range s.Rejections {

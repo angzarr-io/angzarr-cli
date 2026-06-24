@@ -154,6 +154,7 @@ func star(g *protogen.GeneratedFile, pkg protogen.GoImportPath, name string) str
 
 func (goEmitter) sagaMethods(g *protogen.GeneratedFile, s *Service) []methodSig {
 	dests := star(g, angzarrPkg, "Destinations")
+	cover := star(g, angzarrPb, "Cover")
 	cmdBook := star(g, angzarrPb, "CommandBook")
 	evtBook := star(g, angzarrPb, "EventBook")
 	notif := star(g, angzarrPb, "Notification")
@@ -162,7 +163,7 @@ func (goEmitter) sagaMethods(g *protogen.GeneratedFile, s *Service) []methodSig 
 	for _, h := range s.Handlers {
 		out = append(out, methodSig{
 			name:    h.MethodName,
-			params:  "(event *" + g.QualifiedGoIdent(h.Message.GoIdent) + ", dests " + dests + ")",
+			params:  "(event *" + g.QualifiedGoIdent(h.Message.GoIdent) + ", dests " + dests + ", sourceCover " + cover + ")",
 			results: " ([]" + cmdBook + ", []" + evtBook + ", error)",
 		})
 	}
@@ -266,6 +267,7 @@ func (e goEmitter) emitSaga(g *protogen.GeneratedFile, s *Service) error {
 	name := s.GoName
 	component := s.Component
 	dests := star(g, angzarrPkg, "Destinations")
+	cover := star(g, angzarrPb, "Cover")
 	cmdBook := star(g, angzarrPb, "CommandBook")
 	evtBook := star(g, angzarrPb, "EventBook")
 
@@ -274,9 +276,9 @@ func (e goEmitter) emitSaga(g *protogen.GeneratedFile, s *Service) error {
 	g.P("func New", name, "Dispatch(h ", name, "Handler) *", ident(g, angzarrPkg, "SagaDispatch"), " {")
 	g.P("dispatch := ", ident(g, angzarrPkg, "NewSagaDispatch"), "(", quote(name), ", ", quote(component.InputDomain), ", ", quote(component.OutputDomain), ")")
 	for _, h := range s.Handlers {
-		g.P("dispatch.OnEvent(", quoteFQ(h.Message), ", func(eventAny ", star(g, anypbPkg, "Any"), ", dests ", dests, ") ([]", cmdBook, ", []", evtBook, ", error) {")
+		g.P("dispatch.OnEvent(", quoteFQ(h.Message), ", func(eventAny ", star(g, anypbPkg, "Any"), ", dests ", dests, ", sourceCover ", cover, ") ([]", cmdBook, ", []", evtBook, ", error) {")
 		emitDecode(g, "event", "eventAny", h.Message, "nil, nil, ")
-		g.P("return h.", h.MethodName, "(event, dests)")
+		g.P("return h.", h.MethodName, "(event, dests, sourceCover)")
 		g.P("})")
 	}
 	for _, r := range s.Rejections {

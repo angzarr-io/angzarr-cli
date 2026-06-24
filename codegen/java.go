@@ -36,6 +36,7 @@ const (
 	jCoded        = "io.angzarr.router.CodedError"
 	jSagaEmission = "io.angzarr.router.Thunks.SagaEmission"
 	jPmRejection  = "io.angzarr.router.Thunks.PmRejection"
+	jCover        = "io.angzarr.Cover"
 	jEventBook    = "io.angzarr.EventBook"
 	jEventPage    = "io.angzarr.EventPage"
 	jBusinessResp = "io.angzarr.BusinessResponse"
@@ -166,7 +167,7 @@ func (e javaEmitter) sagaMethods(s *Service) []javaMethod {
 	for _, h := range s.Handlers {
 		out = append(out, javaMethod{
 			name:    lowerFirst(h.MethodName),
-			params:  javaType(h.Message) + " event, " + jDestinations + " dests",
+			params:  javaType(h.Message) + " event, " + jDestinations + " dests, " + jCover + " sourceCover",
 			results: jSagaEmission,
 			throws:  " throws Exception",
 		})
@@ -274,9 +275,9 @@ func (e javaEmitter) emitSaga(g *protogen.GeneratedFile, s *Service) error {
 	g.P("  public static ", jSagaDispatch, " new", s.GoName, "Dispatch(", s.GoName, "Handler h) {")
 	g.P("    return new ", jSagaDispatch, "(", quote(s.GoName), ", ", quote(s.Component.InputDomain), ", ", jList, ".of(", quote(s.Component.OutputDomain), "))")
 	for _, h := range s.Handlers {
-		g.P("        .onEvent(", quoteFQ(h.Message), ", (eventAny, dests) -> {")
+		g.P("        .onEvent(", quoteFQ(h.Message), ", (eventAny, dests, sourceCover) -> {")
 		g.P("          ", javaType(h.Message), " event = ", parseAny(h.Message, "eventAny"), ";")
-		g.P("          return h.", lowerFirst(h.MethodName), "(event, dests);")
+		g.P("          return h.", lowerFirst(h.MethodName), "(event, dests, sourceCover);")
 		g.P("        })")
 	}
 	for _, r := range s.Rejections {

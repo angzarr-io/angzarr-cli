@@ -35,6 +35,7 @@ const (
 	csCoded        = "Angzarr.Router.CodedError"
 	csSagaEmission = "Angzarr.Router.SagaEmission"
 	csPmRejection  = "Angzarr.Router.PmRejection"
+	csCover        = "Angzarr.Cover"
 	csEventBook    = "Angzarr.EventBook"
 	csEventPage    = "Angzarr.EventPage"
 	csBusinessResp = "Angzarr.BusinessResponse"
@@ -159,7 +160,7 @@ func (e csharpEmitter) sagaMethods(s *Service) []csMethod {
 	for _, h := range s.Handlers {
 		out = append(out, csMethod{
 			name:    h.MethodName,
-			params:  csType(h.Message) + " ev, " + csDestinations + " dests",
+			params:  csType(h.Message) + " ev, " + csDestinations + " dests, " + csCover + " sourceCover",
 			results: csSagaEmission,
 		})
 	}
@@ -265,10 +266,10 @@ func (e csharpEmitter) emitSaga(g *protogen.GeneratedFile, s *Service) error {
 	g.P("    {")
 	g.P("        return new ", csSagaDispatch, "(", quote(s.GoName), ", ", quote(s.Component.InputDomain), ", ", quote(s.Component.OutputDomain), ")")
 	for _, h := range s.Handlers {
-		g.P("            .OnEvent(", quoteFQ(h.Message), ", (eventAny, dests) =>")
+		g.P("            .OnEvent(", quoteFQ(h.Message), ", (eventAny, dests, sourceCover) =>")
 		g.P("            {")
 		g.P("                ", csType(h.Message), " ev = ", csParseAny(h.Message, "eventAny"), ";")
-		g.P("                return h.", h.MethodName, "(ev, dests);")
+		g.P("                return h.", h.MethodName, "(ev, dests, sourceCover);")
 		g.P("            })")
 	}
 	for _, r := range s.Rejections {

@@ -394,6 +394,7 @@ func TestGenerate_ValidSaga_EmitsMethodRegister(t *testing.T) {
 		"func NewOrderSagaDispatch(",
 		"r.RegisterSaga(NewOrderSagaDispatch(h))", // saga registers via a method
 		`OnEvent("validation.test.OrderPlaced"`,
+		"sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("generated file missing %q", want)
@@ -674,6 +675,7 @@ func TestGenerateJava_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 		`new io.angzarr.router.SagaDispatch("OrderSaga", "orders", java.util.List.of("fulfillment"))`,
 		`.onEvent("validation.test.OrderPlaced"`,
 		"r.registerSaga(newOrderSagaDispatch(h));",
+		"io.angzarr.Cover sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("java saga wiring missing %q\n---\n%s", want, content)
@@ -762,6 +764,7 @@ func TestGenerateCSharp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 		`new Angzarr.Router.SagaDispatch("OrderSaga", "orders", "fulfillment")`,
 		`.OnEvent("validation.test.OrderPlaced"`,
 		"r.RegisterSaga(NewOrderSagaDispatch(h));",
+		"Angzarr.Cover sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("csharp saga wiring missing %q\n---\n%s", want, content)
@@ -840,6 +843,7 @@ func TestGenerateCpp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 		`angzarr::router::SagaDispatch dispatch("OrderSaga", "orders", {"fulfillment"});`,
 		`dispatch.OnEvent("validation.test.OrderPlaced"`,
 		"r.RegisterSaga(NewOrderSagaDispatch(h));",
+		"io::angzarr::v1::Cover& sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("cpp saga wiring missing %q\n---\n%s", want, content)
@@ -917,6 +921,7 @@ func TestGenerateTypeScript_SagaUsesFunctionRegisterAndTargets(t *testing.T) {
 		`const dispatch = new SagaDispatch("OrderSaga", "orders", ["fulfillment"]);`,
 		`dispatch.onEvent("validation.test.OrderPlaced"`,
 		"r.registerSaga(newOrderSagaDispatch(h));",
+		"sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("typescript saga wiring missing %q\n---\n%s", want, content)
