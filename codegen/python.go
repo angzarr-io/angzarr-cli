@@ -280,7 +280,7 @@ func pySagaSigs(refs *pyRefs, s *Service) []pySig {
 	for _, h := range s.Handlers {
 		out = append(out, pySig{
 			name:    snake(h.MethodName),
-			params:  "(self, event: " + refs.ref(h.Message) + ", dests: " + pyAz + ".Destinations)",
+			params:  "(self, event: " + refs.ref(h.Message) + ", dests: " + pyAz + ".Destinations, source_cover: " + pyTypes + ".Cover)",
 			returns: " -> tuple[list[" + pyTypes + ".CommandBook], list[" + pyTypes + ".EventBook]]",
 		})
 	}
@@ -373,11 +373,11 @@ func emitPySagaDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service) {
 	g.P("    dispatch = ", pyAz, ".SagaDispatch(", pyQuote(s.GoName), ", ", pyQuote(c.InputDomain), ", targets=[", pyQuote(c.OutputDomain), "])")
 	for _, h := range s.Handlers {
 		fn := "_on_" + snake(h.MethodName)
-		g.P("    def ", fn, "(event_any, dests):")
+		g.P("    def ", fn, "(event_any, dests, source_cover):")
 		g.P("        event = ", refs.ref(h.Message), "()")
 		emitPyUnpack(g, "event", "event_any")
-		g.P("        return handler.", snake(h.MethodName), "(event, dests)")
-		g.P("    dispatch.on_event(", pyQuote(string(h.Message.Desc.FullName())), ", ", fn, ")")
+		g.P("        return handler.", snake(h.MethodName), "(event, dests, source_cover)")
+		g.P("    dispatch.on_event(", pyQuote(fqName(h.Message)), ", ", fn, ")")
 	}
 	for _, r := range s.Rejections {
 		g.P("    dispatch.on_rejected(", pyQuote(r.Command), ", handler.", snake(r.MethodName), ")")
@@ -391,14 +391,7 @@ func emitPyAggregateDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service
 	g.P("def new_", snake(s.GoName), "_dispatch(handler: ", s.GoName, "Handler) -> ", pyAz, ".AggregateDispatch:")
 	g.P("    rebuilder = ", pyAz, ".Rebuilder(lambda: ", refs.ref(s.State), "())")
 	g.P("    rebuilder.with_snapshot(lambda state, payload: state.ParseFromString(payload.value))")
-	for _, a := range s.Appliers {
-		fn := "_apply_" + snake(a.MethodName)
-		g.P("    def ", fn, "(state, payload):")
-		g.P("        event = ", refs.ref(a.Message), "()")
-		emitPyUnpack(g, "event", "payload")
-		g.P("        handler.", snake(a.MethodName), "(state, event)")
-		g.P("    rebuilder.apply(", pyQuote(string(a.Message.Desc.FullName())), ", ", fn, ")")
-	}
+	emitPyAppliers(g, refs, s)
 	g.P("    dispatch = ", pyAz, ".AggregateDispatch(", pyQuote(s.GoName), ", ", pyQuote(c.InputDomain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		fn := "_on_" + snake(h.MethodName)
@@ -414,7 +407,7 @@ func emitPyAggregateDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service
 		} else {
 			g.P("        return handler.", snake(h.MethodName), "(cmd, state, cctx)")
 		}
-		g.P("    dispatch.on_command(", pyQuote(string(h.Message.Desc.FullName())), ", ", fn, ")")
+		g.P("    dispatch.on_command(", pyQuote(fqName(h.Message)), ", ", fn, ")")
 	}
 	for _, r := range s.Rejections {
 		g.P("    dispatch.on_rejected(", pyQuote(r.Command), ", handler.", snake(r.MethodName), ")")
@@ -428,14 +421,7 @@ func emitPyPMDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service) {
 	g.P("def new_", snake(s.GoName), "_dispatch(handler: ", s.GoName, "Handler) -> ", pyAz, ".ProcessManagerDispatch:")
 	g.P("    rebuilder = ", pyAz, ".Rebuilder(lambda: ", refs.ref(s.State), "())")
 	g.P("    rebuilder.with_snapshot(lambda state, payload: state.ParseFromString(payload.value))")
-	for _, a := range s.Appliers {
-		fn := "_apply_" + snake(a.MethodName)
-		g.P("    def ", fn, "(state, payload):")
-		g.P("        event = ", refs.ref(a.Message), "()")
-		emitPyUnpack(g, "event", "payload")
-		g.P("        handler.", snake(a.MethodName), "(state, event)")
-		g.P("    rebuilder.apply(", pyQuote(string(a.Message.Desc.FullName())), ", ", fn, ")")
-	}
+	emitPyAppliers(g, refs, s)
 	g.P("    dispatch = ", pyAz, ".ProcessManagerDispatch(", pyQuote(s.GoName), ", ", pyQuote(c.OutputDomain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		fn := "_on_" + snake(h.MethodName)
@@ -443,7 +429,7 @@ func emitPyPMDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service) {
 		g.P("        event = ", refs.ref(h.Message), "()")
 		emitPyUnpack(g, "event", "event_any")
 		g.P("        return handler.", snake(h.MethodName), "(event, state, dests)")
-		g.P("    dispatch.on_event(", pyQuote(h.SourceDomain), ", ", pyQuote(string(h.Message.Desc.FullName())), ", ", fn, ")")
+		g.P("    dispatch.on_event(", pyQuote(h.SourceDomain), ", ", pyQuote(fqName(h.Message)), ", ", fn, ")")
 	}
 	for _, r := range s.Rejections {
 		g.P("    dispatch.on_rejected(", pyQuote(r.Command), ", handler.", snake(r.MethodName), ")")
@@ -480,11 +466,25 @@ func emitPyProjectorDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service
 		g.P("        event = ", refs.ref(h.Message), "()")
 		emitPyUnpack(g, "event", "event_any")
 		g.P("        handler.", snake(h.MethodName), "(projection, event)")
-		g.P("    dispatch.on_event(", pyQuote(string(h.Message.Desc.FullName())), ", ", fn, ")")
+		g.P("    dispatch.on_event(", pyQuote(fqName(h.Message)), ", ", fn, ")")
 	}
 	g.P("    dispatch.finish(handler.finish)")
 	g.P("    return dispatch")
 	g.P()
+}
+
+// emitPyAppliers registers each event applier on the rebuilder: a nested fn
+// that unpacks the payload into the typed event and folds it into state.
+// Identical for aggregates and process managers (both rebuild their own state).
+func emitPyAppliers(g *protogen.GeneratedFile, refs *pyRefs, s *Service) {
+	for _, a := range s.Appliers {
+		fn := "_apply_" + snake(a.MethodName)
+		g.P("    def ", fn, "(state, payload):")
+		g.P("        event = ", refs.ref(a.Message), "()")
+		emitPyUnpack(g, "event", "payload")
+		g.P("        handler.", snake(a.MethodName), "(state, event)")
+		g.P("    rebuilder.apply(", pyQuote(fqName(a.Message)), ", ", fn, ")")
+	}
 }
 
 // emitPyUnpack parses an Any payload into a typed message, raising the binding's
