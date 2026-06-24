@@ -323,14 +323,10 @@ func (e tsEmitter) aggregateDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 		g.P("export function new", s.GoName, "Dispatch(h: ", s.GoName, "Handler): ", disp, " {")
 		g.P("  const rebuilder = new ", tsRebuilder, "<", state, ">(() => create(", refs.schema(s.State), "));")
 		g.P("  rebuilder.withSnapshot((state, payload) => ", tsPack, ".merge(", refs.schema(s.State), ", state, payload));")
-		for _, a := range s.Appliers {
-			g.P("  rebuilder.apply(", tsQuote(a.fqType()), ", (state, payload) => {")
-			g.P("    h.", lowerFirst(a.MethodName), "(state, ", tsParseAny, "(", refs.schema(a.Message), ", payload));")
-			g.P("  });")
-		}
+		emitTSAppliers(g, refs, s)
 		g.P("  const dispatch = new ", tsAggDispatch, "<", state, ">(", tsQuote(s.GoName), ", ", tsQuote(s.Component.InputDomain), ", rebuilder);")
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onCommand(", tsQuote(string(h.Message.Desc.FullName())), ", (cmdAny, state, cctx) => {")
+			g.P("  dispatch.onCommand(", tsQuote(fqName(h.Message)), ", (cmdAny, state, cctx) => {")
 			g.P("    const cmd = ", tsParseAny, "(", refs.schema(h.Message), ", cmdAny);")
 			if h.TypedEmit() {
 				g.P("    const events = h.", lowerFirst(h.MethodName), "(cmd, state, cctx);")
@@ -359,7 +355,7 @@ func (e tsEmitter) sagaDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Serv
 		g.P("export function new", s.GoName, "Dispatch(h: ", s.GoName, "Handler): ", disp, " {")
 		g.P("  const dispatch = new ", tsSagaDispatch, "(", tsQuote(s.GoName), ", ", tsQuote(s.Component.InputDomain), ", [", tsQuote(s.Component.OutputDomain), "]);")
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onEvent(", tsQuote(string(h.Message.Desc.FullName())), ", (eventAny, dests) => {")
+			g.P("  dispatch.onEvent(", tsQuote(fqName(h.Message)), ", (eventAny, dests) => {")
 			g.P("    const ev = ", tsParseAny, "(", refs.schema(h.Message), ", eventAny);")
 			g.P("    return h.", lowerFirst(h.MethodName), "(ev, dests);")
 			g.P("  });")
@@ -384,7 +380,7 @@ func (e tsEmitter) projectorDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 		g.P("  const dispatch = new ", tsProjDispatch, "<", state, ">(", tsQuote(s.GoName), ", () => create(", refs.schema(s.State), "));")
 		g.P("  dispatch.forDomains(", tsQuote(s.Component.InputDomain), ");")
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onEvent(", tsQuote(string(h.Message.Desc.FullName())), ", (projection, eventAny) => {")
+			g.P("  dispatch.onEvent(", tsQuote(fqName(h.Message)), ", (projection, eventAny) => {")
 			g.P("    h.", lowerFirst(h.MethodName), "(projection, ", tsParseAny, "(", refs.schema(h.Message), ", eventAny));")
 			g.P("  });")
 		}
@@ -407,14 +403,10 @@ func (e tsEmitter) pmDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Servic
 		g.P("export function new", s.GoName, "Dispatch(h: ", s.GoName, "Handler): ", disp, " {")
 		g.P("  const rebuilder = new ", tsRebuilder, "<", state, ">(() => create(", refs.schema(s.State), "));")
 		g.P("  rebuilder.withSnapshot((state, payload) => ", tsPack, ".merge(", refs.schema(s.State), ", state, payload));")
-		for _, a := range s.Appliers {
-			g.P("  rebuilder.apply(", tsQuote(a.fqType()), ", (state, payload) => {")
-			g.P("    h.", lowerFirst(a.MethodName), "(state, ", tsParseAny, "(", refs.schema(a.Message), ", payload));")
-			g.P("  });")
-		}
+		emitTSAppliers(g, refs, s)
 		g.P("  const dispatch = new ", tsPmDispatch, "<", state, ">(", tsQuote(s.GoName), ", ", tsQuote(s.Component.OutputDomain), ", rebuilder);")
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onEvent(", tsQuote(h.SourceDomain), ", ", tsQuote(string(h.Message.Desc.FullName())), ", (eventAny, state, dests) => {")
+			g.P("  dispatch.onEvent(", tsQuote(h.SourceDomain), ", ", tsQuote(fqName(h.Message)), ", (eventAny, state, dests) => {")
 			g.P("    const ev = ", tsParseAny, "(", refs.schema(h.Message), ", eventAny);")
 			g.P("    return h.", lowerFirst(h.MethodName), "(ev, state, dests);")
 			g.P("  });")
@@ -427,6 +419,16 @@ func (e tsEmitter) pmDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Servic
 		g.P("  return dispatch;")
 		g.P("}")
 		g.P()
+	}
+}
+
+// emitTSAppliers registers each event applier on the rebuilder. Identical for
+// aggregates and process managers (both rebuild their own state).
+func emitTSAppliers(g *protogen.GeneratedFile, refs *tsRefs, s *Service) {
+	for _, a := range s.Appliers {
+		g.P("  rebuilder.apply(", tsQuote(fqName(a.Message)), ", (state, payload) => {")
+		g.P("    h.", lowerFirst(a.MethodName), "(state, ", tsParseAny, "(", refs.schema(a.Message), ", payload));")
+		g.P("  });")
 	}
 }
 

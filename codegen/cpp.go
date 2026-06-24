@@ -233,14 +233,10 @@ func (e cppEmitter) emitAggregate(g *protogen.GeneratedFile, s *Service) error {
 	g.P("  rebuilder.WithSnapshot([](", state, "& state, const ", cppAny, "& payload) {")
 	g.P("    ", cppCoded, "::Merge(state, payload);")
 	g.P("  });")
-	for _, a := range s.Appliers {
-		g.P("  rebuilder.Apply(", cppQuote(a.fqType()), ", [&h](", state, "& state, const ", cppAny, "& payload) {")
-		g.P("    h.", a.MethodName, "(state, ", cppParse(a.Message, "payload"), ");")
-		g.P("  });")
-	}
+	emitCppAppliers(g, s, state)
 	g.P("  ", disp, " dispatch(", cppQuote(s.GoName), ", ", cppQuote(s.Component.InputDomain), ", std::move(rebuilder));")
 	for _, h := range s.Handlers {
-		g.P("  dispatch.OnCommand(", cppQuote(string(h.Message.Desc.FullName())), ", [&h](const ", cppAny, "& cmdAny, ", state, "& state, const ", cppCctx, "& cctx) -> ", cppEventBook, " {")
+		g.P("  dispatch.OnCommand(", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& cmdAny, ", state, "& state, const ", cppCctx, "& cctx) -> ", cppEventBook, " {")
 		g.P("    auto cmd = ", cppParse(h.Message, "cmdAny"), ";")
 		if h.TypedEmit() {
 			g.P("    auto events = h.", h.MethodName, "(cmd, state, cctx);")
@@ -272,7 +268,7 @@ func (e cppEmitter) emitSaga(g *protogen.GeneratedFile, s *Service) error {
 	g.P("inline ", cppSagaDispatch, " New", s.GoName, "Dispatch(", s.GoName, "Handler& h) {")
 	g.P("  ", cppSagaDispatch, " dispatch(", cppQuote(s.GoName), ", ", cppQuote(s.Component.InputDomain), ", {", cppQuote(s.Component.OutputDomain), "});")
 	for _, h := range s.Handlers {
-		g.P("  dispatch.OnEvent(", cppQuote(string(h.Message.Desc.FullName())), ", [&h](const ", cppAny, "& eventAny, const ", cppDestinations, "& dests) {")
+		g.P("  dispatch.OnEvent(", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& eventAny, const ", cppDestinations, "& dests) {")
 		g.P("    auto ev = ", cppParse(h.Message, "eventAny"), ";")
 		g.P("    return h.", h.MethodName, "(ev, dests);")
 		g.P("  });")
@@ -298,7 +294,7 @@ func (e cppEmitter) emitProjector(g *protogen.GeneratedFile, s *Service) error {
 	g.P("  ", disp, " dispatch(", cppQuote(s.GoName), ");")
 	g.P("  dispatch.ForDomains({", cppQuote(s.Component.InputDomain), "});")
 	for _, h := range s.Handlers {
-		g.P("  dispatch.OnEvent(", cppQuote(string(h.Message.Desc.FullName())), ", [&h](", state, "& projection, const ", cppAny, "& eventAny) {")
+		g.P("  dispatch.OnEvent(", cppQuote(fqName(h.Message)), ", [&h](", state, "& projection, const ", cppAny, "& eventAny) {")
 		g.P("    auto ev = ", cppParse(h.Message, "eventAny"), ";")
 		g.P("    h.", h.MethodName, "(projection, ev);")
 		g.P("  });")
@@ -323,14 +319,10 @@ func (e cppEmitter) emitPM(g *protogen.GeneratedFile, s *Service) error {
 	g.P("  rebuilder.WithSnapshot([](", state, "& state, const ", cppAny, "& payload) {")
 	g.P("    ", cppCoded, "::Merge(state, payload);")
 	g.P("  });")
-	for _, a := range s.Appliers {
-		g.P("  rebuilder.Apply(", cppQuote(a.fqType()), ", [&h](", state, "& state, const ", cppAny, "& payload) {")
-		g.P("    h.", a.MethodName, "(state, ", cppParse(a.Message, "payload"), ");")
-		g.P("  });")
-	}
+	emitCppAppliers(g, s, state)
 	g.P("  ", disp, " dispatch(", cppQuote(s.GoName), ", ", cppQuote(s.Component.OutputDomain), ", std::move(rebuilder));")
 	for _, h := range s.Handlers {
-		g.P("  dispatch.OnEvent(", cppQuote(h.SourceDomain), ", ", cppQuote(string(h.Message.Desc.FullName())), ", [&h](const ", cppAny, "& eventAny, ", state, "& state, const ", cppDestinations, "& dests) {")
+		g.P("  dispatch.OnEvent(", cppQuote(h.SourceDomain), ", ", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& eventAny, ", state, "& state, const ", cppDestinations, "& dests) {")
 		g.P("    auto ev = ", cppParse(h.Message, "eventAny"), ";")
 		g.P("    return h.", h.MethodName, "(ev, state, dests);")
 		g.P("  });")
@@ -345,6 +337,16 @@ func (e cppEmitter) emitPM(g *protogen.GeneratedFile, s *Service) error {
 	g.P()
 	e.emitRegister(g, s, "RegisterProcessManager")
 	return nil
+}
+
+// emitCppAppliers registers each event applier on the rebuilder. Identical for
+// aggregates and process managers (both rebuild their own state).
+func emitCppAppliers(g *protogen.GeneratedFile, s *Service, state string) {
+	for _, a := range s.Appliers {
+		g.P("  rebuilder.Apply(", cppQuote(fqName(a.Message)), ", [&h](", state, "& state, const ", cppAny, "& payload) {")
+		g.P("    h.", a.MethodName, "(state, ", cppParse(a.Message, "payload"), ");")
+		g.P("  });")
+	}
 }
 
 func (e cppEmitter) emitRegister(g *protogen.GeneratedFile, s *Service, routerMethod string) {

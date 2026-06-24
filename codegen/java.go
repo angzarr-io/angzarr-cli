@@ -240,13 +240,10 @@ func (e javaEmitter) emitAggregate(g *protogen.GeneratedFile, s *Service) error 
 	g.P("  public static ", jAggDispatch, " new", s.GoName, "Dispatch(", s.GoName, "Handler h) {")
 	g.P("    ", jRebuilder, " rebuilder = new ", jRebuilder, "(", javaType(s.State), "::newBuilder);")
 	g.P("    rebuilder.withSnapshot((state, payload) -> ((", state, ") state).mergeFrom(payload.getValue()));")
-	for _, a := range s.Appliers {
-		g.P("    rebuilder.apply(", quote(a.fqType()), ", (state, payload) ->")
-		g.P("        h.", lowerFirst(a.MethodName), "((", state, ") state, ", javaType(a.Message), ".parseFrom(payload.getValue())));")
-	}
+	emitJavaAppliers(g, s, state)
 	g.P("    return new ", jAggDispatch, "(", quote(s.GoName), ", ", quote(s.Component.InputDomain), ", rebuilder)")
 	for _, h := range s.Handlers {
-		g.P("        .onCommand(", quote(string(h.Message.Desc.FullName())), ", (cmdAny, state, cctx) -> {")
+		g.P("        .onCommand(", quoteFQ(h.Message), ", (cmdAny, state, cctx) -> {")
 		g.P("          ", javaType(h.Message), " cmd = ", parseAny(h.Message, "cmdAny"), ";")
 		if h.TypedEmit() {
 			g.P("          ", jList, "<", javaType(h.Emits[0]), "> events = h.", lowerFirst(h.MethodName), "(cmd, (", state, ") state, cctx);")
@@ -277,7 +274,7 @@ func (e javaEmitter) emitSaga(g *protogen.GeneratedFile, s *Service) error {
 	g.P("  public static ", jSagaDispatch, " new", s.GoName, "Dispatch(", s.GoName, "Handler h) {")
 	g.P("    return new ", jSagaDispatch, "(", quote(s.GoName), ", ", quote(s.Component.InputDomain), ", ", jList, ".of(", quote(s.Component.OutputDomain), "))")
 	for _, h := range s.Handlers {
-		g.P("        .onEvent(", quote(string(h.Message.Desc.FullName())), ", (eventAny, dests) -> {")
+		g.P("        .onEvent(", quoteFQ(h.Message), ", (eventAny, dests) -> {")
 		g.P("          ", javaType(h.Message), " event = ", parseAny(h.Message, "eventAny"), ";")
 		g.P("          return h.", lowerFirst(h.MethodName), "(event, dests);")
 		g.P("        })")
@@ -300,7 +297,7 @@ func (e javaEmitter) emitProjector(g *protogen.GeneratedFile, s *Service) error 
 	g.P("    return new ", jProjDispatch, "(", quote(s.GoName), ", ", javaType(s.State), "::newBuilder)")
 	g.P("        .forDomains(", quote(s.Component.InputDomain), ")")
 	for _, h := range s.Handlers {
-		g.P("        .onEvent(", quote(string(h.Message.Desc.FullName())), ", (projection, eventAny) -> {")
+		g.P("        .onEvent(", quoteFQ(h.Message), ", (projection, eventAny) -> {")
 		g.P("          ", javaType(h.Message), " event = ", parseAny(h.Message, "eventAny"), ";")
 		g.P("          h.", lowerFirst(h.MethodName), "((", state, ") projection, event);")
 		g.P("        })")
@@ -319,13 +316,10 @@ func (e javaEmitter) emitPM(g *protogen.GeneratedFile, s *Service) error {
 	g.P("  public static ", jPmDispatch, " new", s.GoName, "Dispatch(", s.GoName, "Handler h) {")
 	g.P("    ", jRebuilder, " rebuilder = new ", jRebuilder, "(", javaType(s.State), "::newBuilder);")
 	g.P("    rebuilder.withSnapshot((state, payload) -> ((", state, ") state).mergeFrom(payload.getValue()));")
-	for _, a := range s.Appliers {
-		g.P("    rebuilder.apply(", quote(a.fqType()), ", (state, payload) ->")
-		g.P("        h.", lowerFirst(a.MethodName), "((", state, ") state, ", javaType(a.Message), ".parseFrom(payload.getValue())));")
-	}
+	emitJavaAppliers(g, s, state)
 	g.P("    return new ", jPmDispatch, "(", quote(s.GoName), ", ", quote(s.Component.OutputDomain), ", rebuilder)")
 	for _, h := range s.Handlers {
-		g.P("        .onEvent(", quote(h.SourceDomain), ", ", quote(string(h.Message.Desc.FullName())), ", (eventAny, state, dests) -> {")
+		g.P("        .onEvent(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", (eventAny, state, dests) -> {")
 		g.P("          ", javaType(h.Message), " event = ", parseAny(h.Message, "eventAny"), ";")
 		g.P("          return h.", lowerFirst(h.MethodName), "(event, (", state, ") state, dests);")
 		g.P("        })")
@@ -339,6 +333,16 @@ func (e javaEmitter) emitPM(g *protogen.GeneratedFile, s *Service) error {
 	g.P()
 	e.emitRegister(g, s, "registerProcessManager")
 	return nil
+}
+
+// emitJavaAppliers registers each event applier on the rebuilder. Identical for
+// aggregates and process managers (both rebuild their own state). state is the
+// state Builder type the appliers fold into.
+func emitJavaAppliers(g *protogen.GeneratedFile, s *Service, state string) {
+	for _, a := range s.Appliers {
+		g.P("    rebuilder.apply(", quoteFQ(a.Message), ", (state, payload) ->")
+		g.P("        h.", lowerFirst(a.MethodName), "((", state, ") state, ", javaType(a.Message), ".parseFrom(payload.getValue())));")
+	}
 }
 
 func (e javaEmitter) emitRegister(g *protogen.GeneratedFile, s *Service, routerMethod string) {
@@ -374,8 +378,6 @@ func (e javaEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *prot
 }
 
 // --- Java naming helpers ------------------------------------------------------
-
-func (a Applier) fqType() string { return string(a.Message.Desc.FullName()) }
 
 func lowerFirst(s string) string {
 	if s == "" {

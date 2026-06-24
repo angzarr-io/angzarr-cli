@@ -272,17 +272,17 @@ func (e goEmitter) emitSaga(g *protogen.GeneratedFile, s *Service) error {
 	emitInterface(g, name, name+" saga", e.sagaMethods(g, s))
 	g.P("// New", name, "Dispatch populates the saga table from the proto declaration.")
 	g.P("func New", name, "Dispatch(h ", name, "Handler) *", ident(g, angzarrPkg, "SagaDispatch"), " {")
-	g.P("\treturn ", ident(g, angzarrPkg, "NewSagaDispatch"), "(", quote(name), ", ", quote(component.InputDomain), ", ", quote(component.OutputDomain), ").")
-	for i, h := range s.Handlers {
-		g.P("\t\tOnEvent(", quote(string(h.Message.Desc.FullName())), ", func(eventAny *", ident(g, anypbPkg, "Any"), ", dests ", dests, ") ([]", cmdBook, ", []", evtBook, ", error) {")
-		g.P("\t\t\tevent := &", g.QualifiedGoIdent(h.Message.GoIdent), "{}")
-		g.P("\t\t\tif err := eventAny.UnmarshalTo(event); err != nil { return nil, nil, ", ident(g, angzarrPkg, "AnyDecodeError"), "(eventAny.TypeUrl, err) }")
-		g.P("\t\t\treturn h.", h.MethodName, "(event, dests)")
-		g.P("\t\t})", trailer(i, len(s.Handlers), len(s.Rejections) > 0))
+	g.P("dispatch := ", ident(g, angzarrPkg, "NewSagaDispatch"), "(", quote(name), ", ", quote(component.InputDomain), ", ", quote(component.OutputDomain), ")")
+	for _, h := range s.Handlers {
+		g.P("dispatch.OnEvent(", quoteFQ(h.Message), ", func(eventAny ", star(g, anypbPkg, "Any"), ", dests ", dests, ") ([]", cmdBook, ", []", evtBook, ", error) {")
+		emitDecode(g, "event", "eventAny", h.Message, "nil, nil, ")
+		g.P("return h.", h.MethodName, "(event, dests)")
+		g.P("})")
 	}
-	for i, r := range s.Rejections {
-		g.P("\t\tOnRejected(", quote(r.Command), ", h.", r.MethodName, ")", trailer(i, len(s.Rejections), false))
+	for _, r := range s.Rejections {
+		g.P("dispatch.OnRejected(", quote(r.Command), ", h.", r.MethodName, ")")
 	}
+	g.P("return dispatch")
 	g.P("}")
 	g.P()
 	emitRegister(g, s, func() {
@@ -303,39 +303,32 @@ func (e goEmitter) emitAggregate(g *protogen.GeneratedFile, s *Service) error {
 	emitInterface(g, name, name+" aggregate", e.aggregateMethods(g, s))
 	g.P("// New", name, "Dispatch populates the aggregate table from the proto declaration.")
 	g.P("func New", name, "Dispatch(h ", name, "Handler) *", ident(g, angzarrPkg, "AggregateDispatch"), "[", statePtr, "] {")
-	g.P("\trebuilder := ", ident(g, angzarrPkg, "NewRebuilder"), "(func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
+	g.P("rebuilder := ", ident(g, angzarrPkg, "NewRebuilder"), "(func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
 	emitSnapshotLoader(g, s.State)
-	for _, a := range s.Appliers {
-		g.P("\trebuilder.Apply(", quote(string(a.Message.Desc.FullName())), ", func(state ", statePtr, ", payload *", ident(g, anypbPkg, "Any"), ") error {")
-		g.P("\t\tevent := &", g.QualifiedGoIdent(a.Message.GoIdent), "{}")
-		g.P("\t\tif err := payload.UnmarshalTo(event); err != nil { return err }")
-		g.P("\t\th.", a.MethodName, "(state, event)")
-		g.P("\t\treturn nil")
-		g.P("\t})")
-	}
-	g.P("\treturn ", ident(g, angzarrPkg, "NewAggregateDispatch"), "(", quote(name), ", ", quote(component.InputDomain), ", rebuilder).")
-	for i, h := range s.Handlers {
-		g.P("\t\tOnCommand(", quote(string(h.Message.Desc.FullName())), ", func(cmdAny *", ident(g, anypbPkg, "Any"), ", state ", statePtr, ", cctx ", cctx, ") (", evtBook, ", error) {")
-		g.P("\t\t\tcmd := &", g.QualifiedGoIdent(h.Message.GoIdent), "{}")
-		g.P("\t\t\tif err := cmdAny.UnmarshalTo(cmd); err != nil { return nil, ", ident(g, angzarrPkg, "AnyDecodeError"), "(cmdAny.TypeUrl, err) }")
+	emitAppliers(g, s, statePtr)
+	g.P("dispatch := ", ident(g, angzarrPkg, "NewAggregateDispatch"), "(", quote(name), ", ", quote(component.InputDomain), ", rebuilder)")
+	for _, h := range s.Handlers {
+		g.P("dispatch.OnCommand(", quoteFQ(h.Message), ", func(cmdAny ", star(g, anypbPkg, "Any"), ", state ", statePtr, ", cctx ", cctx, ") (", evtBook, ", error) {")
+		emitDecode(g, "cmd", "cmdAny", h.Message, "nil, ")
 		if h.TypedEmit() {
-			g.P("\t\t\tevents, err := h.", h.MethodName, "(cmd, state, cctx)")
-			g.P("\t\t\tif err != nil { return nil, err }")
-			g.P("\t\t\tpages := make([]*", evtPage, ", len(events))")
-			g.P("\t\t\tfor i, ev := range events {")
-			g.P("\t\t\t\tpayload, err := ", ident(g, angzarrPkg, "Pack"), "(ev)")
-			g.P("\t\t\t\tif err != nil { return nil, err }")
-			g.P("\t\t\t\tpages[i] = &", evtPage, "{Payload: &", evtPageEvent, "{Event: payload}}")
-			g.P("\t\t\t}")
-			g.P("\t\t\treturn &", ident(g, angzarrPb, "EventBook"), "{Pages: pages}, nil")
+			g.P("events, err := h.", h.MethodName, "(cmd, state, cctx)")
+			g.P("if err != nil { return nil, err }")
+			g.P("pages := make([]*", evtPage, ", len(events))")
+			g.P("for i, ev := range events {")
+			g.P("payload, err := ", ident(g, angzarrPkg, "Pack"), "(ev)")
+			g.P("if err != nil { return nil, err }")
+			g.P("pages[i] = &", evtPage, "{Payload: &", evtPageEvent, "{Event: payload}}")
+			g.P("}")
+			g.P("return &", ident(g, angzarrPb, "EventBook"), "{Pages: pages}, nil")
 		} else {
-			g.P("\t\t\treturn h.", h.MethodName, "(cmd, state, cctx)")
+			g.P("return h.", h.MethodName, "(cmd, state, cctx)")
 		}
-		g.P("\t\t})", trailer(i, len(s.Handlers), len(s.Rejections) > 0))
+		g.P("})")
 	}
-	for i, r := range s.Rejections {
-		g.P("\t\tOnRejected(", quote(r.Command), ", h.", r.MethodName, ")", trailer(i, len(s.Rejections), false))
+	for _, r := range s.Rejections {
+		g.P("dispatch.OnRejected(", quote(r.Command), ", h.", r.MethodName, ")")
 	}
+	g.P("return dispatch")
 	g.P("}")
 	g.P()
 	emitRegister(g, s, func() {
@@ -354,27 +347,20 @@ func (e goEmitter) emitPM(g *protogen.GeneratedFile, s *Service) error {
 	emitInterface(g, name, name+" process manager", e.pmMethods(g, s))
 	g.P("// New", name, "Dispatch populates the PM table from the proto declaration.")
 	g.P("func New", name, "Dispatch(h ", name, "Handler) *", ident(g, angzarrPkg, "ProcessManagerDispatch"), "[", statePtr, "] {")
-	g.P("\trebuilder := ", ident(g, angzarrPkg, "NewRebuilder"), "(func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
+	g.P("rebuilder := ", ident(g, angzarrPkg, "NewRebuilder"), "(func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
 	emitSnapshotLoader(g, s.State)
-	for _, a := range s.Appliers {
-		g.P("\trebuilder.Apply(", quote(string(a.Message.Desc.FullName())), ", func(state ", statePtr, ", payload *", ident(g, anypbPkg, "Any"), ") error {")
-		g.P("\t\tevent := &", g.QualifiedGoIdent(a.Message.GoIdent), "{}")
-		g.P("\t\tif err := payload.UnmarshalTo(event); err != nil { return err }")
-		g.P("\t\th.", a.MethodName, "(state, event)")
-		g.P("\t\treturn nil")
-		g.P("\t})")
+	emitAppliers(g, s, statePtr)
+	g.P("dispatch := ", ident(g, angzarrPkg, "NewProcessManagerDispatch"), "(", quote(name), ", ", quote(component.OutputDomain), ", rebuilder)")
+	for _, h := range s.Handlers {
+		g.P("dispatch.OnEvent(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", func(eventAny ", star(g, anypbPkg, "Any"), ", state ", statePtr, ", dests ", dests, ") (", pmResp, ", error) {")
+		emitDecode(g, "event", "eventAny", h.Message, "nil, ")
+		g.P("return h.", h.MethodName, "(event, state, dests)")
+		g.P("})")
 	}
-	g.P("\treturn ", ident(g, angzarrPkg, "NewProcessManagerDispatch"), "(", quote(name), ", ", quote(component.OutputDomain), ", rebuilder).")
-	for i, h := range s.Handlers {
-		g.P("\t\tOnEvent(", quote(h.SourceDomain), ", ", quote(string(h.Message.Desc.FullName())), ", func(eventAny *", ident(g, anypbPkg, "Any"), ", state ", statePtr, ", dests ", dests, ") (", pmResp, ", error) {")
-		g.P("\t\t\tevent := &", g.QualifiedGoIdent(h.Message.GoIdent), "{}")
-		g.P("\t\t\tif err := eventAny.UnmarshalTo(event); err != nil { return nil, ", ident(g, angzarrPkg, "AnyDecodeError"), "(eventAny.TypeUrl, err) }")
-		g.P("\t\t\treturn h.", h.MethodName, "(event, state, dests)")
-		g.P("\t\t})", trailer(i, len(s.Handlers), len(s.Rejections) > 0))
+	for _, r := range s.Rejections {
+		g.P("dispatch.OnRejected(", quote(r.Command), ", h.", r.MethodName, ")")
 	}
-	for i, r := range s.Rejections {
-		g.P("\t\tOnRejected(", quote(r.Command), ", h.", r.MethodName, ")", trailer(i, len(s.Rejections), false))
-	}
+	g.P("return dispatch")
 	g.P("}")
 	g.P()
 	emitRegister(g, s, func() {
@@ -391,16 +377,16 @@ func (e goEmitter) emitProjector(g *protogen.GeneratedFile, s *Service) error {
 	emitInterface(g, name, name+" projector", e.projectorMethods(g, s))
 	g.P("// New", name, "Dispatch populates the projector table from the proto declaration.")
 	g.P("func New", name, "Dispatch(h ", name, "Handler) *", ident(g, angzarrPkg, "ProjectorDispatch"), "[", statePtr, "] {")
-	g.P("\treturn ", ident(g, angzarrPkg, "NewProjectorDispatch"), "(", quote(name), ", func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} }).")
-	g.P("\t\tForDomains(", quote(component.InputDomain), ").")
+	g.P("dispatch := ", ident(g, angzarrPkg, "NewProjectorDispatch"), "(", quote(name), ", func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
+	g.P("dispatch.ForDomains(", quote(component.InputDomain), ")")
 	for _, h := range s.Handlers {
-		g.P("\t\tOnEvent(", quote(string(h.Message.Desc.FullName())), ", func(projection ", statePtr, ", eventAny *", ident(g, anypbPkg, "Any"), ") error {")
-		g.P("\t\t\tevent := &", g.QualifiedGoIdent(h.Message.GoIdent), "{}")
-		g.P("\t\t\tif err := eventAny.UnmarshalTo(event); err != nil { return ", ident(g, angzarrPkg, "AnyDecodeError"), "(eventAny.TypeUrl, err) }")
-		g.P("\t\t\treturn h.", h.MethodName, "(projection, event)")
-		g.P("\t\t}).")
+		g.P("dispatch.OnEvent(", quoteFQ(h.Message), ", func(projection ", statePtr, ", eventAny ", star(g, anypbPkg, "Any"), ") error {")
+		emitDecode(g, "event", "eventAny", h.Message, "")
+		g.P("return h.", h.MethodName, "(projection, event)")
+		g.P("})")
 	}
-	g.P("\t\tFinish(h.Finish)")
+	g.P("dispatch.Finish(h.Finish)")
+	g.P("return dispatch")
 	g.P("}")
 	g.P()
 	emitRegister(g, s, func() {
@@ -414,9 +400,35 @@ func (e goEmitter) emitProjector(g *protogen.GeneratedFile, s *Service) error {
 // the rebuilding state — generic, no business method needed.
 func emitSnapshotLoader(g *protogen.GeneratedFile, state *protogen.Message) {
 	statePtr := "*" + g.QualifiedGoIdent(state.GoIdent)
-	g.P("\trebuilder.WithSnapshot(func(state ", statePtr, ", payload *", ident(g, anypbPkg, "Any"), ") error {")
-	g.P("\t\treturn payload.UnmarshalTo(state)")
-	g.P("\t})")
+	g.P("rebuilder.WithSnapshot(func(state ", statePtr, ", payload ", star(g, anypbPkg, "Any"), ") error {")
+	g.P("return payload.UnmarshalTo(state)")
+	g.P("})")
+}
+
+// emitDecode writes the typed-message decode guard shared by every handler
+// thunk: declare the message, UnmarshalTo it, and code a decode failure as
+// AnyDecodeError (a malformed payload is an invalid argument). ret is the
+// values returned before the error on failure — "nil, nil, " for the saga's
+// three-result handler, "nil, " for a two-result handler, "" when the only
+// result is the error.
+func emitDecode(g *protogen.GeneratedFile, name, anyVar string, m *protogen.Message, ret string) {
+	g.P(name, " := &", g.QualifiedGoIdent(m.GoIdent), "{}")
+	g.P("if err := ", anyVar, ".UnmarshalTo(", name, "); err != nil { return ", ret, ident(g, angzarrPkg, "AnyDecodeError"), "(", anyVar, ".TypeUrl, err) }")
+}
+
+// emitAppliers registers each event applier on the rebuilder: decode the
+// payload into the typed event and fold it into state. Identical for
+// aggregates and process managers — both rebuild state from their own events —
+// so the two emitters share it.
+func emitAppliers(g *protogen.GeneratedFile, s *Service, statePtr string) {
+	for _, a := range s.Appliers {
+		g.P("rebuilder.Apply(", quoteFQ(a.Message), ", func(state ", statePtr, ", payload ", star(g, anypbPkg, "Any"), ") error {")
+		g.P("event := &", g.QualifiedGoIdent(a.Message.GoIdent), "{}")
+		g.P("if err := payload.UnmarshalTo(event); err != nil { return err }")
+		g.P("h.", a.MethodName, "(state, event)")
+		g.P("return nil")
+		g.P("})")
+	}
 }
 
 // emitRegister writes the Register<Component> convenience that hides the
@@ -432,10 +444,10 @@ func emitRegister(g *protogen.GeneratedFile, s *Service, body func()) {
 
 func quote(s string) string { return fmt.Sprintf("%q", s) }
 
-// trailer continues the fluent chain when more registrations follow.
-func trailer(i, n int, more bool) string {
-	if i < n-1 || more {
-		return "." // not last — keep chaining
-	}
-	return ""
-}
+// fqName is a message's fully-qualified proto name — the dispatch key the
+// runtime matches on. Short names never match, so the FQ name is the contract.
+// Every emitter keys its dispatch table on this.
+func fqName(m *protogen.Message) string { return string(m.Desc.FullName()) }
+
+// quoteFQ quotes fqName for the emitters that share quote (Go, Java, C#).
+func quoteFQ(m *protogen.Message) string { return quote(fqName(m)) }

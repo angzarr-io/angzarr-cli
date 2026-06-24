@@ -50,27 +50,10 @@ generate-check: lint-proto
     done
     echo "generate-check OK: $(grep -rh 'func New' _gen | wc -l) constructors across $(find _gen -name '*_angzarr.pb.go' | wc -l) component files"
 
-# Validate against the test client: regenerate client-go's dispatch
-# wiring with THIS checkout of the CLI (a throwaway go.work makes the
-# local module win over the go.mod pin) and run client-go's tests — the
-# generated-round-trip tests and the cucumber suite compile and exercise
-# the emitted code against the real engine. Needs the sibling checkout;
-# override with ANGZARR_CLIENT_GO.
-CLIENT_GO := env_var_or_default("ANGZARR_CLIENT_GO", TOP / ".." / ".." / "client-go" / "main")
-validate-client:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    client="{{CLIENT_GO}}"
-    test -d "$client" || { echo "FAIL: test client not found at $client (set ANGZARR_CLIENT_GO)"; exit 1; }
-    client="$(cd "$client" && pwd)" # go.work prefix-matches literal paths
-    workdir="$(mktemp -d)"
-    trap 'rm -rf "$workdir"' EXIT
-    printf 'go 1.24.4\nuse (\n\t%s\n\t%s\n)\n' "{{TOP}}" "$client" > "$workdir/go.work"
-    cd "$client"
-    GOWORK="$workdir/go.work" buf generate angzarr-project/proto
-    head -1 proto/angzarr_client/proto/examples/v1/components_angzarr.pb.go
-    GOWORK="$workdir/go.work" go test -count=1 ./...
-    echo "validate-client OK: generated wiring passed the test client's suite"
+# Full compile-against-engine validation lives in angzarr-router, which bakes
+# this CLI into its Go toolchain image and runs the FFI conformance suite. The
+# in-repo gate above (generate-check) validates that generation succeeds and
+# emits parseable Go.
 
 # Check formatting
 fmt:

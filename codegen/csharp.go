@@ -228,13 +228,10 @@ func (e csharpEmitter) emitAggregate(g *protogen.GeneratedFile, s *Service) erro
 	g.P("    {")
 	g.P("        var rebuilder = new ", csGeneric(csRebuilder, state), "(() => new ", state, "());")
 	g.P("        rebuilder.WithSnapshot((state, payload) => Google.Protobuf.MessageExtensions.MergeFrom(state, payload.Value));")
-	for _, a := range s.Appliers {
-		g.P("        rebuilder.Apply(", quote(a.fqType()), ", (state, payload) =>")
-		g.P("            h.", a.MethodName, "(state, ", csParse(a.Message, "payload.Value"), "));")
-	}
+	emitCsAppliers(g, s)
 	g.P("        return new ", csGeneric(csAggDispatch, state), "(", quote(s.GoName), ", ", quote(s.Component.InputDomain), ", rebuilder)")
 	for _, h := range s.Handlers {
-		g.P("            .OnCommand(", quote(string(h.Message.Desc.FullName())), ", (cmdAny, state, cctx) =>")
+		g.P("            .OnCommand(", quoteFQ(h.Message), ", (cmdAny, state, cctx) =>")
 		g.P("            {")
 		g.P("                ", csType(h.Message), " cmd = ", csParseAny(h.Message, "cmdAny"), ";")
 		if h.TypedEmit() {
@@ -268,7 +265,7 @@ func (e csharpEmitter) emitSaga(g *protogen.GeneratedFile, s *Service) error {
 	g.P("    {")
 	g.P("        return new ", csSagaDispatch, "(", quote(s.GoName), ", ", quote(s.Component.InputDomain), ", ", quote(s.Component.OutputDomain), ")")
 	for _, h := range s.Handlers {
-		g.P("            .OnEvent(", quote(string(h.Message.Desc.FullName())), ", (eventAny, dests) =>")
+		g.P("            .OnEvent(", quoteFQ(h.Message), ", (eventAny, dests) =>")
 		g.P("            {")
 		g.P("                ", csType(h.Message), " ev = ", csParseAny(h.Message, "eventAny"), ";")
 		g.P("                return h.", h.MethodName, "(ev, dests);")
@@ -293,7 +290,7 @@ func (e csharpEmitter) emitProjector(g *protogen.GeneratedFile, s *Service) erro
 	g.P("        return new ", csGeneric(csProjDispatch, state), "(", quote(s.GoName), ", () => new ", state, "())")
 	g.P("            .ForDomains(", quote(s.Component.InputDomain), ")")
 	for _, h := range s.Handlers {
-		g.P("            .OnEvent(", quote(string(h.Message.Desc.FullName())), ", (projection, eventAny) =>")
+		g.P("            .OnEvent(", quoteFQ(h.Message), ", (projection, eventAny) =>")
 		g.P("            {")
 		g.P("                ", csType(h.Message), " ev = ", csParseAny(h.Message, "eventAny"), ";")
 		g.P("                h.", h.MethodName, "(projection, ev);")
@@ -314,13 +311,10 @@ func (e csharpEmitter) emitPM(g *protogen.GeneratedFile, s *Service) error {
 	g.P("    {")
 	g.P("        var rebuilder = new ", csGeneric(csRebuilder, state), "(() => new ", state, "());")
 	g.P("        rebuilder.WithSnapshot((state, payload) => Google.Protobuf.MessageExtensions.MergeFrom(state, payload.Value));")
-	for _, a := range s.Appliers {
-		g.P("        rebuilder.Apply(", quote(a.fqType()), ", (state, payload) =>")
-		g.P("            h.", a.MethodName, "(state, ", csParse(a.Message, "payload.Value"), "));")
-	}
+	emitCsAppliers(g, s)
 	g.P("        return new ", csGeneric(csPmDispatch, state), "(", quote(s.GoName), ", ", quote(s.Component.OutputDomain), ", rebuilder)")
 	for _, h := range s.Handlers {
-		g.P("            .OnEvent(", quote(h.SourceDomain), ", ", quote(string(h.Message.Desc.FullName())), ", (eventAny, state, dests) =>")
+		g.P("            .OnEvent(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", (eventAny, state, dests) =>")
 		g.P("            {")
 		g.P("                ", csType(h.Message), " ev = ", csParseAny(h.Message, "eventAny"), ";")
 		g.P("                return h.", h.MethodName, "(ev, state, dests);")
@@ -335,6 +329,15 @@ func (e csharpEmitter) emitPM(g *protogen.GeneratedFile, s *Service) error {
 	g.P()
 	e.emitRegister(g, s, "RegisterProcessManager")
 	return nil
+}
+
+// emitCsAppliers registers each event applier on the rebuilder. Identical for
+// aggregates and process managers (both rebuild their own state).
+func emitCsAppliers(g *protogen.GeneratedFile, s *Service) {
+	for _, a := range s.Appliers {
+		g.P("        rebuilder.Apply(", quoteFQ(a.Message), ", (state, payload) =>")
+		g.P("            h.", a.MethodName, "(state, ", csParse(a.Message, "payload.Value"), "));")
+	}
 }
 
 func (e csharpEmitter) emitRegister(g *protogen.GeneratedFile, s *Service, routerMethod string) {
