@@ -109,8 +109,16 @@ func newPyRefs(services []*Service) *pyRefs {
 		sorted = append(sorted, p)
 	}
 	sort.Strings(sorted)
+	used := map[string]bool{pyAz: true, pyTypes: true, pyCmdH: true, pyPM: true}
 	for i, p := range sorted {
-		alias := "_m" + itoa(i)
+		// Readable module alias from the proto file stem (buy_in.proto -> _buy_in)
+		// rather than an opaque _m<N> index. Falls back to an index suffix on the
+		// rare same-stem clash across packages or a clash with a framework alias.
+		alias := "_" + strings.TrimSuffix(path.Base(p), ".proto")
+		if used[alias] {
+			alias += itoa(i)
+		}
+		used[alias] = true
 		r.alias[p] = alias
 		r.order = append(r.order, p)
 	}

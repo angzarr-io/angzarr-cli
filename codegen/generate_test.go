@@ -448,8 +448,8 @@ func TestGeneratePython_EmitsProtocolSeam(t *testing.T) {
 	for _, want := range []string{
 		"import angzarr_router_ffi as _az",
 		"class OrderAggregateHandler(Protocol):",
-		"def create_order(self, cmd: _m0.CreateOrder, state: _m0.State, cctx: _az.CommandContext) -> list[_m0.OrderCreated]: ...",
-		"def apply_order_created(self, state: _m0.State, event: _m0.OrderCreated) -> None: ...",
+		"def create_order(self, cmd: _validation_test.CreateOrder, state: _validation_test.State, cctx: _az.CommandContext) -> list[_validation_test.OrderCreated]: ...",
+		"def apply_order_created(self, state: _validation_test.State, event: _validation_test.OrderCreated) -> None: ...",
 		"def new_order_aggregate_dispatch(handler: OrderAggregateHandler) -> _az.AggregateDispatch:",
 		`dispatch.on_command("validation.test.CreateOrder"`,
 		"book.pages.add().event.CopyFrom(_az.pack(ev))", // typed-emit
@@ -515,7 +515,7 @@ func TestGeneratePythonScaffold_EmitsOwnedStub(t *testing.T) {
 	for _, want := range []string{
 		"Regeneration will NOT overwrite this file",
 		"class OrderAggregate:",
-		"def create_order(self, cmd: _m0.CreateOrder",
+		"def create_order(self, cmd: _validation_test.CreateOrder",
 		`raise NotImplementedError("TODO: implement OrderAggregate.create_order")`,
 	} {
 		if !strings.Contains(content, want) {
