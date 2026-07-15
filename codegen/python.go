@@ -449,24 +449,15 @@ func emitPyPMDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service) {
 func emitPyProjectorDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Service) {
 	g.P("def new_", snake(s.GoName), "_dispatch(handler: ", s.GoName, "Handler) -> ", pyAz, ".ProjectorDispatch:")
 	g.P("    dispatch = ", pyAz, ".ProjectorDispatch(", pyQuote(s.GoName), ", lambda: ", refs.ref(s.State), "())")
-	// A projector consumes events from every domain its handlers source from
-	// (a display can fold table, hand and player events) — not a single input
-	// domain. Restrict folding to that exact set; empty means consume all.
-	seen := map[string]bool{}
-	var domains []string
-	for _, h := range s.Handlers {
-		if h.SourceDomain != "" && !seen[h.SourceDomain] {
-			seen[h.SourceDomain] = true
-			domains = append(domains, h.SourceDomain)
-		}
-	}
-	sort.Strings(domains)
-	if len(domains) > 0 {
-		quoted := make([]string, len(domains))
-		for i, d := range domains {
-			quoted[i] = pyQuote(d)
-		}
-		g.P("    dispatch.for_domains(", strings.Join(quoted, ", "), ")")
+	// The projector's domain filter is the union of its handlers' source
+	// domains (Service.ProjectorDomains, computed once in analyze() and
+	// shared by every emitter) — not the single declared input_domain, since
+	// a projector routinely folds several domains at once (e.g. a display
+	// combining player, table and hand events). Empty means every handler's
+	// source domain was unset, so the call is omitted and the runtime default
+	// (consume every domain) applies.
+	if len(s.ProjectorDomains) > 0 {
+		g.P("    dispatch.for_domains(", quoteJoin(s.ProjectorDomains, pyQuote), ")")
 	}
 	for _, h := range s.Handlers {
 		fn := "_on_" + snake(h.MethodName)

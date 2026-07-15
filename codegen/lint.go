@@ -19,6 +19,7 @@ package codegen
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
@@ -147,6 +148,17 @@ func analyze(gen *protogen.Plugin) ([]fileServices, []Diagnostic) {
 		}
 	}
 
+	// Projector domain filter: the union of handler source domains, computed
+	// once here rather than per-emitter (the L01 bug: five of six emitters
+	// restricted to the single declared input_domain instead, silently
+	// dropping every secondary-domain event at runtime).
+	for _, fq := range order {
+		s := services[fq]
+		if s.Component.Kind == KindProjector {
+			s.ProjectorDomains = projectorDomains(s)
+		}
+	}
+
 	// compensation references + per-kind required-field contract.
 	for _, fq := range order {
 		s := services[fq]
@@ -266,13 +278,39 @@ func requiredFields(s *Service) []Diagnostic {
 			return []Diagnostic{errDiag("ANZ008", s.Anchor, "process manager requires output_domain (its pm_domain and command-target domain)")}
 		}
 	case KindProjector:
-		if c.InputDomain == "" {
-			return []Diagnostic{errDiag("ANZ008", s.Anchor, "projector requires input_domain (its subscribed domains)")}
-		}
+		// No required declared field: the domain filter is DERIVED
+		// (Service.ProjectorDomains, computed above from each handler's
+		// (event).domain) rather than the single declared input_domain — a
+		// projector legitimately spans multiple source domains. Requiring
+		// input_domain here would re-litigate the L01 bug at the lint layer:
+		// a projector whose handlers span several domains has no single
+		// correct value to put there.
 	default:
 		return []Diagnostic{errDiag("ANZ008", s.Anchor, fmt.Sprintf("unsupported component kind %v", c.Kind))}
 	}
 	return nil
+}
+
+// projectorDomains computes a projector's authoritative domain filter: the
+// sorted, deduplicated set of non-empty source domains across its handlers.
+// Decision (A) — the union of handler source domains, not the single
+// declared input_domain — is authoritative (L01 remediation): the Python
+// emitter already computed this and documented input_domain as wrong for
+// projectors, while the other five emitters silently restricted to
+// input_domain and dropped every secondary-domain event at runtime. Hoisted
+// here so every emitter consumes one computation instead of five diverging
+// ones.
+func projectorDomains(s *Service) []string {
+	seen := make(map[string]bool)
+	var domains []string
+	for _, h := range s.Handlers {
+		if h.SourceDomain != "" && !seen[h.SourceDomain] {
+			seen[h.SourceDomain] = true
+			domains = append(domains, h.SourceDomain)
+		}
+	}
+	sort.Strings(domains)
+	return domains
 }
 
 // collisionDiags catches generated-identifier clashes that would produce

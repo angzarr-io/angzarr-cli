@@ -289,7 +289,14 @@ func (e csharpEmitter) emitProjector(g *protogen.GeneratedFile, s *Service) erro
 	g.P("    public static ", csGeneric(csProjDispatch, state), " New", s.GoName, "Dispatch(", s.GoName, "Handler h)")
 	g.P("    {")
 	g.P("        return new ", csGeneric(csProjDispatch, state), "(", quote(s.GoName), ", () => new ", state, "())")
-	g.P("            .ForDomains(", quote(s.Component.InputDomain), ")")
+	// The projector's domain filter is the union of its handlers' source
+	// domains (Service.ProjectorDomains), not the single declared
+	// input_domain — see the Go emitter for the full rationale. Empty means
+	// every handler's source domain was unset, so the call is omitted and the
+	// runtime default (consume every domain) applies.
+	if len(s.ProjectorDomains) > 0 {
+		g.P("            .ForDomains(", quoteJoin(s.ProjectorDomains, quote), ")")
+	}
 	for _, h := range s.Handlers {
 		g.P("            .OnEvent(", quoteFQ(h.Message), ", (projection, eventAny) =>")
 		g.P("            {")

@@ -373,14 +373,21 @@ func (e goEmitter) emitPM(g *protogen.GeneratedFile, s *Service) error {
 
 func (e goEmitter) emitProjector(g *protogen.GeneratedFile, s *Service) error {
 	name := s.GoName
-	component := s.Component
 	statePtr := "*" + g.QualifiedGoIdent(s.State.GoIdent)
 
 	emitInterface(g, name, name+" projector", e.projectorMethods(g, s))
 	g.P("// New", name, "Dispatch populates the projector table from the proto declaration.")
 	g.P("func New", name, "Dispatch(h ", name, "Handler) *", ident(g, angzarrPkg, "ProjectorDispatch"), "[", statePtr, "] {")
 	g.P("dispatch := ", ident(g, angzarrPkg, "NewProjectorDispatch"), "(", quote(name), ", func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
-	g.P("dispatch.ForDomains(", quote(component.InputDomain), ")")
+	// The projector's domain filter is the union of its handlers' source
+	// domains (Service.ProjectorDomains), not the single declared
+	// input_domain — a projector routinely spans several domains (e.g. a
+	// display folding player, table and hand events). Empty means every
+	// handler's source domain was unset, so the filter is left unset too:
+	// the runtime default is to consume every domain.
+	if len(s.ProjectorDomains) > 0 {
+		g.P("dispatch.ForDomains(", quoteJoin(s.ProjectorDomains, quote), ")")
+	}
 	for _, h := range s.Handlers {
 		g.P("dispatch.OnEvent(", quoteFQ(h.Message), ", func(projection ", statePtr, ", eventAny ", star(g, anypbPkg, "Any"), ") error {")
 		emitDecode(g, "event", "eventAny", h.Message, "")

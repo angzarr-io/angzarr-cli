@@ -110,9 +110,6 @@ func TestLint_TierA_ResolutionErrors(t *testing.T) {
 		{"process manager without output domain", "ANZ008", []declMsg{
 			{"PMState", o.componentDecl(3, "", "", "")},
 		}},
-		{"projector without input domain", "ANZ008", []declMsg{
-			{"ProjState", o.componentDecl(4, "", "", "")},
-		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -124,6 +121,26 @@ func TestLint_TierA_ResolutionErrors(t *testing.T) {
 				t.Errorf("%s should be an error, got %v", tt.want, sev)
 			}
 		})
+	}
+}
+
+// TestLint_Projector_InputDomainNotRequired locks in decision A of the L01
+// remediation: a projector's domain filter is the union of its handlers'
+// source domains (Service.ProjectorDomains), not the single declared
+// input_domain, so input_domain is no longer a required field for
+// COMPONENT_KIND_PROJECTOR (ANZ008 must not fire even when it is empty). A
+// projector with zero handlers still warns (ANZ103: dispatches nothing) —
+// that is a separate, pre-existing, non-blocking coherence check untouched
+// by this decision.
+func TestLint_Projector_InputDomainNotRequired(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"Projection", o.componentDecl(4, "", "", "MultiDomainProjector")},
+		declMsg{"TableCreated", o.eventDecl(eventEntry{component: fq("Projection"), domain: "table"})},
+		declMsg{"HandStarted", o.eventDecl(eventEntry{component: fq("Projection"), domain: "hand"})},
+	)
+	if hasCode(diags, "ANZ008") {
+		t.Errorf("projector with handlers but no input_domain must not require it (decision A), got %v", codesOf(diags))
 	}
 }
 

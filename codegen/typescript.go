@@ -379,7 +379,14 @@ func (e tsEmitter) projectorDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 		g.P("// Populates the projector dispatch table from the proto declaration.")
 		g.P("export function new", s.GoName, "Dispatch(h: ", s.GoName, "Handler): ", disp, " {")
 		g.P("  const dispatch = new ", tsProjDispatch, "<", state, ">(", tsQuote(s.GoName), ", () => create(", refs.schema(s.State), "));")
-		g.P("  dispatch.forDomains(", tsQuote(s.Component.InputDomain), ");")
+		// The projector's domain filter is the union of its handlers' source
+		// domains (Service.ProjectorDomains), not the single declared
+		// input_domain — see the Go emitter for the full rationale. Empty
+		// means every handler's source domain was unset, so the call is
+		// omitted and the runtime default (consume every domain) applies.
+		if len(s.ProjectorDomains) > 0 {
+			g.P("  dispatch.forDomains(", quoteJoin(s.ProjectorDomains, tsQuote), ");")
+		}
 		for _, h := range s.Handlers {
 			g.P("  dispatch.onEvent(", tsQuote(fqName(h.Message)), ", (projection, eventAny) => {")
 			g.P("    h.", lowerFirst(h.MethodName), "(projection, ", tsParseAny, "(", refs.schema(h.Message), ", eventAny));")

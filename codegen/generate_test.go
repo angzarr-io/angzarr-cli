@@ -327,6 +327,30 @@ func orderAggregate(o optionTypes) []declMsg {
 	}
 }
 
+// projectorMultiDomain is the CLI-#1 reproduction fixture (L01): a projector
+// whose handlers source events from TWO domains ("table" and "hand", in that
+// declaration order — deliberately not alphabetical, so a test asserting the
+// sorted union catches an emitter that merely echoes declaration order) while
+// its declared input_domain names only ONE of them ("table"). This mirrors
+// the real angzarr-project example that shipped the bug: OutputProjection
+// declares input_domain: "hand" but its handlers span player/table/hand — see
+// io/angzarr/examples/v1/components.proto and the (event) entries in
+// player.proto/table.proto/hand.proto that name it as their consumer.
+//
+// Before the fix, Python folded the union {hand, table} while the other five
+// emitters restricted to the declared input_domain {table} alone, silently
+// dropping every "hand" event at runtime — same proto, different runtime
+// behavior per language. Decision A (this remediation) makes the union
+// authoritative for all six languages: every TestGenerate*_Projector_
+// MultiDomain test below asserts the identical two-domain, sorted result.
+func projectorMultiDomain(o optionTypes) []declMsg {
+	return []declMsg{
+		{"Projection", o.componentDecl(4, "table", "", "MultiDomainProjector")},
+		{"TableCreated", o.eventDecl(eventEntry{component: fq("Projection"), domain: "table"})},
+		{"HandStarted", o.eventDecl(eventEntry{component: fq("Projection"), domain: "hand"})},
+	}
+}
+
 func TestGenerate_ValidAggregate_EmitsStrictSeam(t *testing.T) {
 	// Both packages must produce the same seam: matching is by extension
 	// number, so the declaration package is irrelevant (the KEY FIX).
@@ -589,9 +613,14 @@ func TestGenerate_Validations_FailGeneration(t *testing.T) {
 			{"PMState", o.componentDecl(3, "", "fulfillment", "")},
 			{"Trig", o.eventDecl(eventEntry{component: fq("PMState")})},
 		}},
-		{"projector without domains", []declMsg{
-			{"ProjState", o.componentDecl(4, "", "", "")},
-		}},
+		// NOTE: a "projector without domains" case previously lived here,
+		// asserting that COMPONENT_KIND_PROJECTOR required input_domain.
+		// Removed under decision A (L01 remediation): a projector's domain
+		// filter is the union of its handlers' source domains
+		// (Service.ProjectorDomains), not the single declared input_domain,
+		// so input_domain is no longer required. See
+		// TestLint_Projector_InputDomainNotRequired and the
+		// TestGenerate*_Projector_MultiDomain family below.
 		{"command to unknown component", []declMsg{
 			{"CreateOrder", o.commandDecl(fq("Nope"))},
 		}},
@@ -1024,6 +1053,111 @@ func TestLanguages_ListsGoAndPython(t *testing.T) {
 	}
 	if !sort.StringsAreSorted(langs) {
 		t.Errorf("Languages() not sorted: %v", langs)
+	}
+}
+
+// ----------------------------------------------------------------------------
+// L01: projector multi-domain folding — identical across all six languages.
+//
+// Before this remediation there was NO per-language projector test at all —
+// the coverage gap that let CLI finding #1 ship: Python computed the union of
+// handler source domains (with a comment explaining input_domain is wrong for
+// projectors) while golang.go, java.go, csharp.go, cpp.go and typescript.go
+// all restricted folding to the single declared input_domain, silently
+// dropping every event from a secondary domain at runtime. Each test below
+// generates the SAME projectorMultiDomain() declaration and asserts the SAME
+// two-domain, sorted result, so a future regression in any one emitter shows
+// up as a single-language test failure instead of a silent runtime divergence
+// only Python got right.
+// ----------------------------------------------------------------------------
+
+func TestGenerateGo_Projector_MultiDomain(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "go", ioPkg, projectorMultiDomain(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, `dispatch.ForDomains("hand", "table")`) {
+		t.Errorf("go projector wiring missing folded domain union; got:\n%s", content)
+	}
+	if strings.Contains(content, `dispatch.ForDomains("table")`) {
+		t.Errorf("go projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
+	}
+}
+
+func TestGenerateJava_Projector_MultiDomain(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "java", ioPkg, projectorMultiDomain(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, `.forDomains("hand", "table")`) {
+		t.Errorf("java projector wiring missing folded domain union; got:\n%s", content)
+	}
+	if strings.Contains(content, `.forDomains("table")`) {
+		t.Errorf("java projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
+	}
+}
+
+func TestGenerateCSharp_Projector_MultiDomain(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "csharp", ioPkg, projectorMultiDomain(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, `.ForDomains("hand", "table")`) {
+		t.Errorf("csharp projector wiring missing folded domain union; got:\n%s", content)
+	}
+	if strings.Contains(content, `.ForDomains("table")`) {
+		t.Errorf("csharp projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
+	}
+}
+
+func TestGenerateCpp_Projector_MultiDomain(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "cpp", ioPkg, projectorMultiDomain(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, `dispatch.ForDomains({"hand", "table"});`) {
+		t.Errorf("cpp projector wiring missing folded domain union; got:\n%s", content)
+	}
+	if strings.Contains(content, `dispatch.ForDomains({"table"});`) {
+		t.Errorf("cpp projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
+	}
+}
+
+func TestGenerateTypeScript_Projector_MultiDomain(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "typescript", ioPkg, projectorMultiDomain(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, `dispatch.forDomains("hand", "table");`) {
+		t.Errorf("typescript projector wiring missing folded domain union; got:\n%s", content)
+	}
+	if strings.Contains(content, `dispatch.forDomains("table");`) {
+		t.Errorf("typescript projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
+	}
+}
+
+func TestGeneratePython_Projector_MultiDomain(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := generate(t, "python", ioPkg, projectorMultiDomain(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	content := resp.File[0].GetContent()
+	if !strings.Contains(content, `dispatch.for_domains("hand", "table")`) {
+		t.Errorf("python projector wiring missing folded domain union; got:\n%s", content)
+	}
+	if strings.Contains(content, `dispatch.for_domains("table")`) {
+		t.Errorf("python projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
 	}
 }
 
