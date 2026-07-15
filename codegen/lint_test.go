@@ -168,6 +168,100 @@ func TestLint_TierB_MethodCollisionAcrossPackages(t *testing.T) {
 	}
 }
 
+func TestLint_TierB_MethodCollisionCrossCategory(t *testing.T) {
+	// A command "ApplyCredit" (handler method "ApplyCredit") and an applier for
+	// event "Credit" (applierName = "Apply"+"Credit" = "ApplyCredit") land on
+	// the same aggregate and generate the same interface method twice — the
+	// escape the per-category check (handler vs. applier) missed. ANZ011.
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"State", o.componentDecl(1, "orders", "", "")},
+		declMsg{"ApplyCredit", o.commandDecl(fq("State"))},
+		declMsg{"Credit", o.eventDecl(eventEntry{component: fq("State")})},
+	)
+	if !hasCode(diags, "ANZ011") {
+		t.Fatalf("want ANZ011 cross-category method collision, got %v", codesOf(diags))
+	}
+	if sev, _ := severityOf(diags, "ANZ011"); sev != codegen.SeverityError {
+		t.Errorf("ANZ011 should be an error, got %v", sev)
+	}
+}
+
+func TestLint_TierB_MethodCollisionRejectionsAcrossPackages(t *testing.T) {
+	// compensates: ["shop.a.Reserve", "shop.b.Reserve"] — two different
+	// commands from different packages that share a short name — both
+	// generate the rejection method "OnReserveRejected". Rejections were
+	// excluded from the duplicate check entirely; this is the escape. ANZ011.
+	o := buildOptionTypes(t, ioPkg)
+	gen := buildGenRejectionCollisionAcrossPackages(t, o)
+	diags := codegen.Lint(gen)
+	if !hasCode(diags, "ANZ011") {
+		t.Fatalf("want ANZ011 duplicate rejection method across packages, got %v", codesOf(diags))
+	}
+}
+
+func TestLint_TierB_MethodCollisionDuplicateCompensatesEntry(t *testing.T) {
+	// A literal duplicate compensates entry on one component: the same
+	// fully-qualified command listed twice generates "On<Short>Rejected"
+	// twice for the same aggregate. ANZ011.
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"State", o.componentDecl(1, "orders", "", "", fq("Reserve"), fq("Reserve"))},
+		declMsg{"Reserve", nil},
+	)
+	if !hasCode(diags, "ANZ011") {
+		t.Fatalf("want ANZ011 duplicate compensates entry, got %v", codesOf(diags))
+	}
+}
+
+// buildGenRejectionCollisionAcrossPackages builds a two-file request: file A
+// (testPkg "shop.a") holds the compensating component and a "Reserve"
+// message; file B ("shop.b") holds another "Reserve" message. The component's
+// compensates references both fully-qualified names, so it generates the
+// rejection method "OnReserveRejected" twice.
+func buildGenRejectionCollisionAcrossPackages(t *testing.T, o optionTypes) *protogen.Plugin {
+	t.Helper()
+	const pkgA = "shop.a"
+	const pkgB = "shop.b"
+	const pathA = "shop_a_test.proto"
+	const pathB = "shop_b_test.proto"
+
+	fileA := &descriptorpb.FileDescriptorProto{
+		Name:       str(pathA),
+		Package:    str(pkgA),
+		Syntax:     str("proto3"),
+		Dependency: []string{optionsPath},
+		Options:    &descriptorpb.FileOptions{GoPackage: str("example.test/a;a")},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{Name: str("State"), Options: o.componentDecl(1, "orders", "", "", pkgA+".Reserve", pkgB+".Reserve")},
+			{Name: str("Reserve")},
+		},
+	}
+	fileB := &descriptorpb.FileDescriptorProto{
+		Name:       str(pathB),
+		Package:    str(pkgB),
+		Syntax:     str("proto3"),
+		Dependency: []string{optionsPath},
+		Options:    &descriptorpb.FileOptions{GoPackage: str("example.test/b;b")},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{Name: str("Reserve")},
+		},
+	}
+	gen, err := protogen.Options{}.New(&pluginpb.CodeGeneratorRequest{
+		FileToGenerate: []string{pathA, pathB},
+		ProtoFile: []*descriptorpb.FileDescriptorProto{
+			protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
+			optionsFDP(ioPkg),
+			fileA,
+			fileB,
+		},
+	})
+	if err != nil {
+		t.Fatalf("buildGenRejectionCollisionAcrossPackages: %v", err)
+	}
+	return gen
+}
+
 func TestLint_TierC_EmitWithoutApplier_Warns(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	// Aggregate emits OrderCreated but declares no applier for it.
