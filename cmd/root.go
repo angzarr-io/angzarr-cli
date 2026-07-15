@@ -19,6 +19,7 @@ var rootCmd = &cobra.Command{
 Capabilities grow as subcommands; codegen (per-language dispatch wiring
 from proto component declarations) is the first.`,
 	SilenceUsage: true,
+	Version:      version,
 }
 
 // Execute runs the CLI.
