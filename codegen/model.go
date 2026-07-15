@@ -78,8 +78,8 @@ func (k ComponentKind) String() string {
 	}
 }
 
-// Component is the parsed (io.angzarr.v1.component) declaration.
-type Component struct {
+// ComponentDecl is the parsed (io.angzarr.v1.component) declaration.
+type ComponentDecl struct {
 	Kind         ComponentKind
 	InputDomain  string
 	OutputDomain string
@@ -262,7 +262,7 @@ func reflStrings(m protoreflect.Message, name string) []string {
 
 // componentOptions extracts the (io.angzarr.v1.component) declaration off a
 // message, or nil when absent / unspecified.
-func componentOptions(m *protogen.Message, exts extensions) *Component {
+func componentOptions(m *protogen.Message, exts extensions) *ComponentDecl {
 	if exts.component == nil {
 		return nil
 	}
@@ -272,7 +272,7 @@ func componentOptions(m *protogen.Message, exts extensions) *Component {
 		return nil
 	}
 	sub := opts.Get(fd).Message()
-	c := &Component{
+	c := &ComponentDecl{
 		InputDomain:  reflString(sub, "input_domain"),
 		OutputDomain: reflString(sub, "output_domain"),
 		Name:         reflString(sub, "name"),
@@ -366,14 +366,14 @@ type Rejection struct {
 	MethodName string // On<ShortCommand>Rejected
 }
 
-// Service is one validated component declaration ready for emission.
-type Service struct {
+// Component is one validated component declaration ready for emission.
+type Component struct {
 	// Anchor is the message carrying (component): the state message for the
 	// stateful kinds, or an empty marker for the saga.
 	Anchor *protogen.Message
-	// GoName is the generated handler/dispatch base name.
-	GoName     string
-	Component  *Component
+	// BaseName is the generated handler/dispatch base name.
+	BaseName   string
+	Component  *ComponentDecl
 	Handlers   []Handler
 	Appliers   []Applier
 	Rejections []Rejection
@@ -448,15 +448,15 @@ func shortName(fq string) string {
 	return fq
 }
 
-// fileServices is one generated file's components.
-type fileServices struct {
-	File     *protogen.File
-	Services []*Service
+// fileComponents is one generated file's components.
+type fileComponents struct {
+	File       *protogen.File
+	Components []*Component
 }
 
 // baseName resolves the component's generated base name: the declared name, or
 // the anchor message's own name.
-func baseName(m *protogen.Message, c *Component) string {
+func baseName(m *protogen.Message, c *ComponentDecl) string {
 	if c.Name != "" {
 		return c.Name
 	}

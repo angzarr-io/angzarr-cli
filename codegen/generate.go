@@ -18,14 +18,14 @@ type Emitter interface {
 	Lang() string
 	// WiringPath is the generated wiring file path for one component
 	// (response-relative). The wiring file is regenerated wholesale every run.
-	WiringPath(file *protogen.File, s *Service) string
+	WiringPath(file *protogen.File, s *Component) string
 	// EmitComponent writes the wiring file for ONE component.
-	EmitComponent(g *protogen.GeneratedFile, file *protogen.File, s *Service) error
+	EmitComponent(g *protogen.GeneratedFile, file *protogen.File, s *Component) error
 	// ScaffoldPath is the generate-once handler stub file path for one component.
-	ScaffoldPath(file *protogen.File, s *Service) string
+	ScaffoldPath(file *protogen.File, s *Component) string
 	// EmitScaffoldComponent writes the handler stub for ONE component —
 	// generated once, then owned by the developer.
-	EmitScaffoldComponent(g *protogen.GeneratedFile, file *protogen.File, s *Service) error
+	EmitScaffoldComponent(g *protogen.GeneratedFile, file *protogen.File, s *Component) error
 }
 
 // componentFile builds a per-component output path: the proto file's directory
@@ -94,10 +94,10 @@ func Generate(gen *protogen.Plugin, lang string, opts Options) error {
 	}
 
 	for _, fs := range model {
-		for _, s := range fs.Services {
+		for _, s := range fs.Components {
 			g := gen.NewGeneratedFile(emitter.WiringPath(fs.File, s), fs.File.GoImportPath)
 			if err := emitter.EmitComponent(g, fs.File, s); err != nil {
-				return fmt.Errorf("%s/%s: %w", fs.File.Desc.Path(), s.GoName, err)
+				return fmt.Errorf("%s/%s: %w", fs.File.Desc.Path(), s.BaseName, err)
 			}
 		}
 	}
@@ -124,14 +124,14 @@ func GenerateScaffold(gen *protogen.Plugin, lang string, exists func(path string
 	}
 
 	for _, fs := range model {
-		for _, s := range fs.Services {
+		for _, s := range fs.Components {
 			stub := emitter.ScaffoldPath(fs.File, s)
 			if exists != nil && exists(stub) {
 				continue
 			}
 			g := gen.NewGeneratedFile(stub, fs.File.GoImportPath)
 			if err := emitter.EmitScaffoldComponent(g, fs.File, s); err != nil {
-				return fmt.Errorf("%s/%s: %w", fs.File.Desc.Path(), s.GoName, err)
+				return fmt.Errorf("%s/%s: %w", fs.File.Desc.Path(), s.BaseName, err)
 			}
 		}
 	}

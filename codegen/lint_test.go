@@ -126,7 +126,7 @@ func TestLint_TierA_ResolutionErrors(t *testing.T) {
 
 // TestLint_Projector_InputDomainNotRequired locks in decision A of the L01
 // remediation: a projector's domain filter is the union of its handlers'
-// source domains (Service.ProjectorDomains), not the single declared
+// source domains (Component.ProjectorDomains), not the single declared
 // input_domain, so input_domain is no longer a required field for
 // COMPONENT_KIND_PROJECTOR (ANZ008 must not fire even when it is empty). A
 // projector with zero handlers still warns (ANZ103: dispatches nothing) —

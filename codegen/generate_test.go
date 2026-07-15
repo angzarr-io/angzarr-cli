@@ -617,7 +617,7 @@ func TestGenerate_Validations_FailGeneration(t *testing.T) {
 		// asserting that COMPONENT_KIND_PROJECTOR required input_domain.
 		// Removed under decision A (L01 remediation): a projector's domain
 		// filter is the union of its handlers' source domains
-		// (Service.ProjectorDomains), not the single declared input_domain,
+		// (Component.ProjectorDomains), not the single declared input_domain,
 		// so input_domain is no longer required. See
 		// TestLint_Projector_InputDomainNotRequired and the
 		// TestGenerate*_Projector_MultiDomain family below.
@@ -996,6 +996,34 @@ func TestGenerateTypeScriptScaffold_EmitsOwnedStub(t *testing.T) {
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("typescript scaffold missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
+func TestGenerateCppScaffold_EmitsOwnedStub(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := scaffold(t, "cpp", ioPkg, nil, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("GenerateScaffold: %v", err)
+	}
+	if len(resp.File) != 1 {
+		t.Fatalf("scaffolded %d files, want 1", len(resp.File))
+	}
+	f := resp.File[0]
+	if !strings.HasSuffix(f.GetName(), "_angzarr_handler.h") {
+		t.Errorf("scaffold file name = %q, want *_angzarr_handler.h suffix", f.GetName())
+	}
+	content := f.GetContent()
+	for _, want := range []string{
+		// CreateOrder is a typed-emit command handler (non-void), so its stub
+		// throws std::runtime_error — the include below must actually be
+		// present or the scaffold fails to compile (CLI finding #10).
+		"#include <stdexcept>",
+		"class OrderAggregate : public OrderAggregateHandler {",
+		`throw std::runtime_error("TODO: implement OrderAggregate::CreateOrder");`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("cpp scaffold missing %q\n---\n%s", want, content)
 		}
 	}
 }

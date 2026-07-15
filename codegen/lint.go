@@ -107,14 +107,14 @@ func diagError(diags []Diagnostic) error {
 // analyze builds the component model and collects all diagnostics in one pass.
 // The model it returns is only sound when HasErrors(diags) is false; codegen
 // gates emission on that, so an invalid model is never handed to an emitter.
-func analyze(gen *protogen.Plugin) ([]fileServices, []Diagnostic) {
+func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
 	exts := resolveExtensions(gen)
 	registry := messageRegistry(gen)
 	var diags []Diagnostic
 
-	// pass 1: one Service per component anchor; declaration order is captured
+	// pass 1: one Component per component anchor; declaration order is captured
 	// for deterministic cross-checks and diagnostics.
-	services := make(map[string]*Service)
+	services := make(map[string]*Component)
 	var order []string
 	for _, file := range gen.Files {
 		for _, m := range allMessages(file.Messages) {
@@ -127,7 +127,7 @@ func analyze(gen *protogen.Plugin) ([]fileServices, []Diagnostic) {
 				diags = append(diags, errDiag("ANZ001", m, fmt.Sprintf("duplicate component declaration %q", fq)))
 				continue
 			}
-			s := &Service{Anchor: m, Component: component, GoName: baseName(m, component)}
+			s := &Component{Anchor: m, Component: component, BaseName: baseName(m, component)}
 			if component.Kind != KindSaga {
 				s.State = m
 			}
@@ -176,19 +176,19 @@ func analyze(gen *protogen.Plugin) ([]fileServices, []Diagnostic) {
 	diags = append(diags, coherenceDiags(services, order)...)
 
 	// group by anchor file, preserving message declaration order within a file.
-	var result []fileServices
+	var result []fileComponents
 	for _, file := range gen.Files {
 		if !file.Generate {
 			continue
 		}
-		var fileSvcs []*Service
+		var fileSvcs []*Component
 		for _, m := range allMessages(file.Messages) {
 			if s, ok := services[string(m.Desc.FullName())]; ok {
 				fileSvcs = append(fileSvcs, s)
 			}
 		}
 		if len(fileSvcs) > 0 {
-			result = append(result, fileServices{File: file, Services: fileSvcs})
+			result = append(result, fileComponents{File: file, Components: fileSvcs})
 		}
 	}
 	return result, diags
@@ -206,7 +206,7 @@ func resolves(registry map[string]*protogen.Message, name string) bool {
 
 // attachCommand wires a command message to its aggregate owner, collecting a
 // diagnostic for every unresolved reference.
-func attachCommand(services map[string]*Service, registry map[string]*protogen.Message, m *protogen.Message, cmd *command) []Diagnostic {
+func attachCommand(services map[string]*Component, registry map[string]*protogen.Message, m *protogen.Message, cmd *command) []Diagnostic {
 	owner, ok := services[cmd.Component]
 	if !ok {
 		return []Diagnostic{errDiag("ANZ002", m, fmt.Sprintf("(command).component %q is not a declared component", cmd.Component))}
@@ -235,7 +235,7 @@ func attachCommand(services map[string]*Service, registry map[string]*protogen.M
 // attachEvent classifies one event-consumer entry as an applier or a trigger
 // handler on its owning component, collecting diagnostics for unresolved or
 // underspecified entries.
-func attachEvent(services map[string]*Service, m *protogen.Message, ev eventConsumer) []Diagnostic {
+func attachEvent(services map[string]*Component, m *protogen.Message, ev eventConsumer) []Diagnostic {
 	owner, ok := services[ev.Component]
 	if !ok {
 		return []Diagnostic{errDiag("ANZ005", m, fmt.Sprintf("(event).component %q is not a declared component", ev.Component))}
@@ -262,7 +262,7 @@ func attachEvent(services map[string]*Service, m *protogen.Message, ev eventCons
 
 // requiredFields enforces the per-kind required-field contract: an omitted
 // domain would wire a component that silently receives or targets nothing.
-func requiredFields(s *Service) []Diagnostic {
+func requiredFields(s *Component) []Diagnostic {
 	c := s.Component
 	switch c.Kind {
 	case KindAggregate:
@@ -279,7 +279,7 @@ func requiredFields(s *Service) []Diagnostic {
 		}
 	case KindProjector:
 		// No required declared field: the domain filter is DERIVED
-		// (Service.ProjectorDomains, computed above from each handler's
+		// (Component.ProjectorDomains, computed above from each handler's
 		// (event).domain) rather than the single declared input_domain — a
 		// projector legitimately spans multiple source domains. Requiring
 		// input_domain here would re-litigate the L01 bug at the lint layer:
@@ -300,7 +300,7 @@ func requiredFields(s *Service) []Diagnostic {
 // input_domain and dropped every secondary-domain event at runtime. Hoisted
 // here so every emitter consumes one computation instead of five diverging
 // ones.
-func projectorDomains(s *Service) []string {
+func projectorDomains(s *Component) []string {
 	seen := make(map[string]bool)
 	var domains []string
 	for _, h := range s.Handlers {
@@ -320,17 +320,17 @@ func projectorDomains(s *Service) []string {
 // runs over their UNION as one namespace, not per category — a command
 // handler and an applier (or two rejections) that resolve to the same
 // generated method name collide just as badly as two handlers do.
-func collisionDiags(services map[string]*Service, order []string) []Diagnostic {
+func collisionDiags(services map[string]*Component, order []string) []Diagnostic {
 	var diags []Diagnostic
 
-	first := make(map[string]string) // GoName -> first anchor FQ
+	first := make(map[string]string) // BaseName -> first anchor FQ
 	for _, fq := range order {
 		s := services[fq]
-		if owner, dup := first[s.GoName]; dup {
-			diags = append(diags, errDiag("ANZ010", s.Anchor, fmt.Sprintf("generated name %q collides with component %q; set a distinct (component).name", s.GoName, owner)))
+		if owner, dup := first[s.BaseName]; dup {
+			diags = append(diags, errDiag("ANZ010", s.Anchor, fmt.Sprintf("generated name %q collides with component %q; set a distinct (component).name", s.BaseName, owner)))
 			continue
 		}
-		first[s.GoName] = fq
+		first[s.BaseName] = fq
 	}
 
 	for _, fq := range order {
@@ -368,7 +368,7 @@ func rejectionNames(rs []Rejection) []string {
 	return out
 }
 
-func dupMethods(s *Service, fq string, names []string) []Diagnostic {
+func dupMethods(s *Component, fq string, names []string) []Diagnostic {
 	var diags []Diagnostic
 	seen := make(map[string]bool, len(names))
 	for _, n := range names {
@@ -384,7 +384,7 @@ func dupMethods(s *Service, fq string, names []string) []Diagnostic {
 // events with no applier, output/source domains with no counterpart aggregate,
 // and components that handle nothing. These are warnings, not errors: the
 // counterpart may legitimately live in a proto set not part of this compile.
-func coherenceDiags(services map[string]*Service, order []string) []Diagnostic {
+func coherenceDiags(services map[string]*Component, order []string) []Diagnostic {
 	var diags []Diagnostic
 
 	aggDomains := make(map[string]bool)

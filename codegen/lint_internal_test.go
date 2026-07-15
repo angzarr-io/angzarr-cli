@@ -1,7 +1,7 @@
 package codegen
 
 // White-box test for the projectorDomains computation itself (package
-// codegen, not codegen_test): a pure function over Service.Handlers, so it is
+// codegen, not codegen_test): a pure function over Component.Handlers, so it is
 // unit-testable directly without building a descriptor set. Complements the
 // black-box per-language TestGenerate*_Projector_MultiDomain tests in
 // generate_test.go, which prove the computed value is actually consumed
@@ -42,7 +42,7 @@ func TestProjectorDomains_UnionDedupedSorted(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Service{Component: &Component{Kind: KindProjector}, Handlers: tt.handlers}
+			s := &Component{Component: &ComponentDecl{Kind: KindProjector}, Handlers: tt.handlers}
 			got := projectorDomains(s)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("projectorDomains() = %#v, want %#v", got, tt.want)
