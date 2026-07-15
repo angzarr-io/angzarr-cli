@@ -277,8 +277,11 @@ func requiredFields(s *Service) []Diagnostic {
 
 // collisionDiags catches generated-identifier clashes that would produce
 // uncompilable source: two components emitting the same base name, or one
-// component generating the same handler/applier method twice (events sharing a
-// short name across packages).
+// component generating the same method twice. Handlers, appliers, and
+// rejections all land on the same generated interface, so the duplicate check
+// runs over their UNION as one namespace, not per category — a command
+// handler and an applier (or two rejections) that resolve to the same
+// generated method name collide just as badly as two handlers do.
 func collisionDiags(services map[string]*Service, order []string) []Diagnostic {
 	var diags []Diagnostic
 
@@ -294,8 +297,11 @@ func collisionDiags(services map[string]*Service, order []string) []Diagnostic {
 
 	for _, fq := range order {
 		s := services[fq]
-		diags = append(diags, dupMethods(s, fq, "handler", handlerNames(s.Handlers))...)
-		diags = append(diags, dupMethods(s, fq, "applier", applierNames(s.Appliers))...)
+		names := make([]string, 0, len(s.Handlers)+len(s.Appliers)+len(s.Rejections))
+		names = append(names, handlerNames(s.Handlers)...)
+		names = append(names, applierNames(s.Appliers)...)
+		names = append(names, rejectionNames(s.Rejections)...)
+		diags = append(diags, dupMethods(s, fq, names)...)
 	}
 	return diags
 }
@@ -316,12 +322,20 @@ func applierNames(as []Applier) []string {
 	return out
 }
 
-func dupMethods(s *Service, fq, kind string, names []string) []Diagnostic {
+func rejectionNames(rs []Rejection) []string {
+	out := make([]string, len(rs))
+	for i, r := range rs {
+		out[i] = r.MethodName
+	}
+	return out
+}
+
+func dupMethods(s *Service, fq string, names []string) []Diagnostic {
 	var diags []Diagnostic
 	seen := make(map[string]bool, len(names))
 	for _, n := range names {
 		if seen[n] {
-			diags = append(diags, errDiag("ANZ011", s.Anchor, fmt.Sprintf("component %q generates duplicate %s method %q (events sharing a name across packages)", fq, kind, n)))
+			diags = append(diags, errDiag("ANZ011", s.Anchor, fmt.Sprintf("component %q generates duplicate method %q (handler, applier, and rejection names share one generated namespace)", fq, n)))
 		}
 		seen[n] = true
 	}
