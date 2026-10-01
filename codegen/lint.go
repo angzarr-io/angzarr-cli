@@ -307,11 +307,9 @@ func projectorDomains(s *Component) []string {
 
 // collisionDiags catches generated-identifier clashes that would produce
 // uncompilable source: two components emitting the same base name, or one
-// component generating the same method twice. Handlers, appliers, and
-// rejections all land on the same generated interface, so the duplicate check
-// runs over their UNION as one namespace, not per category — a command
-// handler and an applier (or two rejections) that resolve to the same
-// generated method name collide just as badly as two handlers do.
+// component generating the same method twice. Handlers, appliers, rejections
+// and the projector's fixed Finish all land on the same generated interface,
+// so the duplicate check runs over their union as one namespace.
 func collisionDiags(services map[string]*Component, order []string) []Diagnostic {
 	var diags []Diagnostic
 
@@ -327,13 +325,32 @@ func collisionDiags(services map[string]*Component, order []string) []Diagnostic
 
 	for _, fq := range order {
 		s := services[fq]
-		names := make([]string, 0, len(s.Handlers)+len(s.Appliers)+len(s.Rejections))
+		names := make([]string, 0, len(s.Handlers)+len(s.Appliers)+len(s.Rejections)+1)
 		names = append(names, handlerNames(s.Handlers)...)
 		names = append(names, applierNames(s.Appliers)...)
 		names = append(names, rejectionNames(s.Rejections)...)
+		if s.Component.Kind == KindProjector {
+			names = append(names, projectorFinishMethod)
+		}
 		diags = append(diags, dupMethods(s, fq, names)...)
 	}
 	return diags
+}
+
+// projectorFinishMethod is the fixed method every projector interface carries
+// alongside its handlers.
+const projectorFinishMethod = "Finish"
+
+// methodRenderings are the per-language spellings of a generated method name.
+// Two distinct names collide when any rendering coincides: "HTTPGet" and
+// "HttpGet" are separate Go methods but the same Python http_get.
+var methodRenderings = []struct {
+	langs  string
+	render func(string) string
+}{
+	{"every language", func(n string) string { return n }},
+	{"java/typescript", lowerFirst},
+	{"python", snake},
 }
 
 func handlerNames(hs []Handler) []string {
@@ -360,14 +377,20 @@ func rejectionNames(rs []Rejection) []string {
 	return out
 }
 
+// dupMethods reports each pair of method names that render identically in
+// some target language, once per pair, naming the first rendering that
+// collides.
 func dupMethods(s *Component, fq string, names []string) []Diagnostic {
 	var diags []Diagnostic
-	seen := make(map[string]bool, len(names))
-	for _, n := range names {
-		if seen[n] {
-			diags = append(diags, errDiag("ANZ011", s.Anchor, fmt.Sprintf("component %q generates duplicate method %q (handler, applier, and rejection names share one generated namespace)", fq, n)))
+	for j := 1; j < len(names); j++ {
+		for i := 0; i < j; i++ {
+			for _, r := range methodRenderings {
+				if rendered := r.render(names[i]); rendered == r.render(names[j]) {
+					diags = append(diags, errDiag("ANZ011", s.Anchor, fmt.Sprintf("component %q generates duplicate method %q in %s (from %q and %q; handler, applier, rejection and projector Finish names share one generated namespace)", fq, rendered, r.langs, names[i], names[j])))
+					break
+				}
+			}
 		}
-		seen[n] = true
 	}
 	return diags
 }

@@ -186,7 +186,7 @@ func (e csharpEmitter) projectorMethods(s *Component) []csMethod {
 		})
 	}
 	out = append(out, csMethod{
-		name:    "Finish",
+		name:    projectorFinishMethod,
 		params:  state + " projection, " + csEventBook + " events",
 		results: csProjection,
 	})

@@ -6,6 +6,7 @@ package codegen_test
 // error-vs-warning split that gates code generation.
 
 import (
+	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/compiler/protogen"
@@ -205,6 +206,66 @@ func TestLint_TierB_MethodCollisionDuplicateCompensatesEntry(t *testing.T) {
 	)
 	if !hasCode(diags, "ANZ011") {
 		t.Fatalf("want ANZ011 duplicate compensates entry, got %v", codesOf(diags))
+	}
+}
+
+func TestLint_TierB_ProjectorHandlerCollidesWithFinish(t *testing.T) {
+	// Every projector interface carries a fixed Finish method; a consumed
+	// event named "Finish" generates a second one. ANZ011.
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"Projection", o.componentDecl(4, "orders", "", "")},
+		declMsg{"Finish", o.eventDecl(eventEntry{component: fq("Projection")})},
+	)
+	if !hasCode(diags, "ANZ011") {
+		t.Fatalf("want ANZ011 for a projector handler named Finish, got %v", codesOf(diags))
+	}
+}
+
+func TestLint_TierB_FinishIsOnlyReservedOnProjectors(t *testing.T) {
+	// An aggregate has no Finish method, so a command named Finish is fine.
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"State", o.componentDecl(1, "orders", "", "")},
+		declMsg{"Finish", o.commandDecl(fq("State"))},
+	)
+	if hasCode(diags, "ANZ011") {
+		t.Fatalf("aggregate command named Finish must not collide, got %v", codesOf(diags))
+	}
+}
+
+func TestLint_TierB_MethodCollisionAfterLanguageCasing(t *testing.T) {
+	// "HTTPGet" and "HttpGet" are distinct Go/Java/C#/C++/TS methods but both
+	// render as Python's http_get. ANZ011 names the colliding language.
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"State", o.componentDecl(1, "orders", "", "")},
+		declMsg{"HTTPGet", o.commandDecl(fq("State"))},
+		declMsg{"HttpGet", o.commandDecl(fq("State"))},
+	)
+	var msg string
+	for _, d := range diags {
+		if d.Code == "ANZ011" {
+			msg = d.Message
+		}
+	}
+	if msg == "" {
+		t.Fatalf("want ANZ011 for http_get python collision, got %v", codesOf(diags))
+	}
+	if !strings.Contains(msg, "http_get") || !strings.Contains(msg, "python") {
+		t.Errorf("ANZ011 message should name the python method http_get, got %q", msg)
+	}
+}
+
+func TestLint_TierB_DistinctNamesDoNotCollide(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"State", o.componentDecl(1, "orders", "", "")},
+		declMsg{"HttpGet", o.commandDecl(fq("State"))},
+		declMsg{"HttpPut", o.commandDecl(fq("State"))},
+	)
+	if hasCode(diags, "ANZ011") {
+		t.Fatalf("distinct methods flagged as colliding: %v", diags)
 	}
 }
 

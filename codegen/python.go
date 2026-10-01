@@ -368,7 +368,7 @@ func pyProjectorSigs(refs *pyRefs, s *Component) []pySig {
 		})
 	}
 	out = append(out, pySig{
-		name:    "finish",
+		name:    snake(projectorFinishMethod),
 		params:  "(self, projection: " + refs.ref(s.State) + ", events: " + pyTypes + ".EventBook)",
 		returns: " -> " + pyTypes + ".Projection",
 	})

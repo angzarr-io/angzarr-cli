@@ -256,7 +256,7 @@ func (goEmitter) projectorMethods(g *protogen.GeneratedFile, s *Component) []met
 		})
 	}
 	out = append(out, methodSig{
-		name:    "Finish",
+		name:    projectorFinishMethod,
 		params:  "(projection " + statePtr + ", events " + evtBook + ")",
 		results: " (" + projection + ", error)",
 	})

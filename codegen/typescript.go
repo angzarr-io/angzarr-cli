@@ -276,7 +276,7 @@ func (e tsEmitter) projectorSigs(refs *tsRefs, s *Component) []tsSig {
 		})
 	}
 	out = append(out, tsSig{
-		name:    "finish",
+		name:    lowerFirst(projectorFinishMethod),
 		params:  "projection: " + state + ", events: " + refs.use(tsEventBook),
 		returns: refs.use(tsProjection),
 	})

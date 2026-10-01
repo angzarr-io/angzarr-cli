@@ -191,7 +191,7 @@ func (e cppEmitter) projectorMethods(s *Component) []cppMethod {
 		})
 	}
 	out = append(out, cppMethod{
-		name:    "Finish",
+		name:    projectorFinishMethod,
 		params:  state + "& projection, const " + cppEventBook + "& events",
 		results: cppProjection,
 	})

@@ -197,7 +197,7 @@ func (e javaEmitter) projectorMethods(s *Component) []javaMethod {
 		})
 	}
 	out = append(out, javaMethod{
-		name:    "finish",
+		name:    lowerFirst(projectorFinishMethod),
 		params:  state + " projection, " + jEventBook + " events",
 		results: jProjection,
 		throws:  " throws Exception",
