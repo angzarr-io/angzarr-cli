@@ -435,16 +435,7 @@ func javaType(m *protogen.Message) string {
 
 // messageNestedName joins a message's name path within its file (Parent.Child).
 func messageNestedName(md protoreflect.MessageDescriptor) string {
-	parts := []string{string(md.Name())}
-	for {
-		parent, ok := md.Parent().(protoreflect.MessageDescriptor)
-		if !ok {
-			break
-		}
-		parts = append([]string{string(parent.Name())}, parts...)
-		md = parent
-	}
-	return strings.Join(parts, ".")
+	return strings.Join(nestedNames(md), ".")
 }
 
 // javaOuterClass derives the file's outer class name (java_outer_classname, else
@@ -484,19 +475,28 @@ func outerClassCollides(fd protoreflect.FileDescriptor, name string) bool {
 	return false
 }
 
+// snakeToPascal is protoc's UnderscoresToCamelCase with the first letter
+// capitalised: a letter after an underscore, digit or other non-alphanumeric
+// is upper-cased, the non-alphanumerics are dropped, digits are kept.
 func snakeToPascal(s string) string {
 	var b strings.Builder
-	upper := true
+	capNext := true
 	for _, r := range s {
-		if r == '_' {
-			upper = true
-			continue
-		}
-		if upper {
-			b.WriteString(strings.ToUpper(string(r)))
-			upper = false
-		} else {
+		switch {
+		case r >= 'a' && r <= 'z':
+			if capNext {
+				r -= 'a' - 'A'
+			}
 			b.WriteRune(r)
+			capNext = false
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+			capNext = false
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+			capNext = true
+		default:
+			capNext = true
 		}
 	}
 	return b.String()

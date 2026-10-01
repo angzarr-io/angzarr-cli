@@ -441,14 +441,5 @@ func csType(m *protogen.Message) string {
 // csNestedName joins a message's name path within its file, with ".Types."
 // between levels (Outer.Types.Inner).
 func csNestedName(md protoreflect.MessageDescriptor) string {
-	parts := []string{string(md.Name())}
-	for {
-		parent, ok := md.Parent().(protoreflect.MessageDescriptor)
-		if !ok {
-			break
-		}
-		parts = append([]string{string(parent.Name())}, parts...)
-		md = parent
-	}
-	return strings.Join(parts, ".Types.")
+	return strings.Join(nestedNames(md), ".Types.")
 }

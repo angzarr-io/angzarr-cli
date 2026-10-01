@@ -1185,3 +1185,19 @@ func TestGenerateScaffold_UnnamedComponentStubDoesNotShadowAnchor(t *testing.T) 
 		})
 	}
 }
+
+func TestGenerateCppScaffold_IncludesTheWiringWhereItIsWritten(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	wiring, err := generate(t, "cpp", ioPkg, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	stub, err := scaffold(t, "cpp", ioPkg, func(string) bool { return false }, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("GenerateScaffold: %v", err)
+	}
+	want := `#include "` + wiring.File[0].GetName() + `"`
+	if content := stub.File[0].GetContent(); !strings.Contains(content, want) {
+		t.Errorf("scaffold should %s (the wiring's output path); got:\n%s", want, content)
+	}
+}

@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -116,7 +117,7 @@ func newPyRefs(services []*Component) *pyRefs {
 		// rare same-stem clash across packages or a clash with a framework alias.
 		alias := "_" + strings.TrimSuffix(path.Base(p), ".proto")
 		if used[alias] {
-			alias += itoa(i)
+			alias += strconv.Itoa(i)
 		}
 		used[alias] = true
 		r.alias[p] = alias
@@ -533,33 +534,5 @@ func snake(name string) string {
 	return b.String()
 }
 
-// pyQuote renders a Go string as a double-quoted Python string literal.
-func pyQuote(s string) string {
-	var b strings.Builder
-	b.WriteByte('"')
-	for _, r := range s {
-		switch r {
-		case '"':
-			b.WriteString("\\\"")
-		case '\\':
-			b.WriteString("\\\\")
-		default:
-			b.WriteRune(r)
-		}
-	}
-	b.WriteByte('"')
-	return b.String()
-}
-
-// itoa is a tiny strconv-free int formatter for small alias indices.
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	var digits []byte
-	for i > 0 {
-		digits = append([]byte{byte('0' + i%10)}, digits...)
-		i /= 10
-	}
-	return string(digits)
-}
+// pyQuote renders a Python string literal.
+func pyQuote(s string) string { return quoteLiteral(s) }

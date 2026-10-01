@@ -480,18 +480,10 @@ func (e tsEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *protog
 
 // tsName is the protoc-gen-es type name for a message: nested messages are
 // flattened with "_" (Outer.Inner -> Outer_Inner).
-func tsName(m *protogen.Message) string {
-	parts := []string{string(m.Desc.Name())}
-	md := m.Desc
-	for {
-		parent, ok := md.Parent().(protoreflect.MessageDescriptor)
-		if !ok {
-			break
-		}
-		parts = append([]string{string(parent.Name())}, parts...)
-		md = parent
-	}
-	return strings.Join(parts, "_")
+func tsName(m *protogen.Message) string { return tsNestedName(m.Desc) }
+
+func tsNestedName(md protoreflect.MessageDescriptor) string {
+	return strings.Join(nestedNames(md), "_")
 }
 
 // tsImportPath is the ESM import specifier (extensionless, bundler resolution)
@@ -538,20 +530,5 @@ func splitClean(p string) []string {
 	return strings.Split(p, "/")
 }
 
-// tsQuote renders a Go string as a double-quoted TypeScript string literal.
-func tsQuote(s string) string {
-	var b strings.Builder
-	b.WriteByte('"')
-	for _, r := range s {
-		switch r {
-		case '"':
-			b.WriteString("\\\"")
-		case '\\':
-			b.WriteString("\\\\")
-		default:
-			b.WriteRune(r)
-		}
-	}
-	b.WriteByte('"')
-	return b.String()
-}
+// tsQuote renders a TypeScript string literal.
+func tsQuote(s string) string { return quoteLiteral(s) }

@@ -409,10 +409,8 @@ func cppGeneric(base, typeArg string) string {
 	return base + "<" + typeArg + ">"
 }
 
-// cppQuote renders a Go string as a C++ string literal.
-func cppQuote(s string) string {
-	return `"` + s + `"`
-}
+// cppQuote renders a C++ string literal.
+func cppQuote(s string) string { return quoteLiteral(s) }
 
 func cppNamespace(file *protogen.File) string {
 	return cppNamespaceOf(file.Desc)
@@ -434,17 +432,10 @@ func cppType(m *protogen.Message) string {
 	return ns + "::" + nested
 }
 
+// cppNestedName joins a message's name path within its file with "::"
+// (protobuf-cpp exposes nested messages as Outer::Inner).
 func cppNestedName(md protoreflect.MessageDescriptor) string {
-	parts := []string{string(md.Name())}
-	for {
-		parent, ok := md.Parent().(protoreflect.MessageDescriptor)
-		if !ok {
-			break
-		}
-		parts = append([]string{string(parent.Name())}, parts...)
-		md = parent
-	}
-	return strings.Join(parts, "::")
+	return strings.Join(nestedNames(md), "::")
 }
 
 // cppInclude is the generated protobuf header for a proto file (path.proto → path.pb.h).
@@ -452,14 +443,10 @@ func cppInclude(fd protoreflect.FileDescriptor) string {
 	return strings.TrimSuffix(fd.Path(), ".proto") + ".pb.h"
 }
 
-// componentInclude is the gen-relative path of a component's wiring header
-// (beside the proto), used by the scaffold to include the interface it stubs.
+// componentInclude is the output-root-relative path of a component's wiring
+// header, used by the scaffold to include the interface it stubs.
 func (e cppEmitter) componentInclude(file *protogen.File, s *Component) string {
-	dir := ""
-	if i := strings.LastIndex(file.Desc.Path(), "/"); i >= 0 {
-		dir = file.Desc.Path()[:i+1]
-	}
-	return dir + snake(s.BaseName) + "_angzarr.h"
+	return e.WiringPath(file, s)
 }
 
 // includes collects the .pb.h headers the wiring needs: every referenced
