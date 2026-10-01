@@ -200,6 +200,13 @@ func (goEmitter) aggregateMethods(g *protogen.GeneratedFile, s *Component) []met
 			results: " (" + bizResp + ", error)",
 		})
 	}
+	for _, u := range s.Undos {
+		out = append(out, methodSig{
+			name:    u.MethodName,
+			params:  "(n " + notif + ", compensate " + star(g, angzarrPb, "Compensate") + ", state " + statePtr + ", cctx " + cctx + ")",
+			results: " (" + bizResp + ", error)",
+		})
+	}
 	return out
 }
 
@@ -207,14 +214,13 @@ func (goEmitter) pmMethods(g *protogen.GeneratedFile, s *Component) []methodSig 
 	statePtr := "*" + g.QualifiedGoIdent(s.State.GoIdent)
 	dests := star(g, angzarrPkg, "Destinations")
 	pmResp := star(g, angzarrPb, "ProcessManagerHandleResponse")
-	evtBook := star(g, angzarrPb, "EventBook")
 	notif := star(g, angzarrPb, "Notification")
 	rejn := star(g, angzarrPb, "RejectionNotification")
 	var out []methodSig
 	for _, h := range s.Handlers {
 		out = append(out, methodSig{
 			name:    h.MethodName,
-			params:  "(event *" + g.QualifiedGoIdent(h.Message.GoIdent) + ", state " + statePtr + ", dests " + dests + ")",
+			params:  "(event *" + g.QualifiedGoIdent(h.Message.GoIdent) + ", state " + statePtr + ", dests " + dests + ", triggerCover " + star(g, angzarrPb, "Cover") + ")",
 			results: " (" + pmResp + ", error)",
 		})
 	}
@@ -228,7 +234,7 @@ func (goEmitter) pmMethods(g *protogen.GeneratedFile, s *Component) []methodSig 
 		out = append(out, methodSig{
 			name:    r.MethodName,
 			params:  "(n " + notif + ", rejection " + rejn + ", state " + statePtr + ")",
-			results: " ([]" + evtBook + ", " + notif + ", error)",
+			results: " (" + pmResp + ", error)",
 		})
 	}
 	return out
@@ -242,7 +248,7 @@ func (goEmitter) projectorMethods(g *protogen.GeneratedFile, s *Component) []met
 	for _, h := range s.Handlers {
 		out = append(out, methodSig{
 			name:    h.MethodName,
-			params:  "(projection " + statePtr + ", event *" + g.QualifiedGoIdent(h.Message.GoIdent) + ")",
+			params:  "(projection " + statePtr + ", event *" + g.QualifiedGoIdent(h.Message.GoIdent) + ", ctx " + ident(g, angzarrPkg, "PageContext") + ")",
 			results: " error",
 		})
 	}
@@ -318,6 +324,9 @@ func (e goEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) error 
 	for _, r := range s.Rejections {
 		g.P("dispatch.OnRejected(", quote(r.Key), ", h.", r.MethodName, ")")
 	}
+	for _, u := range s.Undos {
+		g.P("dispatch.OnUndo(", quote(u.Command), ", h.", u.MethodName, ")")
+	}
 	g.P("return dispatch")
 	g.P("}")
 	g.P()
@@ -340,15 +349,15 @@ func (e goEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 	g.P("rebuilder := ", ident(g, angzarrPkg, "NewRebuilder"), "(func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
 	emitSnapshotLoader(g, s.State)
 	emitAppliers(g, s, statePtr)
-	g.P("dispatch := ", ident(g, angzarrPkg, "NewProcessManagerDispatch"), "(", quote(name), ", ", quote(component.Domain), ", rebuilder)")
+	g.P("dispatch := ", ident(g, angzarrPkg, "NewProcessManagerDispatch"), "(", quote(name), ", ", quote(component.Domain), ", rebuilder", targetArgs(component.OutputDomains, quote), ")")
 	for _, h := range s.Handlers {
-		g.P("dispatch.OnEvent(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", func(eventAny ", star(g, anypbPkg, "Any"), ", state ", statePtr, ", dests ", dests, ") (", pmResp, ", error) {")
+		g.P("dispatch.OnEventWithCover(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", func(eventAny ", star(g, anypbPkg, "Any"), ", state ", statePtr, ", dests ", dests, ", triggerCover ", star(g, angzarrPb, "Cover"), ") (", pmResp, ", error) {")
 		emitDecode(g, "event", "eventAny", h.Message, "nil, ")
-		g.P("return h.", h.MethodName, "(event, state, dests)")
+		g.P("return h.", h.MethodName, "(event, state, dests, triggerCover)")
 		g.P("})")
 	}
 	for _, r := range s.Rejections {
-		g.P("dispatch.OnRejected(", quote(r.Key), ", h.", r.MethodName, ")")
+		g.P("dispatch.OnRejectedResponse(", quote(r.Key), ", h.", r.MethodName, ")")
 	}
 	g.P("return dispatch")
 	g.P("}")
@@ -373,9 +382,9 @@ func (e goEmitter) emitProjector(g *protogen.GeneratedFile, s *Component) error 
 		g.P("dispatch.ForDomains(", quoteJoin(s.ProjectorDomains, quote), ")")
 	}
 	for _, h := range s.Handlers {
-		g.P("dispatch.OnEvent(", quoteFQ(h.Message), ", func(projection ", statePtr, ", eventAny ", star(g, anypbPkg, "Any"), ") error {")
+		g.P("dispatch.OnEventWithContext(", quoteFQ(h.Message), ", func(projection ", statePtr, ", eventAny ", star(g, anypbPkg, "Any"), ", ctx ", ident(g, angzarrPkg, "PageContext"), ") error {")
 		emitDecode(g, "event", "eventAny", h.Message, "")
-		g.P("return h.", h.MethodName, "(projection, event)")
+		g.P("return h.", h.MethodName, "(projection, event, ctx)")
 		g.P("})")
 	}
 	g.P("dispatch.Finish(h.Finish)")
@@ -436,6 +445,15 @@ func emitRegister(g *protogen.GeneratedFile, s *Component, body func()) {
 }
 
 func quote(s string) string { return fmt.Sprintf("%q", s) }
+
+// targetArgs renders trailing variadic target-domain arguments (", a, b"),
+// or "" when there are none.
+func targetArgs(domains []string, quote func(string) string) string {
+	if len(domains) == 0 {
+		return ""
+	}
+	return ", " + quoteJoin(domains, quote)
+}
 
 // fqName is a message's fully-qualified proto name — the dispatch key the
 // runtime matches on. Short names never match, so the FQ name is the contract.

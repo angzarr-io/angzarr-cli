@@ -37,7 +37,8 @@ const (
 	jPack         = "io.angzarr.router.Pack"
 	jCoded        = "io.angzarr.router.CodedError"
 	jSagaEmission = "io.angzarr.router.Thunks.SagaEmission"
-	jPmRejection  = "io.angzarr.router.Thunks.PmRejection"
+	jPageContext  = "io.angzarr.router.PageContext"
+	jCompensate   = "io.angzarr.Compensate"
 	jCover        = "io.angzarr.Cover"
 	jEventBook    = "io.angzarr.EventBook"
 	jEventPage    = "io.angzarr.EventPage"
@@ -161,6 +162,14 @@ func (e javaEmitter) aggregateMethods(s *Component) []javaMethod {
 			throws:  " throws Exception",
 		})
 	}
+	for _, u := range s.Undos {
+		out = append(out, javaMethod{
+			name:    lowerFirst(u.MethodName),
+			params:  jNotification + " n, " + jCompensate + " compensate, " + state + " state, " + jCctx + " cctx",
+			results: jBusinessResp,
+			throws:  " throws Exception",
+		})
+	}
 	return out
 }
 
@@ -183,7 +192,7 @@ func (e javaEmitter) projectorMethods(s *Component) []javaMethod {
 	for _, h := range s.Handlers {
 		out = append(out, javaMethod{
 			name:    lowerFirst(h.MethodName),
-			params:  state + " projection, " + javaType(h.Message) + " event",
+			params:  state + " projection, " + javaType(h.Message) + " event, " + jPageContext + " ctx",
 			results: "void",
 			throws:  " throws Exception",
 		})
@@ -203,7 +212,7 @@ func (e javaEmitter) pmMethods(s *Component) []javaMethod {
 	for _, h := range s.Handlers {
 		out = append(out, javaMethod{
 			name:    lowerFirst(h.MethodName),
-			params:  javaType(h.Message) + " event, " + state + " state, " + jDestinations + " dests",
+			params:  javaType(h.Message) + " event, " + state + " state, " + jDestinations + " dests, " + jCover + " triggerCover",
 			results: jPmResponse,
 			throws:  " throws Exception",
 		})
@@ -219,7 +228,7 @@ func (e javaEmitter) pmMethods(s *Component) []javaMethod {
 		out = append(out, javaMethod{
 			name:    lowerFirst(r.MethodName),
 			params:  jNotification + " n, " + jRejNotif + " rejection, " + state + " state",
-			results: jPmRejection,
+			results: jPmResponse,
 			throws:  " throws Exception",
 		})
 	}
@@ -255,6 +264,10 @@ func (e javaEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) erro
 	for _, r := range s.Rejections {
 		g.P("        .onRejected(", quote(r.Key), ", (n, rejection, state, cctx) ->")
 		g.P("            h.", lowerFirst(r.MethodName), "(n, rejection, (", state, ") state, cctx))")
+	}
+	for _, u := range s.Undos {
+		g.P("        .onUndo(", quote(u.Command), ", (n, compensate, state, cctx) ->")
+		g.P("            h.", lowerFirst(u.MethodName), "(n, compensate, (", state, ") state, cctx))")
 	}
 	g.P("        ;")
 	g.P("  }")
@@ -293,9 +306,9 @@ func (e javaEmitter) emitProjector(g *protogen.GeneratedFile, s *Component) erro
 		g.P("        .forDomains(", quoteJoin(s.ProjectorDomains, quote), ")")
 	}
 	for _, h := range s.Handlers {
-		g.P("        .onEvent(", quoteFQ(h.Message), ", (projection, eventAny) -> {")
+		g.P("        .onEvent(", quoteFQ(h.Message), ", (projection, eventAny, ctx) -> {")
 		g.P("          ", javaType(h.Message), " event = ", parseAny(h.Message, "eventAny"), ";")
-		g.P("          h.", lowerFirst(h.MethodName), "((", state, ") projection, event);")
+		g.P("          h.", lowerFirst(h.MethodName), "((", state, ") projection, event, ctx);")
 		g.P("        })")
 	}
 	g.P("        .finish((projection, events) -> h.finish((", state, ") projection, events));")
@@ -313,15 +326,15 @@ func (e javaEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 	g.P("    ", jRebuilder, " rebuilder = new ", jRebuilder, "(", javaType(s.State), "::newBuilder);")
 	g.P("    rebuilder.withSnapshot((state, payload) -> ((", state, ") state).mergeFrom(payload.getValue()));")
 	emitJavaAppliers(g, s, state)
-	g.P("    return new ", jPmDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.Domain), ", rebuilder)")
+	g.P("    return new ", jPmDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.Domain), ", ", jList, ".of(", quoteJoin(s.Component.OutputDomains, quote), "), rebuilder)")
 	for _, h := range s.Handlers {
-		g.P("        .onEvent(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", (eventAny, state, dests) -> {")
+		g.P("        .onEvent(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", (eventAny, state, dests, triggerCover) -> {")
 		g.P("          ", javaType(h.Message), " event = ", parseAny(h.Message, "eventAny"), ";")
-		g.P("          return h.", lowerFirst(h.MethodName), "(event, (", state, ") state, dests);")
+		g.P("          return h.", lowerFirst(h.MethodName), "(event, (", state, ") state, dests, triggerCover);")
 		g.P("        })")
 	}
 	for _, r := range s.Rejections {
-		g.P("        .onRejected(", quote(r.Key), ", (n, rejection, state) ->")
+		g.P("        .onRejectedResponse(", quote(r.Key), ", (n, rejection, state) ->")
 		g.P("            h.", lowerFirst(r.MethodName), "(n, rejection, (", state, ") state))")
 	}
 	g.P("        ;")

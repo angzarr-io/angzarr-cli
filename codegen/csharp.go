@@ -35,7 +35,8 @@ const (
 	csPack         = "Angzarr.Router.Pack"
 	csCoded        = "Angzarr.Router.CodedError"
 	csSagaEmission = "Angzarr.Router.SagaEmission"
-	csPmRejection  = "Angzarr.Router.PmRejection"
+	csPageContext  = "Angzarr.Router.PageContext"
+	csCompensate   = "Angzarr.Compensate"
 	csCover        = "Angzarr.Cover"
 	csEventBook    = "Angzarr.EventBook"
 	csEventPage    = "Angzarr.EventPage"
@@ -153,6 +154,13 @@ func (e csharpEmitter) aggregateMethods(s *Component) []csMethod {
 			results: csBusinessResp,
 		})
 	}
+	for _, u := range s.Undos {
+		out = append(out, csMethod{
+			name:    u.MethodName,
+			params:  csNotification + " n, " + csCompensate + " compensate, " + state + " state, " + csCctx + " cctx",
+			results: csBusinessResp,
+		})
+	}
 	return out
 }
 
@@ -174,7 +182,7 @@ func (e csharpEmitter) projectorMethods(s *Component) []csMethod {
 	for _, h := range s.Handlers {
 		out = append(out, csMethod{
 			name:    h.MethodName,
-			params:  state + " projection, " + csType(h.Message) + " ev",
+			params:  state + " projection, " + csType(h.Message) + " ev, " + csPageContext + " page",
 			results: "void",
 		})
 	}
@@ -192,7 +200,7 @@ func (e csharpEmitter) pmMethods(s *Component) []csMethod {
 	for _, h := range s.Handlers {
 		out = append(out, csMethod{
 			name:    h.MethodName,
-			params:  csType(h.Message) + " ev, " + state + " state, " + csDestinations + " dests",
+			params:  csType(h.Message) + " ev, " + state + " state, " + csDestinations + " dests, " + csCover + "? triggerCover",
 			results: csPmResponse,
 		})
 	}
@@ -207,7 +215,7 @@ func (e csharpEmitter) pmMethods(s *Component) []csMethod {
 		out = append(out, csMethod{
 			name:    r.MethodName,
 			params:  csNotification + " n, " + csRejNotif + " rejection, " + state + " state",
-			results: csPmRejection,
+			results: csPmResponse,
 		})
 	}
 	return out
@@ -245,6 +253,10 @@ func (e csharpEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) er
 	for _, r := range s.Rejections {
 		g.P("            .OnRejected(", quote(r.Key), ", (n, rejection, state, cctx) =>")
 		g.P("                h.", r.MethodName, "(n, rejection, state, cctx))")
+	}
+	for _, u := range s.Undos {
+		g.P("            .OnUndo(", quote(u.Command), ", (n, compensate, state, cctx) =>")
+		g.P("                h.", u.MethodName, "(n, compensate, state, cctx))")
 	}
 	g.P("            ;")
 	g.P("    }")
@@ -286,10 +298,10 @@ func (e csharpEmitter) emitProjector(g *protogen.GeneratedFile, s *Component) er
 		g.P("            .ForDomains(", quoteJoin(s.ProjectorDomains, quote), ")")
 	}
 	for _, h := range s.Handlers {
-		g.P("            .OnEvent(", quoteFQ(h.Message), ", (projection, eventAny) =>")
+		g.P("            .OnEvent(", quoteFQ(h.Message), ", (projection, eventAny, page) =>")
 		g.P("            {")
 		g.P("                ", csType(h.Message), " ev = ", csParseAny(h.Message, "eventAny"), ";")
-		g.P("                h.", h.MethodName, "(projection, ev);")
+		g.P("                h.", h.MethodName, "(projection, ev, page);")
 		g.P("            })")
 	}
 	g.P("            .Finish((projection, events) => h.Finish(projection, events));")
@@ -308,16 +320,16 @@ func (e csharpEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 	g.P("        var rebuilder = new ", csGeneric(csRebuilder, state), "(() => new ", state, "());")
 	g.P("        rebuilder.WithSnapshot((state, payload) => Google.Protobuf.MessageExtensions.MergeFrom(state, payload.Value));")
 	emitCsAppliers(g, s)
-	g.P("        return new ", csGeneric(csPmDispatch, state), "(", quote(s.BaseName), ", ", quote(s.Component.Domain), ", rebuilder)")
+	g.P("        return new ", csGeneric(csPmDispatch, state), "(", quote(s.BaseName), ", ", quote(s.Component.Domain), ", ", csStringArray(s.Component.OutputDomains), ", rebuilder)")
 	for _, h := range s.Handlers {
-		g.P("            .OnEvent(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", (eventAny, state, dests) =>")
+		g.P("            .OnEvent(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", (eventAny, state, dests, triggerCover) =>")
 		g.P("            {")
 		g.P("                ", csType(h.Message), " ev = ", csParseAny(h.Message, "eventAny"), ";")
-		g.P("                return h.", h.MethodName, "(ev, state, dests);")
+		g.P("                return h.", h.MethodName, "(ev, state, dests, triggerCover);")
 		g.P("            })")
 	}
 	for _, r := range s.Rejections {
-		g.P("            .OnRejected(", quote(r.Key), ", (n, rejection, state) =>")
+		g.P("            .OnRejectedResponse(", quote(r.Key), ", (n, rejection, state) =>")
 		g.P("                h.", r.MethodName, "(n, rejection, state))")
 	}
 	g.P("            ;")
@@ -382,6 +394,15 @@ func csParseAny(m *protogen.Message, anyVar string) string {
 // csParse parses a typed message directly from a ByteString (applier payloads).
 func csParse(m *protogen.Message, bytesVar string) string {
 	return csType(m) + ".Parser.ParseFrom(" + bytesVar + ")"
+}
+
+// csStringArray renders a string[] literal; an empty one has no element to
+// infer the type from, so it is Array.Empty<string>().
+func csStringArray(items []string) string {
+	if len(items) == 0 {
+		return "System.Array.Empty<string>()"
+	}
+	return "new[] { " + quoteJoin(items, quote) + " }"
 }
 
 // csGeneric renders a generic type reference, e.g. AggregateDispatch<Ns.State>.

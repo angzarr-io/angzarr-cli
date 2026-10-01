@@ -37,7 +37,8 @@ const (
 	cppPack         = "angzarr::router::Pack"
 	cppCoded        = "angzarr::router::CodedError"
 	cppSagaEmission = "angzarr::router::SagaEmission"
-	cppPmRejection  = "angzarr::router::PmRejection"
+	cppPageContext  = "angzarr::router::PageContext"
+	cppCompensate   = "io::angzarr::v1::Compensate"
 	cppAny          = "google::protobuf::Any"
 	cppCover        = "io::angzarr::v1::Cover"
 	cppEventBook    = "io::angzarr::v1::EventBook"
@@ -158,6 +159,13 @@ func (e cppEmitter) aggregateMethods(s *Component) []cppMethod {
 			results: cppBusinessResp,
 		})
 	}
+	for _, u := range s.Undos {
+		out = append(out, cppMethod{
+			name:    u.MethodName,
+			params:  "const " + cppNotification + "& n, const " + cppCompensate + "& compensate, " + state + "& state, const " + cppCctx + "& cctx",
+			results: cppBusinessResp,
+		})
+	}
 	return out
 }
 
@@ -179,7 +187,7 @@ func (e cppEmitter) projectorMethods(s *Component) []cppMethod {
 	for _, h := range s.Handlers {
 		out = append(out, cppMethod{
 			name:    h.MethodName,
-			params:  state + "& projection, const " + cppType(h.Message) + "& ev",
+			params:  state + "& projection, const " + cppType(h.Message) + "& ev, const " + cppPageContext + "& ctx",
 			results: "void",
 		})
 	}
@@ -197,7 +205,7 @@ func (e cppEmitter) pmMethods(s *Component) []cppMethod {
 	for _, h := range s.Handlers {
 		out = append(out, cppMethod{
 			name:    h.MethodName,
-			params:  "const " + cppType(h.Message) + "& ev, " + state + "& state, const " + cppDestinations + "& dests",
+			params:  "const " + cppType(h.Message) + "& ev, " + state + "& state, const " + cppDestinations + "& dests, const " + cppCover + "& triggerCover",
 			results: cppPmResponse,
 		})
 	}
@@ -212,7 +220,7 @@ func (e cppEmitter) pmMethods(s *Component) []cppMethod {
 		out = append(out, cppMethod{
 			name:    r.MethodName,
 			params:  "const " + cppNotification + "& n, const " + cppRejNotif + "& rejection, " + state + "& state",
-			results: cppPmRejection,
+			results: cppPmResponse,
 		})
 	}
 	return out
@@ -250,6 +258,11 @@ func (e cppEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) error
 	for _, r := range s.Rejections {
 		g.P("  dispatch.OnRejected(", cppQuote(r.Key), ", [&h](const ", cppNotification, "& n, const ", cppRejNotif, "& rejection, ", state, "& state, const ", cppCctx, "& cctx) {")
 		g.P("    return h.", r.MethodName, "(n, rejection, state, cctx);")
+		g.P("  });")
+	}
+	for _, u := range s.Undos {
+		g.P("  dispatch.OnUndo(", cppQuote(u.Command), ", [&h](const ", cppNotification, "& n, const ", cppCompensate, "& compensate, ", state, "& state, const ", cppCctx, "& cctx) {")
+		g.P("    return h.", u.MethodName, "(n, compensate, state, cctx);")
 		g.P("  });")
 	}
 	g.P("  return dispatch;")
@@ -290,9 +303,9 @@ func (e cppEmitter) emitProjector(g *protogen.GeneratedFile, s *Component) error
 		g.P("  dispatch.ForDomains({", quoteJoin(s.ProjectorDomains, cppQuote), "});")
 	}
 	for _, h := range s.Handlers {
-		g.P("  dispatch.OnEvent(", cppQuote(fqName(h.Message)), ", [&h](", state, "& projection, const ", cppAny, "& eventAny) {")
+		g.P("  dispatch.OnEventWithContext(", cppQuote(fqName(h.Message)), ", [&h](", state, "& projection, const ", cppAny, "& eventAny, const ", cppPageContext, "& ctx) {")
 		g.P("    auto ev = ", cppParse(h.Message, "eventAny"), ";")
-		g.P("    h.", h.MethodName, "(projection, ev);")
+		g.P("    h.", h.MethodName, "(projection, ev, ctx);")
 		g.P("  });")
 	}
 	g.P("  dispatch.Finish([&h](", state, "& projection, const ", cppEventBook, "& events) {")
@@ -316,15 +329,15 @@ func (e cppEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 	g.P("    ", cppCoded, "::Merge(state, payload);")
 	g.P("  });")
 	emitCppAppliers(g, s, state)
-	g.P("  ", disp, " dispatch(", cppQuote(s.BaseName), ", ", cppQuote(s.Component.Domain), ", std::move(rebuilder));")
+	g.P("  ", disp, " dispatch(", cppQuote(s.BaseName), ", ", cppQuote(s.Component.Domain), ", {", quoteJoin(s.Component.OutputDomains, cppQuote), "}, std::move(rebuilder));")
 	for _, h := range s.Handlers {
-		g.P("  dispatch.OnEvent(", cppQuote(h.SourceDomain), ", ", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& eventAny, ", state, "& state, const ", cppDestinations, "& dests) {")
+		g.P("  dispatch.OnEventWithCover(", cppQuote(h.SourceDomain), ", ", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& eventAny, ", state, "& state, const ", cppDestinations, "& dests, const ", cppCover, "& triggerCover) {")
 		g.P("    auto ev = ", cppParse(h.Message, "eventAny"), ";")
-		g.P("    return h.", h.MethodName, "(ev, state, dests);")
+		g.P("    return h.", h.MethodName, "(ev, state, dests, triggerCover);")
 		g.P("  });")
 	}
 	for _, r := range s.Rejections {
-		g.P("  dispatch.OnRejected(", cppQuote(r.Key), ", [&h](const ", cppNotification, "& n, const ", cppRejNotif, "& rejection, ", state, "& state) {")
+		g.P("  dispatch.OnRejectedWithResponse(", cppQuote(r.Key), ", [&h](const ", cppNotification, "& n, const ", cppRejNotif, "& rejection, ", state, "& state) {")
 		g.P("    return h.", r.MethodName, "(n, rejection, state);")
 		g.P("  });")
 	}

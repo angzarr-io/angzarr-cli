@@ -301,12 +301,23 @@ wire. `cctx` carries the historical-state evidence (`NextSequence`,
 The other kinds follow the same shape, with kind-appropriate signatures:
 
 - **saga** — `Increased(event, dests, sourceCover) ([]*CommandBook, []*EventBook, error)`:
-  translate a source event into commands (stamp them from `dests`) and/or
-  injected facts; `sourceCover` is the cover of the triggering event.
+  translate a source event into commands and/or injected facts. `dests` are
+  the saga's declared output domains; emitted commands are deferred (the
+  router stamps their provenance, never a sequence). `sourceCover` is the
+  cover of the triggering event.
 - **process manager** — a trigger handler
-  `Increased(event, state, dests) (*ProcessManagerHandleResponse, error)` plus
-  appliers folding its own state.
-- **projector** — `Increased(projection, event) error` folds, and a generated
+  `Increased(event, state, dests, triggerCover) (*ProcessManagerHandleResponse, error)`
+  plus appliers folding its own state; a compensator
+  `On<Command>Rejected(n, rejection, state) (*ProcessManagerHandleResponse, error)`
+  returns a full response (process events, deferred commands, facts,
+  escalation).
+- **aggregate undo** — for each `undoes` entry,
+  `On<Command>Undo(n, compensate, state, cctx) (*BusinessResponse, error)`
+  reverses a command the aggregate executed when a CASCADE COMPENSATE
+  `Compensate` arrives; a `Compensate` with no undo handler is answered
+  UNIMPLEMENTED and dead-lettered.
+- **projector** — `Increased(projection, event, ctx) error` folds, where `ctx`
+  (`PageContext`) is the event's book cover and page sequence, and a generated
   `Finish(projection, events) (*Projection, error)` packs the result.
 
 ---
@@ -360,7 +371,8 @@ error you clean up. You are never asked to merge into generated code.
 | command handler | the command message name | `PlaceOrder` |
 | event handler (saga / projector / PM trigger) | the event message name | `OrderPlaced` |
 | applier (aggregate / PM own-state fold) | `Apply` + event name | `ApplyOrderPlaced` |
-| compensator | `On` + short command + `Rejected` | `OnReserveRejected` |
+| compensator | `On` + short command + `Rejected` (`From` + domain for a `domain:` entry) | `OnReserveRejected` |
+| undo handler | `On` + short command + `Undo` | `OnReserveUndo` |
 
 The `Apply` prefix keeps an applier distinct from a handler for the *same*
 event — a process manager can both fold an event into its state and react to it.

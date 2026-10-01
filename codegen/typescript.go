@@ -54,13 +54,14 @@ const (
 	tsPack         = "Pack"
 	tsParseAny     = "parseAny"
 	tsSagaEmission = "SagaEmission"
-	tsPmRejection  = "PmRejection"
+	tsPageContext  = "PageContext"
 
 	tsEventBook    = "EventBook"
 	tsCommandBook  = "CommandBook"
 	tsCover        = "Cover"
 	tsNotification = "Notification"
 	tsRejNotif     = "RejectionNotification"
+	tsCompensate   = "Compensate"
 	tsBusinessResp = "BusinessResponse"
 	tsProjection   = "Projection"
 	tsPmResponse   = "ProcessManagerHandleResponse"
@@ -243,6 +244,13 @@ func (e tsEmitter) aggregateSigs(refs *tsRefs, s *Component) []tsSig {
 			returns: refs.use(tsBusinessResp),
 		})
 	}
+	for _, u := range s.Undos {
+		out = append(out, tsSig{
+			name:    lowerFirst(u.MethodName),
+			params:  "n: " + refs.use(tsNotification) + ", compensate: " + refs.use(tsCompensate) + ", state: " + state + ", cctx: " + refs.use(tsCctx),
+			returns: refs.use(tsBusinessResp),
+		})
+	}
 	return out
 }
 
@@ -264,7 +272,7 @@ func (e tsEmitter) projectorSigs(refs *tsRefs, s *Component) []tsSig {
 	for _, h := range s.Handlers {
 		out = append(out, tsSig{
 			name:    lowerFirst(h.MethodName),
-			params:  "projection: " + state + ", ev: " + refs.ref(h.Message),
+			params:  "projection: " + state + ", ev: " + refs.ref(h.Message) + ", ctx: " + refs.use(tsPageContext),
 			returns: "void",
 		})
 	}
@@ -282,7 +290,7 @@ func (e tsEmitter) pmSigs(refs *tsRefs, s *Component) []tsSig {
 	for _, h := range s.Handlers {
 		out = append(out, tsSig{
 			name:    lowerFirst(h.MethodName),
-			params:  "ev: " + refs.ref(h.Message) + ", state: " + state + ", dests: " + refs.use(tsDestinations),
+			params:  "ev: " + refs.ref(h.Message) + ", state: " + state + ", dests: " + refs.use(tsDestinations) + ", triggerCover?: " + refs.use(tsCover),
 			returns: refs.use(tsPmResponse),
 		})
 	}
@@ -297,7 +305,7 @@ func (e tsEmitter) pmSigs(refs *tsRefs, s *Component) []tsSig {
 		out = append(out, tsSig{
 			name:    lowerFirst(r.MethodName),
 			params:  "n: " + refs.use(tsNotification) + ", rejection: " + refs.use(tsRejNotif) + ", state: " + state,
-			returns: refs.use(tsPmRejection),
+			returns: refs.use(tsPmResponse),
 		})
 	}
 	return out
@@ -333,6 +341,11 @@ func (e tsEmitter) aggregateDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 		for _, r := range s.Rejections {
 			g.P("  dispatch.onRejected(", tsQuote(r.Key), ", (n, rejection, state, cctx) =>")
 			g.P("    h.", lowerFirst(r.MethodName), "(n, rejection, state, cctx),")
+			g.P("  );")
+		}
+		for _, u := range s.Undos {
+			g.P("  dispatch.onUndo(", tsQuote(u.Command), ", (n, compensate, state, cctx) =>")
+			g.P("    h.", lowerFirst(u.MethodName), "(n, compensate, state, cctx),")
 			g.P("  );")
 		}
 		g.P("  return dispatch;")
@@ -375,8 +388,8 @@ func (e tsEmitter) projectorDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 			g.P("  dispatch.forDomains(", quoteJoin(s.ProjectorDomains, tsQuote), ");")
 		}
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onEvent(", tsQuote(fqName(h.Message)), ", (projection, eventAny) => {")
-			g.P("    h.", lowerFirst(h.MethodName), "(projection, ", tsParseAny, "(", refs.schema(h.Message), ", eventAny));")
+			g.P("  dispatch.onEvent(", tsQuote(fqName(h.Message)), ", (projection, eventAny, ctx) => {")
+			g.P("    h.", lowerFirst(h.MethodName), "(projection, ", tsParseAny, "(", refs.schema(h.Message), ", eventAny), ctx);")
 			g.P("  });")
 		}
 		g.P("  dispatch.finish((projection, events) => h.finish(projection, events));")
@@ -399,11 +412,11 @@ func (e tsEmitter) pmDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Compon
 		g.P("  const rebuilder = new ", tsRebuilder, "<", state, ">(() => create(", refs.schema(s.State), "));")
 		g.P("  rebuilder.withSnapshot((state, payload) => ", tsPack, ".merge(", refs.schema(s.State), ", state, payload));")
 		emitTSAppliers(g, refs, s)
-		g.P("  const dispatch = new ", tsPmDispatch, "<", state, ">(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.Domain), ", rebuilder);")
+		g.P("  const dispatch = new ", tsPmDispatch, "<", state, ">(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.Domain), ", rebuilder, [", quoteJoin(s.Component.OutputDomains, tsQuote), "]);")
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onEvent(", tsQuote(h.SourceDomain), ", ", tsQuote(fqName(h.Message)), ", (eventAny, state, dests) => {")
+			g.P("  dispatch.onEvent(", tsQuote(h.SourceDomain), ", ", tsQuote(fqName(h.Message)), ", (eventAny, state, dests, triggerCover) => {")
 			g.P("    const ev = ", tsParseAny, "(", refs.schema(h.Message), ", eventAny);")
-			g.P("    return h.", lowerFirst(h.MethodName), "(ev, state, dests);")
+			g.P("    return h.", lowerFirst(h.MethodName), "(ev, state, dests, triggerCover);")
 			g.P("  });")
 		}
 		for _, r := range s.Rejections {

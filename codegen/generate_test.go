@@ -1300,12 +1300,12 @@ func TestGenerate_OwnedDomainRegistersAggregateAndProcessManager(t *testing.T) {
 		{"Trig", o.eventDecl(eventEntry{component: fq("PMState"), domain: "orders"})},
 	}
 	want := map[string][2]string{
-		"go":         {`NewAggregateDispatch("OrderAggregate", "orders", rebuilder)`, `NewProcessManagerDispatch("Flow", "workflow", rebuilder)`},
-		"python":     {`AggregateDispatch("OrderAggregate", "orders", rebuilder)`, `ProcessManagerDispatch("Flow", "workflow", rebuilder)`},
-		"java":       {`("OrderAggregate", "orders", rebuilder)`, `("Flow", "workflow", rebuilder)`},
-		"csharp":     {`("OrderAggregate", "orders", rebuilder)`, `("Flow", "workflow", rebuilder)`},
-		"cpp":        {`dispatch("OrderAggregate", "orders", std::move(rebuilder));`, `dispatch("Flow", "workflow", std::move(rebuilder));`},
-		"typescript": {`("OrderAggregate", "orders", rebuilder);`, `("Flow", "workflow", rebuilder);`},
+		"go":         {`NewAggregateDispatch("OrderAggregate", "orders", rebuilder)`, `NewProcessManagerDispatch("Flow", "workflow", rebuilder, "fulfillment")`},
+		"python":     {`AggregateDispatch("OrderAggregate", "orders", rebuilder)`, `ProcessManagerDispatch("Flow", "workflow", rebuilder, targets=["fulfillment"])`},
+		"java":       {`("OrderAggregate", "orders", rebuilder)`, `("Flow", "workflow", java.util.List.of("fulfillment"), rebuilder)`},
+		"csharp":     {`("OrderAggregate", "orders", rebuilder)`, `("Flow", "workflow", new[] { "fulfillment" }, rebuilder)`},
+		"cpp":        {`dispatch("OrderAggregate", "orders", std::move(rebuilder));`, `dispatch("Flow", "workflow", {"fulfillment"}, std::move(rebuilder));`},
+		"typescript": {`("OrderAggregate", "orders", rebuilder);`, `("Flow", "workflow", rebuilder, ["fulfillment"]);`},
 	}
 	for _, lang := range codegen.Languages() {
 		t.Run(lang, func(t *testing.T) {

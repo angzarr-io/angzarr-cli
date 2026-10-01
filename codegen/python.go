@@ -101,7 +101,7 @@ func newPyRefs(services []*Component) *pyRefs {
 		if s.Component.Kind == KindProcessManager {
 			r.needPM = true
 		}
-		if s.Component.Kind == KindAggregate && len(s.Rejections) > 0 {
+		if s.Component.Kind == KindAggregate && len(s.Rejections)+len(s.Undos) > 0 {
 			r.needCmdHdr = true
 		}
 	}
@@ -323,6 +323,13 @@ func pyAggregateSigs(refs *pyRefs, s *Component) []pySig {
 			returns: " -> Optional[" + pyCmdH + ".BusinessResponse]",
 		})
 	}
+	for _, u := range s.Undos {
+		out = append(out, pySig{
+			name:    snake(u.MethodName),
+			params:  "(self, n: " + pyTypes + ".Notification, compensate: " + pyTypes + ".Compensate, state: " + refs.ref(s.State) + ", cctx: " + pyAz + ".CommandContext)",
+			returns: " -> Optional[" + pyCmdH + ".BusinessResponse]",
+		})
+	}
 	return out
 }
 
@@ -331,7 +338,7 @@ func pyPMSigs(refs *pyRefs, s *Component) []pySig {
 	for _, h := range s.Handlers {
 		out = append(out, pySig{
 			name:    snake(h.MethodName),
-			params:  "(self, event: " + refs.ref(h.Message) + ", state: " + refs.ref(s.State) + ", dests: " + pyAz + ".Destinations)",
+			params:  "(self, event: " + refs.ref(h.Message) + ", state: " + refs.ref(s.State) + ", dests: " + pyAz + ".Destinations, trigger_cover: Optional[" + pyTypes + ".Cover])",
 			returns: " -> " + pyPM + ".ProcessManagerHandleResponse",
 		})
 	}
@@ -346,7 +353,7 @@ func pyPMSigs(refs *pyRefs, s *Component) []pySig {
 		out = append(out, pySig{
 			name:    snake(r.MethodName),
 			params:  "(self, n: " + pyTypes + ".Notification, rejection: " + pyTypes + ".RejectionNotification, state: " + refs.ref(s.State) + ")",
-			returns: " -> tuple[list[" + pyTypes + ".EventBook], Optional[" + pyTypes + ".Notification]]",
+			returns: " -> Optional[" + pyPM + ".ProcessManagerHandleResponse]",
 		})
 	}
 	return out
@@ -357,7 +364,7 @@ func pyProjectorSigs(refs *pyRefs, s *Component) []pySig {
 	for _, h := range s.Handlers {
 		out = append(out, pySig{
 			name:    snake(h.MethodName),
-			params:  "(self, projection: " + refs.ref(s.State) + ", event: " + refs.ref(h.Message) + ")",
+			params:  "(self, projection: " + refs.ref(s.State) + ", event: " + refs.ref(h.Message) + ", ctx: " + pyAz + ".PageContext)",
 			returns: " -> None",
 		})
 	}
@@ -411,6 +418,9 @@ func emitPyAggregateDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Compone
 	for _, r := range s.Rejections {
 		g.P("    dispatch.on_rejected(", pyQuote(r.Key), ", handler.", snake(r.MethodName), ")")
 	}
+	for _, u := range s.Undos {
+		g.P("    dispatch.on_undo(", pyQuote(u.Command), ", handler.", snake(u.MethodName), ")")
+	}
 	g.P("    return dispatch")
 	g.P()
 }
@@ -421,14 +431,14 @@ func emitPyPMDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Component) {
 	g.P("    rebuilder = ", pyAz, ".Rebuilder(lambda: ", refs.ref(s.State), "())")
 	g.P("    rebuilder.with_snapshot(lambda state, payload: state.ParseFromString(payload.value))")
 	emitPyAppliers(g, refs, s)
-	g.P("    dispatch = ", pyAz, ".ProcessManagerDispatch(", pyQuote(s.BaseName), ", ", pyQuote(c.Domain), ", rebuilder)")
+	g.P("    dispatch = ", pyAz, ".ProcessManagerDispatch(", pyQuote(s.BaseName), ", ", pyQuote(c.Domain), ", rebuilder, targets=[", quoteJoin(c.OutputDomains, pyQuote), "])")
 	for _, h := range s.Handlers {
 		fn := "_on_" + snake(h.MethodName)
-		g.P("    def ", fn, "(event_any, state, dests):")
+		g.P("    def ", fn, "(event_any, state, dests, trigger_cover):")
 		g.P("        event = ", refs.ref(h.Message), "()")
 		emitPyUnpack(g, "event", "event_any")
-		g.P("        return handler.", snake(h.MethodName), "(event, state, dests)")
-		g.P("    dispatch.on_event(", pyQuote(h.SourceDomain), ", ", pyQuote(fqName(h.Message)), ", ", fn, ")")
+		g.P("        return handler.", snake(h.MethodName), "(event, state, dests, trigger_cover)")
+		g.P("    dispatch.on_event_with_cover(", pyQuote(h.SourceDomain), ", ", pyQuote(fqName(h.Message)), ", ", fn, ")")
 	}
 	for _, r := range s.Rejections {
 		g.P("    dispatch.on_rejected(", pyQuote(r.Key), ", handler.", snake(r.MethodName), ")")
@@ -447,11 +457,11 @@ func emitPyProjectorDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Compone
 	}
 	for _, h := range s.Handlers {
 		fn := "_on_" + snake(h.MethodName)
-		g.P("    def ", fn, "(projection, event_any):")
+		g.P("    def ", fn, "(projection, event_any, ctx):")
 		g.P("        event = ", refs.ref(h.Message), "()")
 		emitPyUnpack(g, "event", "event_any")
-		g.P("        handler.", snake(h.MethodName), "(projection, event)")
-		g.P("    dispatch.on_event(", pyQuote(fqName(h.Message)), ", ", fn, ")")
+		g.P("        handler.", snake(h.MethodName), "(projection, event, ctx)")
+		g.P("    dispatch.on_event_with_context(", pyQuote(fqName(h.Message)), ", ", fn, ")")
 	}
 	g.P("    dispatch.finish(handler.finish)")
 	g.P("    return dispatch")
