@@ -50,8 +50,8 @@ generate-check: lint-proto
     for out in "${expected[@]}"; do
         test -f "$out" || { echo "FAIL: $out not generated"; exit 1; }
     done
-    gofmt -l _gen | tee /tmp/angzarr-cli-genfmt.out
-    test ! -s /tmp/angzarr-cli-genfmt.out || { echo "FAIL: generated Go does not parse/format"; exit 1; }
+    unformatted="$(gofmt -l _gen)"
+    test -z "$unformatted" || { echo "$unformatted"; echo "FAIL: generated Go does not parse/format"; exit 1; }
     for sym in TableAggregateHandler NewTableAggregateDispatch TableHandSagaHandler NewTableHandSagaDispatch; do
         grep -rq "$sym" _gen || { echo "FAIL: generated wiring missing $sym"; exit 1; }
     done
@@ -64,7 +64,10 @@ generate-check: lint-proto
 
 # Check formatting
 fmt:
-    gofmt -l {{TOP}} | tee /tmp/angzarr-cli-gofmt.out && test ! -s /tmp/angzarr-cli-gofmt.out
+    #!/usr/bin/env bash
+    set -euo pipefail
+    unformatted="$(gofmt -l {{TOP}})"
+    test -z "$unformatted" || { echo "$unformatted"; exit 1; }
 
 # Auto-format code
 fmt-fix:
