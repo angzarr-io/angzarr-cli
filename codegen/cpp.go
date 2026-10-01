@@ -170,13 +170,6 @@ func (e cppEmitter) sagaMethods(s *Component) []cppMethod {
 			results: cppSagaEmission,
 		})
 	}
-	for _, r := range s.Rejections {
-		out = append(out, cppMethod{
-			name:    r.MethodName,
-			params:  "const " + cppNotification + "& n, const " + cppRejNotif + "& rejection",
-			results: cppVector + "<" + cppEventBook + ">",
-		})
-	}
 	return out
 }
 
@@ -275,11 +268,6 @@ func (e cppEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 		g.P("  dispatch.OnEvent(", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& eventAny, const ", cppDestinations, "& dests, const ", cppCover, "& sourceCover) {")
 		g.P("    auto ev = ", cppParse(h.Message, "eventAny"), ";")
 		g.P("    return h.", h.MethodName, "(ev, dests, sourceCover);")
-		g.P("  });")
-	}
-	for _, r := range s.Rejections {
-		g.P("  dispatch.OnRejected(", cppQuote(r.Key), ", [&h](const ", cppNotification, "& n, const ", cppRejNotif, "& rejection) {")
-		g.P("    return h.", r.MethodName, "(n, rejection);")
 		g.P("  });")
 	}
 	g.P("  return dispatch;")

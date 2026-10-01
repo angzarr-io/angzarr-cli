@@ -293,13 +293,6 @@ func pySagaSigs(refs *pyRefs, s *Component) []pySig {
 			returns: " -> tuple[list[" + pyTypes + ".CommandBook], list[" + pyTypes + ".EventBook]]",
 		})
 	}
-	for _, r := range s.Rejections {
-		out = append(out, pySig{
-			name:    snake(r.MethodName),
-			params:  "(self, n: " + pyTypes + ".Notification, rejection: " + pyTypes + ".RejectionNotification)",
-			returns: " -> list[" + pyTypes + ".EventBook]",
-		})
-	}
 	return out
 }
 
@@ -387,9 +380,6 @@ func emitPySagaDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Component) {
 		emitPyUnpack(g, "event", "event_any")
 		g.P("        return handler.", snake(h.MethodName), "(event, dests, source_cover)")
 		g.P("    dispatch.on_event(", pyQuote(fqName(h.Message)), ", ", fn, ")")
-	}
-	for _, r := range s.Rejections {
-		g.P("    dispatch.on_rejected(", pyQuote(r.Key), ", handler.", snake(r.MethodName), ")")
 	}
 	g.P("    return dispatch")
 	g.P()

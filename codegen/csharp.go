@@ -165,13 +165,6 @@ func (e csharpEmitter) sagaMethods(s *Component) []csMethod {
 			results: csSagaEmission,
 		})
 	}
-	for _, r := range s.Rejections {
-		out = append(out, csMethod{
-			name:    r.MethodName,
-			params:  csNotification + " n, " + csRejNotif + " rejection",
-			results: csList + "<" + csEventBook + ">",
-		})
-	}
 	return out
 }
 
@@ -272,9 +265,6 @@ func (e csharpEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 		g.P("                ", csType(h.Message), " ev = ", csParseAny(h.Message, "eventAny"), ";")
 		g.P("                return h.", h.MethodName, "(ev, dests, sourceCover);")
 		g.P("            })")
-	}
-	for _, r := range s.Rejections {
-		g.P("            .OnRejected(", quote(r.Key), ", (n, rejection) => h.", r.MethodName, "(n, rejection))")
 	}
 	g.P("            ;")
 	g.P("    }")

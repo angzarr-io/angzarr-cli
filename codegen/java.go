@@ -174,14 +174,6 @@ func (e javaEmitter) sagaMethods(s *Component) []javaMethod {
 			throws:  " throws Exception",
 		})
 	}
-	for _, r := range s.Rejections {
-		out = append(out, javaMethod{
-			name:    lowerFirst(r.MethodName),
-			params:  jNotification + " n, " + jRejNotif + " rejection",
-			results: jList + "<" + jEventBook + ">",
-			throws:  " throws Exception",
-		})
-	}
 	return out
 }
 
@@ -281,9 +273,6 @@ func (e javaEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 		g.P("          ", javaType(h.Message), " event = ", parseAny(h.Message, "eventAny"), ";")
 		g.P("          return h.", lowerFirst(h.MethodName), "(event, dests, sourceCover);")
 		g.P("        })")
-	}
-	for _, r := range s.Rejections {
-		g.P("        .onRejected(", quote(r.Key), ", (n, rejection) -> h.", lowerFirst(r.MethodName), "(n, rejection))")
 	}
 	g.P("        ;")
 	g.P("  }")

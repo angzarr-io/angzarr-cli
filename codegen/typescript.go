@@ -255,13 +255,6 @@ func (e tsEmitter) sagaSigs(refs *tsRefs, s *Component) []tsSig {
 			returns: refs.use(tsSagaEmission),
 		})
 	}
-	for _, r := range s.Rejections {
-		out = append(out, tsSig{
-			name:    lowerFirst(r.MethodName),
-			params:  "n: " + refs.use(tsNotification) + ", rejection: " + refs.use(tsRejNotif),
-			returns: refs.use(tsEventBook) + "[]",
-		})
-	}
 	return out
 }
 
@@ -360,9 +353,6 @@ func (e tsEmitter) sagaDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Comp
 			g.P("    const ev = ", tsParseAny, "(", refs.schema(h.Message), ", eventAny);")
 			g.P("    return h.", lowerFirst(h.MethodName), "(ev, dests, sourceCover);")
 			g.P("  });")
-		}
-		for _, r := range s.Rejections {
-			g.P("  dispatch.onRejected(", tsQuote(r.Key), ", (n, rejection) => h.", lowerFirst(r.MethodName), "(n, rejection));")
 		}
 		g.P("  return dispatch;")
 		g.P("}")

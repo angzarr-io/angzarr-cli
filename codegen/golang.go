@@ -157,21 +157,12 @@ func (goEmitter) sagaMethods(g *protogen.GeneratedFile, s *Component) []methodSi
 	cover := star(g, angzarrPb, "Cover")
 	cmdBook := star(g, angzarrPb, "CommandBook")
 	evtBook := star(g, angzarrPb, "EventBook")
-	notif := star(g, angzarrPb, "Notification")
-	rejn := star(g, angzarrPb, "RejectionNotification")
 	var out []methodSig
 	for _, h := range s.Handlers {
 		out = append(out, methodSig{
 			name:    h.MethodName,
 			params:  "(event *" + g.QualifiedGoIdent(h.Message.GoIdent) + ", dests " + dests + ", sourceCover " + cover + ")",
 			results: " ([]" + cmdBook + ", []" + evtBook + ", error)",
-		})
-	}
-	for _, r := range s.Rejections {
-		out = append(out, methodSig{
-			name:    r.MethodName,
-			params:  "(n " + notif + ", rejection " + rejn + ")",
-			results: " ([]" + evtBook + ", error)",
 		})
 	}
 	return out
@@ -280,9 +271,6 @@ func (e goEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 		emitDecode(g, "event", "eventAny", h.Message, "nil, nil, ")
 		g.P("return h.", h.MethodName, "(event, dests, sourceCover)")
 		g.P("})")
-	}
-	for _, r := range s.Rejections {
-		g.P("dispatch.OnRejected(", quote(r.Key), ", h.", r.MethodName, ")")
 	}
 	g.P("return dispatch")
 	g.P("}")
