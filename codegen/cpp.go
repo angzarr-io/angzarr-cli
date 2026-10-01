@@ -159,6 +159,13 @@ func (e cppEmitter) aggregateMethods(s *Component) []cppMethod {
 			results: cppBusinessResp,
 		})
 	}
+	for _, f := range s.Facts {
+		out = append(out, cppMethod{
+			name:    f.MethodName,
+			params:  "const " + cppType(f.Message) + "& fact, const " + state + "& state",
+			results: "std::optional<" + cppType(f.Message) + ">",
+		})
+	}
 	for _, u := range s.Undos {
 		out = append(out, cppMethod{
 			name:    u.MethodName,
@@ -258,6 +265,14 @@ func (e cppEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) error
 	for _, r := range s.Rejections {
 		g.P("  dispatch.OnRejected(", cppQuote(r.Key), ", [&h](const ", cppNotification, "& n, const ", cppRejNotif, "& rejection, ", state, "& state, const ", cppCctx, "& cctx) {")
 		g.P("    return h.", r.MethodName, "(n, rejection, state, cctx);")
+		g.P("  });")
+	}
+	for _, f := range s.Facts {
+		g.P("  dispatch.OnFact(", cppQuote(fqName(f.Message)), ", [&h](const ", cppAny, "& factAny, const ", state, "& state) -> std::optional<", cppAny, "> {")
+		g.P("    auto fact = ", cppParse(f.Message, "factAny"), ";")
+		g.P("    auto recorded = h.", f.MethodName, "(fact, state);")
+		g.P("    if (!recorded) return std::nullopt;")
+		g.P("    return ", cppPack, "::Wrap(*recorded);")
 		g.P("  });")
 	}
 	for _, u := range s.Undos {

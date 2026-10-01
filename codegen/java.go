@@ -162,6 +162,14 @@ func (e javaEmitter) aggregateMethods(s *Component) []javaMethod {
 			throws:  " throws Exception",
 		})
 	}
+	for _, f := range s.Facts {
+		out = append(out, javaMethod{
+			name:    lowerFirst(f.MethodName),
+			params:  javaType(f.Message) + " fact, " + state + " state",
+			results: javaType(f.Message),
+			throws:  " throws Exception",
+		})
+	}
 	for _, u := range s.Undos {
 		out = append(out, javaMethod{
 			name:    lowerFirst(u.MethodName),
@@ -264,6 +272,13 @@ func (e javaEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) erro
 	for _, r := range s.Rejections {
 		g.P("        .onRejected(", quote(r.Key), ", (n, rejection, state, cctx) ->")
 		g.P("            h.", lowerFirst(r.MethodName), "(n, rejection, (", state, ") state, cctx))")
+	}
+	for _, f := range s.Facts {
+		g.P("        .onFact(", quoteFQ(f.Message), ", (factAny, state) -> {")
+		g.P("          ", javaType(f.Message), " fact = ", parseAny(f.Message, "factAny"), ";")
+		g.P("          ", javaType(f.Message), " recorded = h.", lowerFirst(f.MethodName), "(fact, (", state, ") state);")
+		g.P("          return recorded == null ? null : ", jPack, ".pack(recorded);")
+		g.P("        })")
 	}
 	for _, u := range s.Undos {
 		g.P("        .onUndo(", quote(u.Command), ", (n, compensate, state, cctx) ->")

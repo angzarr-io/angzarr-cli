@@ -244,6 +244,13 @@ func (e tsEmitter) aggregateSigs(refs *tsRefs, s *Component) []tsSig {
 			returns: refs.use(tsBusinessResp),
 		})
 	}
+	for _, f := range s.Facts {
+		out = append(out, tsSig{
+			name:    lowerFirst(f.MethodName),
+			params:  "fact: " + refs.ref(f.Message) + ", state: " + state,
+			returns: refs.ref(f.Message) + " | undefined",
+		})
+	}
 	for _, u := range s.Undos {
 		out = append(out, tsSig{
 			name:    lowerFirst(u.MethodName),
@@ -342,6 +349,12 @@ func (e tsEmitter) aggregateDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 			g.P("  dispatch.onRejected(", tsQuote(r.Key), ", (n, rejection, state, cctx) =>")
 			g.P("    h.", lowerFirst(r.MethodName), "(n, rejection, state, cctx),")
 			g.P("  );")
+		}
+		for _, f := range s.Facts {
+			g.P("  dispatch.onFact(", tsQuote(fqName(f.Message)), ", (factAny, state) => {")
+			g.P("    const recorded = h.", lowerFirst(f.MethodName), "(", tsParseAny, "(", refs.schema(f.Message), ", factAny), state);")
+			g.P("    return recorded === undefined ? undefined : ", tsPack, ".wrap(", refs.schema(f.Message), ", recorded);")
+			g.P("  });")
 		}
 		for _, u := range s.Undos {
 			g.P("  dispatch.onUndo(", tsQuote(u.Command), ", (n, compensate, state, cctx) =>")

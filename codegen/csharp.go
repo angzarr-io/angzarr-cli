@@ -154,6 +154,13 @@ func (e csharpEmitter) aggregateMethods(s *Component) []csMethod {
 			results: csBusinessResp,
 		})
 	}
+	for _, f := range s.Facts {
+		out = append(out, csMethod{
+			name:    f.MethodName,
+			params:  csType(f.Message) + " fact, " + state + " state",
+			results: csType(f.Message) + "?",
+		})
+	}
 	for _, u := range s.Undos {
 		out = append(out, csMethod{
 			name:    u.MethodName,
@@ -253,6 +260,14 @@ func (e csharpEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) er
 	for _, r := range s.Rejections {
 		g.P("            .OnRejected(", quote(r.Key), ", (n, rejection, state, cctx) =>")
 		g.P("                h.", r.MethodName, "(n, rejection, state, cctx))")
+	}
+	for _, f := range s.Facts {
+		g.P("            .OnFact(", quoteFQ(f.Message), ", (factAny, state) =>")
+		g.P("            {")
+		g.P("                ", csType(f.Message), " fact = ", csParseAny(f.Message, "factAny"), ";")
+		g.P("                var recorded = h.", f.MethodName, "(fact, state);")
+		g.P("                return recorded == null ? null : ", csPack, ".Wrap(recorded);")
+		g.P("            })")
 	}
 	for _, u := range s.Undos {
 		g.P("            .OnUndo(", quote(u.Command), ", (n, compensate, state, cctx) =>")

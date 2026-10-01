@@ -60,6 +60,11 @@ generate-check: lint-proto
             grep -q "$sym" "$file" || { echo "FAIL: $file missing $sym"; exit 1; }
         done
     done
+    # PlayerAggregate declares facts: one fact handler each, routed by type.
+    for fact in TopUpSettled CashOutCredited; do
+        grep -q "On${fact}Fact(" "$bj/player_aggregate_angzarr.pb.go" || { echo "FAIL: PlayerAggregate missing On${fact}Fact"; exit 1; }
+        grep -q "OnFact(\"io.angzarr.examples.blackjack.v1.${fact}\"" "$bj/player_aggregate_angzarr.pb.go" || { echo "FAIL: PlayerAggregate does not register the ${fact} fact"; exit 1; }
+    done
     unexpected="$(find _gen -name '*_angzarr.pb.go' | grep -v "^$bj/" || true)"
     test -z "$unexpected" || { echo "$unexpected"; echo "FAIL: wiring generated outside the blackjack example"; exit 1; }
     total="$(find _gen -name '*_angzarr.pb.go' | wc -l)"

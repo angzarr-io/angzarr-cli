@@ -27,7 +27,10 @@ rpcs:
   `output_domain` / `output_domains` (command targets), `name`, `compensates`
   (aggregates and process managers: rejections of commands it caused, as
   `"fq.Type"` for any target domain or `"domain:fq.Type"` for one), `undoes` (aggregates only:
-  commands it executed and can undo on a CASCADE COMPENSATE `Compensate`).
+  commands it executed and can undo on a CASCADE COMPENSATE `Compensate`),
+  `facts` (aggregates only: event types it records as facts, one
+  `On<Event>Fact` handler each) and `emits_facts` (sagas and process
+  managers: fact types they inject into their output domains).
 - `(io.angzarr.v1.command)` on a command: `component` (anchor, fully
   qualified) and `emits`.
 - repeated `(io.angzarr.v1.event)` on an event, one entry per consumer:
@@ -84,6 +87,8 @@ scaffold and `lint` share it. Errors block generation, warnings do not:
 | ANZ014 | error | a field the kind must leave empty is set (e.g. `input_domain` on an aggregate, `domain` on a saga, `undoes` on anything but an aggregate) |
 | ANZ015 | error | an `undoes` entry is not a fully-qualified command the aggregate handles |
 | ANZ016 | error | a `compensates` type is listed twice unqualified, twice for one domain, or both unqualified and qualified |
+| ANZ017 | error | a `facts` / `emits_facts` entry is not a fully-qualified message in the request |
+| ANZ018 | error | an `emits_facts` type is not declared in `facts` by an aggregate owning one of the emitter's output domains |
 | ANZ100–103 | warning | incoherent wiring: unfolded emits, dangling domains, empty components |
 
 The option extensions are read dynamically (by extension number) from the

@@ -98,6 +98,9 @@ func newPyRefs(services []*Component) *pyRefs {
 		for _, a := range s.Appliers {
 			add(a.Message)
 		}
+		for _, f := range s.Facts {
+			add(f.Message)
+		}
 		if s.Component.Kind == KindProcessManager {
 			r.needPM = true
 		}
@@ -323,6 +326,13 @@ func pyAggregateSigs(refs *pyRefs, s *Component) []pySig {
 			returns: " -> Optional[" + pyCmdH + ".BusinessResponse]",
 		})
 	}
+	for _, f := range s.Facts {
+		out = append(out, pySig{
+			name:    snake(f.MethodName),
+			params:  "(self, fact: " + refs.ref(f.Message) + ", state: " + refs.ref(s.State) + ")",
+			returns: " -> Optional[" + refs.ref(f.Message) + "]",
+		})
+	}
 	for _, u := range s.Undos {
 		out = append(out, pySig{
 			name:    snake(u.MethodName),
@@ -417,6 +427,14 @@ func emitPyAggregateDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Compone
 	}
 	for _, r := range s.Rejections {
 		g.P("    dispatch.on_rejected(", pyQuote(r.Key), ", handler.", snake(r.MethodName), ")")
+	}
+	for _, f := range s.Facts {
+		fn := "_fact_" + snake(f.MethodName)
+		g.P("    def ", fn, "(fact_any, state):")
+		g.P("        fact = ", refs.ref(f.Message), "()")
+		emitPyUnpack(g, "fact", "fact_any")
+		g.P("        return handler.", snake(f.MethodName), "(fact, state)")
+		g.P("    dispatch.on_fact(", pyQuote(fqName(f.Message)), ", ", fn, ")")
 	}
 	for _, u := range s.Undos {
 		g.P("    dispatch.on_undo(", pyQuote(u.Command), ", handler.", snake(u.MethodName), ")")

@@ -199,6 +199,14 @@ func (goEmitter) aggregateMethods(g *protogen.GeneratedFile, s *Component) []met
 			results: " (" + bizResp + ", error)",
 		})
 	}
+	for _, f := range s.Facts {
+		fact := "*" + g.QualifiedGoIdent(f.Message.GoIdent)
+		out = append(out, methodSig{
+			name:    f.MethodName,
+			params:  "(fact " + fact + ", state " + statePtr + ")",
+			results: " (" + fact + ", error)",
+		})
+	}
 	for _, u := range s.Undos {
 		out = append(out, methodSig{
 			name:    u.MethodName,
@@ -321,6 +329,14 @@ func (e goEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) error 
 	}
 	for _, r := range s.Rejections {
 		g.P("dispatch.OnRejected(", quote(r.Key), ", h.", r.MethodName, ")")
+	}
+	for _, f := range s.Facts {
+		g.P("dispatch.OnFact(", quoteFQ(f.Message), ", func(factAny ", star(g, anypbPkg, "Any"), ", state ", statePtr, ") (", star(g, anypbPkg, "Any"), ", error) {")
+		emitDecode(g, "fact", "factAny", f.Message, "nil, ")
+		g.P("recorded, err := h.", f.MethodName, "(fact, state)")
+		g.P("if err != nil || recorded == nil { return nil, err }")
+		g.P("return ", ident(g, angzarrPkg, "Pack"), "(recorded)")
+		g.P("})")
 	}
 	for _, u := range s.Undos {
 		g.P("dispatch.OnUndo(", quote(u.Command), ", h.", u.MethodName, ")")

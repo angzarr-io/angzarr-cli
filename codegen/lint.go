@@ -167,8 +167,10 @@ func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
 		diags = append(diags, compensatesDiags(s, registry)...)
 		diags = append(diags, requiredFields(s)...)
 		diags = append(diags, undoDiags(s)...)
+		diags = append(diags, factDiags(s, registry)...)
 	}
 
+	diags = append(diags, emittedFactDiags(services, order, registry)...)
 	diags = append(diags, collisionDiags(services, order)...)
 	diags = append(diags, typeCollisionDiags(gen, services, order)...)
 	diags = append(diags, coherenceDiags(services, order)...)
@@ -406,6 +408,90 @@ func compensatesDiags(s *Component, registry map[string]*protogen.Message) []Dia
 	return diags
 }
 
+// factDiags validates (component).facts and emits_facts on one component and
+// records one fact handler per valid facts entry. facts is aggregate-only and
+// emits_facts saga/process-manager-only (ANZ014 otherwise); every entry must
+// be a fully-qualified message in the request (ANZ017).
+func factDiags(s *Component, registry map[string]*protogen.Message) []Diagnostic {
+	c := s.Component
+	var diags []Diagnostic
+	if len(c.Facts) > 0 && c.Kind != KindAggregate {
+		diags = append(diags, errDiag("ANZ014", s.Anchor, fmt.Sprintf("%v must not set facts (%s): facts is allowed only on aggregates", c.Kind, strings.Join(c.Facts, ", "))))
+	} else {
+		for _, f := range c.Facts {
+			m, ok := registry[f]
+			if !ok {
+				diags = append(diags, errDiag("ANZ017", s.Anchor, fmt.Sprintf("(component).facts %q is not a fully-qualified message name in the compiled set", f)))
+				continue
+			}
+			s.Facts = append(s.Facts, Fact{Message: m, MethodName: "On" + m.GoIdent.GoName + "Fact"})
+		}
+	}
+	if len(c.EmitsFacts) > 0 && c.Kind != KindSaga && c.Kind != KindProcessManager {
+		diags = append(diags, errDiag("ANZ014", s.Anchor, fmt.Sprintf("%v must not set emits_facts (%s): only sagas and process managers inject facts", c.Kind, strings.Join(c.EmitsFacts, ", "))))
+		return diags
+	}
+	for _, f := range c.EmitsFacts {
+		if _, ok := registry[f]; !ok {
+			diags = append(diags, errDiag("ANZ017", s.Anchor, fmt.Sprintf("(component).emits_facts %q is not a fully-qualified message name in the compiled set", f)))
+		}
+	}
+	return diags
+}
+
+// emittedFactDiags reports each emits_facts type that no aggregate owning
+// one of the emitter's output domains declares in facts (ANZ018): the router
+// would refuse the injected fact (NO_FACT_HANDLER). Unresolvable entries are
+// left to ANZ017.
+func emittedFactDiags(services map[string]*Component, order []string, registry map[string]*protogen.Message) []Diagnostic {
+	accepts := make(map[string]map[string]bool) // domain -> fact types
+	for _, fq := range order {
+		s := services[fq]
+		if s.Component.Kind != KindAggregate || s.Component.Domain == "" {
+			continue
+		}
+		if accepts[s.Component.Domain] == nil {
+			accepts[s.Component.Domain] = make(map[string]bool)
+		}
+		for _, f := range s.Component.Facts {
+			accepts[s.Component.Domain][f] = true
+		}
+	}
+	var diags []Diagnostic
+	for _, fq := range order {
+		s := services[fq]
+		c := s.Component
+		if c.Kind != KindSaga && c.Kind != KindProcessManager {
+			continue
+		}
+		for _, f := range c.EmitsFacts {
+			if !resolves(registry, f) {
+				continue // ANZ017 already reported
+			}
+			declared := false
+			for _, d := range c.OutputDomains {
+				if accepts[d][f] {
+					declared = true
+					break
+				}
+			}
+			if !declared {
+				diags = append(diags, errDiag("ANZ018", s.Anchor, fmt.Sprintf("%v %q emits fact %q, but no aggregate owning its output domain %s declares it in facts; the router would refuse it (NO_FACT_HANDLER)", c.Kind, fq, f, quoteList(c.OutputDomains))))
+			}
+		}
+	}
+	return diags
+}
+
+// quoteList renders strings as a comma-separated list of Go-quoted values.
+func quoteList(items []string) string {
+	q := make([]string, len(items))
+	for i, it := range items {
+		q[i] = fmt.Sprintf("%q", it)
+	}
+	return strings.Join(q, ", ")
+}
+
 // undoDiags validates (component).undoes and records one undo handler per
 // valid entry. Only aggregates execute commands, so only they may undo one
 // (ANZ014 otherwise); each entry must name a command the aggregate handles
@@ -480,6 +566,9 @@ func collisionDiags(services map[string]*Component, order []string) []Diagnostic
 		names = append(names, rejectionNames(s.Rejections)...)
 		for _, u := range s.Undos {
 			names = append(names, u.MethodName)
+		}
+		for _, f := range s.Facts {
+			names = append(names, f.MethodName)
 		}
 		if s.Component.Kind == KindProjector {
 			names = append(names, projectorFinishMethod)

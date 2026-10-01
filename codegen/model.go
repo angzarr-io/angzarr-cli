@@ -103,6 +103,12 @@ type ComponentDecl struct {
 	// Undoes is the fully-qualified command types this aggregate undoes on a
 	// CASCADE COMPENSATE Compensate notification, in declaration order.
 	Undoes []string
+	// Facts is the fully-qualified event types this aggregate accepts as
+	// facts, in declaration order.
+	Facts []string
+	// EmitsFacts is the fully-qualified fact types this saga / process
+	// manager injects into its output domains.
+	EmitsFacts []string
 }
 
 // command is the parsed (io.angzarr.v1.command) declaration on a command msg.
@@ -338,6 +344,8 @@ func componentOptions(m *protogen.Message, exts extensions) *ComponentDecl {
 		Name:         reflString(sub, "name"),
 		Compensates:  reflStrings(sub, "compensates"),
 		Undoes:       reflStrings(sub, "undoes"),
+		Facts:        reflStrings(sub, "facts"),
+		EmitsFacts:   reflStrings(sub, "emits_facts"),
 	}
 	if kindFD := sub.Descriptor().Fields().ByName("kind"); kindFD != nil {
 		c.Kind = ComponentKind(sub.Get(kindFD).Enum())
@@ -444,6 +452,13 @@ type Undo struct {
 	MethodName string // On<ShortCommand>Undo
 }
 
+// Fact is one declared fact handler: the aggregate records a fact of this
+// type (an external reality it cannot refuse), optionally annotated.
+type Fact struct {
+	Message    *protogen.Message
+	MethodName string // On<Event>Fact
+}
+
 // Component is one validated component declaration ready for emission.
 type Component struct {
 	// Anchor is the message carrying (component): the state message for the
@@ -461,6 +476,7 @@ type Component struct {
 	Appliers   []Applier
 	Rejections []Rejection
 	Undos      []Undo
+	Facts      []Fact
 	// State is the anchor message for stateful kinds; nil for the saga.
 	State *protogen.Message
 	// ProjectorDomains is a KindProjector component's domain filter: the
