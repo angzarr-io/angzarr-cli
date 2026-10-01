@@ -282,7 +282,7 @@ func (e goEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 		g.P("})")
 	}
 	for _, r := range s.Rejections {
-		g.P("dispatch.OnRejected(", quote(r.Command), ", h.", r.MethodName, ")")
+		g.P("dispatch.OnRejected(", quote(r.Key), ", h.", r.MethodName, ")")
 	}
 	g.P("return dispatch")
 	g.P("}")
@@ -328,7 +328,7 @@ func (e goEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) error 
 		g.P("})")
 	}
 	for _, r := range s.Rejections {
-		g.P("dispatch.OnRejected(", quote(r.Command), ", h.", r.MethodName, ")")
+		g.P("dispatch.OnRejected(", quote(r.Key), ", h.", r.MethodName, ")")
 	}
 	g.P("return dispatch")
 	g.P("}")
@@ -360,7 +360,7 @@ func (e goEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 		g.P("})")
 	}
 	for _, r := range s.Rejections {
-		g.P("dispatch.OnRejected(", quote(r.Command), ", h.", r.MethodName, ")")
+		g.P("dispatch.OnRejected(", quote(r.Key), ", h.", r.MethodName, ")")
 	}
 	g.P("return dispatch")
 	g.P("}")

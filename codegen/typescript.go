@@ -338,7 +338,7 @@ func (e tsEmitter) aggregateDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 			g.P("  });")
 		}
 		for _, r := range s.Rejections {
-			g.P("  dispatch.onRejected(", tsQuote(r.Command), ", (n, rejection, state, cctx) =>")
+			g.P("  dispatch.onRejected(", tsQuote(r.Key), ", (n, rejection, state, cctx) =>")
 			g.P("    h.", lowerFirst(r.MethodName), "(n, rejection, state, cctx),")
 			g.P("  );")
 		}
@@ -362,7 +362,7 @@ func (e tsEmitter) sagaDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Comp
 			g.P("  });")
 		}
 		for _, r := range s.Rejections {
-			g.P("  dispatch.onRejected(", tsQuote(r.Command), ", (n, rejection) => h.", lowerFirst(r.MethodName), "(n, rejection));")
+			g.P("  dispatch.onRejected(", tsQuote(r.Key), ", (n, rejection) => h.", lowerFirst(r.MethodName), "(n, rejection));")
 		}
 		g.P("  return dispatch;")
 		g.P("}")
@@ -417,7 +417,7 @@ func (e tsEmitter) pmDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Compon
 			g.P("  });")
 		}
 		for _, r := range s.Rejections {
-			g.P("  dispatch.onRejected(", tsQuote(r.Command), ", (n, rejection, state) =>")
+			g.P("  dispatch.onRejected(", tsQuote(r.Key), ", (n, rejection, state) =>")
 			g.P("    h.", lowerFirst(r.MethodName), "(n, rejection, state),")
 			g.P("  );")
 		}

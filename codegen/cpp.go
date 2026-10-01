@@ -255,7 +255,7 @@ func (e cppEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) error
 		g.P("  });")
 	}
 	for _, r := range s.Rejections {
-		g.P("  dispatch.OnRejected(", cppQuote(r.Command), ", [&h](const ", cppNotification, "& n, const ", cppRejNotif, "& rejection, ", state, "& state, const ", cppCctx, "& cctx) {")
+		g.P("  dispatch.OnRejected(", cppQuote(r.Key), ", [&h](const ", cppNotification, "& n, const ", cppRejNotif, "& rejection, ", state, "& state, const ", cppCctx, "& cctx) {")
 		g.P("    return h.", r.MethodName, "(n, rejection, state, cctx);")
 		g.P("  });")
 	}
@@ -278,7 +278,7 @@ func (e cppEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 		g.P("  });")
 	}
 	for _, r := range s.Rejections {
-		g.P("  dispatch.OnRejected(", cppQuote(r.Command), ", [&h](const ", cppNotification, "& n, const ", cppRejNotif, "& rejection) {")
+		g.P("  dispatch.OnRejected(", cppQuote(r.Key), ", [&h](const ", cppNotification, "& n, const ", cppRejNotif, "& rejection) {")
 		g.P("    return h.", r.MethodName, "(n, rejection);")
 		g.P("  });")
 	}
@@ -336,7 +336,7 @@ func (e cppEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 		g.P("  });")
 	}
 	for _, r := range s.Rejections {
-		g.P("  dispatch.OnRejected(", cppQuote(r.Command), ", [&h](const ", cppNotification, "& n, const ", cppRejNotif, "& rejection, ", state, "& state) {")
+		g.P("  dispatch.OnRejected(", cppQuote(r.Key), ", [&h](const ", cppNotification, "& n, const ", cppRejNotif, "& rejection, ", state, "& state) {")
 		g.P("    return h.", r.MethodName, "(n, rejection, state);")
 		g.P("  });")
 	}

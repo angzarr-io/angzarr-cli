@@ -424,8 +424,17 @@ type Applier struct {
 
 // Rejection is one declared compensation.
 type Rejection struct {
-	Command    string // fully-qualified rejected command type
-	MethodName string // On<ShortCommand>Rejected
+	// Key is the declared compensates entry, "fq.Type" or "domain:fq.Type",
+	// registered verbatim as the binding's rejection key.
+	Key string
+	// Command is the fully-qualified rejected command type.
+	Command string
+	// Domain qualifies the entry to rejections of Command sent to this domain;
+	// empty matches any domain.
+	Domain string
+	// MethodName is On<ShortCommand>Rejected, or
+	// On<ShortCommand>From<Domain>Rejected for a domain-qualified entry.
+	MethodName string
 }
 
 // Undo is one declared undo handler: the aggregate reverses a command it

@@ -250,7 +250,7 @@ func (e csharpEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) er
 		g.P("            })")
 	}
 	for _, r := range s.Rejections {
-		g.P("            .OnRejected(", quote(r.Command), ", (n, rejection, state, cctx) =>")
+		g.P("            .OnRejected(", quote(r.Key), ", (n, rejection, state, cctx) =>")
 		g.P("                h.", r.MethodName, "(n, rejection, state, cctx))")
 	}
 	g.P("            ;")
@@ -274,7 +274,7 @@ func (e csharpEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 		g.P("            })")
 	}
 	for _, r := range s.Rejections {
-		g.P("            .OnRejected(", quote(r.Command), ", (n, rejection) => h.", r.MethodName, "(n, rejection))")
+		g.P("            .OnRejected(", quote(r.Key), ", (n, rejection) => h.", r.MethodName, "(n, rejection))")
 	}
 	g.P("            ;")
 	g.P("    }")
@@ -327,7 +327,7 @@ func (e csharpEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 		g.P("            })")
 	}
 	for _, r := range s.Rejections {
-		g.P("            .OnRejected(", quote(r.Command), ", (n, rejection, state) =>")
+		g.P("            .OnRejected(", quote(r.Key), ", (n, rejection, state) =>")
 		g.P("                h.", r.MethodName, "(n, rejection, state))")
 	}
 	g.P("            ;")

@@ -85,7 +85,7 @@ message OrderState {
 | `input_domain` | a domain it **subscribes** to (saga source, projector filter); empty for aggregates/PMs |
 | `output_domain` / `output_domains` | domains it **sends commands** to (sagas, PMs) |
 | `name` | generated handler/dispatch base name; **defaults to the anchor message name** |
-| `compensates` | repeated FQ command types whose rejection this component compensates |
+| `compensates` | aggregates and process managers: rejected commands this component compensates — `"fq.Type"` (sent to any domain, `On<Command>Rejected`) or `"domain:fq.Type"` (sent to that domain only, `On<Command>From<Domain>Rejected`); a type appears once unqualified or once per domain, never both |
 | `undoes` | aggregates only: repeated FQ command types it handles and can undo when a CASCADE COMPENSATE `Compensate` arrives (`On<Command>Undo`) |
 
 `CommandOptions` (on a command message): `component` (anchor FQ), `emits`

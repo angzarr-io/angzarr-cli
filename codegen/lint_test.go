@@ -601,3 +601,105 @@ func TestLint_UndoMethodSharesTheNamespace(t *testing.T) {
 		t.Fatalf("want ANZ011 for OnReserveStockUndo, got %v", diags)
 	}
 }
+
+func TestLint_CompensatesEntries(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	agg := func(entries ...string) []declMsg {
+		return []declMsg{
+			{"State", o.ownedDecl(1, "orders", "", "OrderAggregate", entries...)},
+			{"ReserveStock", nil},
+			{"ChargeCard", nil},
+		}
+	}
+	rs, cc := fq("ReserveStock"), fq("ChargeCard")
+	cases := []struct {
+		name string
+		msgs []declMsg
+		want string // "" = none of ANZ007/ANZ014/ANZ016
+	}{
+		{"unqualified", agg(rs), ""},
+		{"qualified", agg("inventory:" + rs), ""},
+		{"one type qualified by two domains", agg("inventory:"+rs, "warehouse:"+rs), ""},
+		{"two types, mixed forms", agg(rs, "billing:"+cc), ""},
+		{"type both unqualified and qualified", agg(rs, "inventory:"+rs), "ANZ016"},
+		{"type unqualified twice", agg(rs, rs), "ANZ016"},
+		{"type qualified by one domain twice", agg("inventory:"+rs, "inventory:"+rs), "ANZ016"},
+		{"empty domain", agg(":" + rs), "ANZ007"},
+		{"domain with a colon", agg("a:b:" + rs), "ANZ007"},
+		{"qualified unresolvable type", agg("inventory:" + fq("Nope")), "ANZ007"},
+		{"qualified short name", agg("inventory:ReserveStock"), "ANZ007"},
+		{"process manager compensates", []declMsg{
+			{"PMState", o.ownedDecl(3, "workflow", "inventory", "", "inventory:"+rs)},
+			{"ReserveStock", nil},
+		}, ""},
+		{"saga compensates", []declMsg{
+			{"OrderSaga", o.componentDecl(2, "orders", "inventory", "", rs)},
+			{"ReserveStock", nil},
+		}, "ANZ014"},
+		{"projector compensates", []declMsg{
+			{"Projection", o.componentDecl(4, "orders", "", "", rs)},
+			{"ReserveStock", nil},
+		}, "ANZ014"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := lint(t, tc.msgs...)
+			for _, code := range []string{"ANZ007", "ANZ014", "ANZ016"} {
+				if got := hasCode(diags, code); got != (code == tc.want) {
+					t.Errorf("%s present = %v, want %v (diags %v)", code, got, code == tc.want, diags)
+				}
+			}
+			if tc.want == "" && hasCode(diags, "ANZ011") {
+				t.Errorf("valid entries must not collide as methods: %v", diags)
+			}
+		})
+	}
+}
+
+func TestGenerate_QualifiedCompensatesRegistersTheEntry(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	msgs := []declMsg{
+		{"State", o.ownedDecl(1, "orders", "", "OrderAggregate", "inventory:"+fq("ReserveStock"), "warehouse:"+fq("ReserveStock"), fq("ChargeCard"))},
+		{"ReserveStock", nil},
+		{"ChargeCard", nil},
+		{"CreateOrder", o.commandDecl(fq("State"))},
+	}
+	resp, err := generate(t, "go", ioPkg, msgs...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	c := resp.File[0].GetContent()
+	for _, want := range []string{
+		`dispatch.OnRejected("inventory:validation.test.ReserveStock", h.OnReserveStockFromInventoryRejected)`,
+		`dispatch.OnRejected("warehouse:validation.test.ReserveStock", h.OnReserveStockFromWarehouseRejected)`,
+		`dispatch.OnRejected("validation.test.ChargeCard", h.OnChargeCardRejected)`,
+	} {
+		if !strings.Contains(c, want) {
+			t.Errorf("missing %s:\n%s", want, c)
+		}
+	}
+}
+
+func TestGenerate_QualifiedCompensatesKeyInEveryLanguage(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	msgs := []declMsg{
+		{"State", o.ownedDecl(1, "orders", "", "OrderAggregate", "inventory:"+fq("ReserveStock"))},
+		{"ReserveStock", nil},
+		{"CreateOrder", o.commandDecl(fq("State"))},
+	}
+	for _, lang := range codegen.Languages() {
+		t.Run(lang, func(t *testing.T) {
+			resp, err := generate(t, lang, ioPkg, msgs...)
+			if err != nil {
+				t.Fatalf("Generate: %v", err)
+			}
+			c := resp.File[0].GetContent()
+			if !strings.Contains(c, `"inventory:validation.test.ReserveStock"`) {
+				t.Errorf("%s wiring does not register the qualified entry:\n%s", lang, c)
+			}
+			if !strings.Contains(strings.ToLower(c), "onreservestockfrominventoryrejected") && !strings.Contains(c, "on_reserve_stock_from_inventory_rejected") {
+				t.Errorf("%s wiring lacks the qualified handler method:\n%s", lang, c)
+			}
+		})
+	}
+}

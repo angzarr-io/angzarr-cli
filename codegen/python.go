@@ -389,7 +389,7 @@ func emitPySagaDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Component) {
 		g.P("    dispatch.on_event(", pyQuote(fqName(h.Message)), ", ", fn, ")")
 	}
 	for _, r := range s.Rejections {
-		g.P("    dispatch.on_rejected(", pyQuote(r.Command), ", handler.", snake(r.MethodName), ")")
+		g.P("    dispatch.on_rejected(", pyQuote(r.Key), ", handler.", snake(r.MethodName), ")")
 	}
 	g.P("    return dispatch")
 	g.P()
@@ -419,7 +419,7 @@ func emitPyAggregateDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Compone
 		g.P("    dispatch.on_command(", pyQuote(fqName(h.Message)), ", ", fn, ")")
 	}
 	for _, r := range s.Rejections {
-		g.P("    dispatch.on_rejected(", pyQuote(r.Command), ", handler.", snake(r.MethodName), ")")
+		g.P("    dispatch.on_rejected(", pyQuote(r.Key), ", handler.", snake(r.MethodName), ")")
 	}
 	g.P("    return dispatch")
 	g.P()
@@ -441,7 +441,7 @@ func emitPyPMDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Component) {
 		g.P("    dispatch.on_event(", pyQuote(h.SourceDomain), ", ", pyQuote(fqName(h.Message)), ", ", fn, ")")
 	}
 	for _, r := range s.Rejections {
-		g.P("    dispatch.on_rejected(", pyQuote(r.Command), ", handler.", snake(r.MethodName), ")")
+		g.P("    dispatch.on_rejected(", pyQuote(r.Key), ", handler.", snake(r.MethodName), ")")
 	}
 	g.P("    return dispatch")
 	g.P()

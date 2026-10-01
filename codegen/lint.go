@@ -164,13 +164,7 @@ func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
 	// compensation references + per-kind required-field contract.
 	for _, fq := range order {
 		s := services[fq]
-		for _, cmd := range s.Component.Compensates {
-			if !resolves(registry, cmd) {
-				diags = append(diags, errDiag("ANZ007", s.Anchor, fmt.Sprintf("(component).compensates %q is not a fully-qualified message name in the compiled set (short names never match dispatch)", cmd)))
-				continue
-			}
-			s.Rejections = append(s.Rejections, Rejection{Command: cmd, MethodName: "On" + shortName(cmd) + "Rejected"})
-		}
+		diags = append(diags, compensatesDiags(s, registry)...)
 		diags = append(diags, requiredFields(s)...)
 		diags = append(diags, undoDiags(s)...)
 	}
@@ -347,6 +341,67 @@ func requiredFields(s *Component) []Diagnostic {
 		forbid("output_domain(s)", outputs, "a projector issues no commands")
 	default:
 		missing(fmt.Sprintf("unsupported component kind %v", c.Kind))
+	}
+	return diags
+}
+
+// compensatesDiags validates (component).compensates and records one
+// rejection handler per valid entry. Entries are "fq.Type" (a rejection of
+// that type sent to any domain) or "domain:fq.Type" (sent to that domain);
+// domains contain no ':'. Only aggregates and process managers receive
+// rejections (ANZ014 otherwise). A malformed entry or unresolvable type is
+// ANZ007; a type listed unqualified more than once, by the same domain more
+// than once, or both unqualified and qualified is ANZ016, since two entries
+// would then match one rejection.
+func compensatesDiags(s *Component, registry map[string]*protogen.Message) []Diagnostic {
+	c := s.Component
+	if len(c.Compensates) == 0 {
+		return nil
+	}
+	if c.Kind != KindAggregate && c.Kind != KindProcessManager {
+		return []Diagnostic{errDiag("ANZ014", s.Anchor, fmt.Sprintf("%v must not set compensates (%s): only aggregates and process managers receive rejections", c.Kind, strings.Join(c.Compensates, ", ")))}
+	}
+	var diags []Diagnostic
+	unqualified := make(map[string]bool)
+	byDomain := make(map[string]map[string]bool) // type -> domains
+	for _, entry := range c.Compensates {
+		domain, typ, qualified := strings.Cut(entry, ":")
+		if !qualified {
+			domain, typ = "", entry
+		}
+		if qualified && (domain == "" || strings.Contains(typ, ":")) {
+			diags = append(diags, errDiag("ANZ007", s.Anchor, fmt.Sprintf("(component).compensates %q is malformed: use \"fq.Type\" or \"domain:fq.Type\" (domains contain no ':')", entry)))
+			continue
+		}
+		if !resolves(registry, typ) {
+			diags = append(diags, errDiag("ANZ007", s.Anchor, fmt.Sprintf("(component).compensates %q: %q is not a fully-qualified message name in the compiled set (short names never match dispatch)", entry, typ)))
+			continue
+		}
+		conflict := ""
+		switch {
+		case !qualified && unqualified[typ]:
+			conflict = "it is listed unqualified more than once"
+		case !qualified && len(byDomain[typ]) > 0, qualified && unqualified[typ]:
+			conflict = "it is listed both unqualified and domain-qualified"
+		case qualified && byDomain[typ][domain]:
+			conflict = fmt.Sprintf("it is qualified by %q more than once", domain)
+		}
+		if conflict != "" {
+			diags = append(diags, errDiag("ANZ016", s.Anchor, fmt.Sprintf("(component).compensates %q: %s; a type appears once unqualified or once per domain, never both", entry, conflict)))
+		}
+		if qualified {
+			if byDomain[typ] == nil {
+				byDomain[typ] = make(map[string]bool)
+			}
+			byDomain[typ][domain] = true
+		} else {
+			unqualified[typ] = true
+		}
+		method := "On" + shortName(typ) + "Rejected"
+		if qualified {
+			method = "On" + shortName(typ) + "From" + snakeToPascal(domain) + "Rejected"
+		}
+		s.Rejections = append(s.Rejections, Rejection{Key: entry, Command: typ, Domain: domain, MethodName: method})
 	}
 	return diags
 }

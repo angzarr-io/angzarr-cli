@@ -25,7 +25,8 @@ rpcs:
   `kind`, `domain` (the stream it owns: aggregates and process managers),
   `input_domain` (a subscription: saga source, projector filter),
   `output_domain` / `output_domains` (command targets), `name`, `compensates`
-  (rejections of commands it caused elsewhere), `undoes` (aggregates only:
+  (aggregates and process managers: rejections of commands it caused, as
+  `"fq.Type"` for any target domain or `"domain:fq.Type"` for one), `undoes` (aggregates only:
   commands it executed and can undo on a CASCADE COMPENSATE `Compensate`).
 - `(io.angzarr.v1.command)` on a command: `component` (anchor, fully
   qualified) and `emits`.
@@ -72,7 +73,7 @@ scaffold and `lint` share it. Errors block generation, warnings do not:
 |---|---|---|
 | ANZ002 / ANZ005 | error | `(command)` / `(event)` names an unknown component |
 | ANZ003 | error | a command targets a non-aggregate |
-| ANZ004 / ANZ007 | error | `emits` / `compensates` is not a fully-qualified message in the request |
+| ANZ004 / ANZ007 | error | `emits` / `compensates` is not a fully-qualified message in the request (or a malformed `domain:fq.Type`) |
 | ANZ006 | error | a process-manager trigger has no `(event).domain` |
 | ANZ008 | error | a required component field is missing (`domain` for aggregates/PMs; saga source and targets) |
 | ANZ009 | error | a message carries angzarr option bytes that no `options.proto` in the request defines |
@@ -82,6 +83,7 @@ scaffold and `lint` share it. Errors block generation, warnings do not:
 | ANZ013 | error | a command/event is generated without its component's anchor (split run) |
 | ANZ014 | error | a field the kind must leave empty is set (e.g. `input_domain` on an aggregate, `domain` on a saga, `undoes` on anything but an aggregate) |
 | ANZ015 | error | an `undoes` entry is not a fully-qualified command the aggregate handles |
+| ANZ016 | error | a `compensates` type is listed twice unqualified, twice for one domain, or both unqualified and qualified |
 | ANZ100–103 | warning | incoherent wiring: unfolded emits, dangling domains, empty components |
 
 The option extensions are read dynamically (by extension number) from the

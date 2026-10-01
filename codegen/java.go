@@ -261,7 +261,7 @@ func (e javaEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) erro
 		g.P("        })")
 	}
 	for _, r := range s.Rejections {
-		g.P("        .onRejected(", quote(r.Command), ", (n, rejection, state, cctx) ->")
+		g.P("        .onRejected(", quote(r.Key), ", (n, rejection, state, cctx) ->")
 		g.P("            h.", lowerFirst(r.MethodName), "(n, rejection, (", state, ") state, cctx))")
 	}
 	g.P("        ;")
@@ -283,7 +283,7 @@ func (e javaEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 		g.P("        })")
 	}
 	for _, r := range s.Rejections {
-		g.P("        .onRejected(", quote(r.Command), ", (n, rejection) -> h.", lowerFirst(r.MethodName), "(n, rejection))")
+		g.P("        .onRejected(", quote(r.Key), ", (n, rejection) -> h.", lowerFirst(r.MethodName), "(n, rejection))")
 	}
 	g.P("        ;")
 	g.P("  }")
@@ -332,7 +332,7 @@ func (e javaEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 		g.P("        })")
 	}
 	for _, r := range s.Rejections {
-		g.P("        .onRejected(", quote(r.Command), ", (n, rejection, state) ->")
+		g.P("        .onRejected(", quote(r.Key), ", (n, rejection, state) ->")
 		g.P("            h.", lowerFirst(r.MethodName), "(n, rejection, (", state, ") state))")
 	}
 	g.P("        ;")
