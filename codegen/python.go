@@ -31,7 +31,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"google.golang.org/protobuf/compiler/protogen"
 )
@@ -535,22 +534,6 @@ func pyModule(path string) (pkg, module string) {
 		return dotted[:i], dotted[i+1:] + "_pb2"
 	}
 	return "", dotted + "_pb2"
-}
-
-// snake converts an exported CamelCase identifier to Python snake_case.
-func snake(name string) string {
-	var b strings.Builder
-	for i, r := range name {
-		if unicode.IsUpper(r) {
-			if i > 0 && (!unicode.IsUpper(rune(name[i-1])) || (i+1 < len(name) && unicode.IsLower(rune(name[i+1])))) {
-				b.WriteByte('_')
-			}
-			b.WriteRune(unicode.ToLower(r))
-		} else {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
 }
 
 // pyQuote renders a Python string literal.

@@ -1,0 +1,15 @@
+{{- $c := .component -}}
+{{ .params.greeting }} {{ $c.name }} {{ lower $c.kind }} schema={{ .schema_version }} mode={{ .mode }} lang={{ .language }}
+{{- range .imports }}
+import {{ .path }} as {{ .alias }} pkg={{ .package }}
+{{- end }}
+{{- if $c.state }}
+state {{ typeRef $c.state }}
+{{- end }}
+{{- range $c.handlers }}
+handler {{ snake .method }}({{ typeRef .message }}) typed={{ .typed_emit }}{{ if .typed_emit }} -> {{ typeRef (index .emits 0) }}{{ end }}
+{{- end }}
+{{- range $c.appliers }}
+applier {{ snake .method }}({{ typeRef .message }})
+{{- end }}
+{{ include "shared" $c }}
