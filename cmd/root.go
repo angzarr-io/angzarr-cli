@@ -2,7 +2,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -11,6 +13,19 @@ import (
 
 var cfgFile string
 
+// configErr carries a hard failure from loading an explicit --config file.
+// cobra.OnInitialize hooks (see initConfig) can't return an error directly,
+// so initConfig stashes it here for rootCmd's PersistentPreRunE to surface
+// before any subcommand's business logic runs.
+var configErr error
+
+// load-bearing: no subcommand reads a config value yet — codegen and lint
+// take all their input from flags/args and stdin/files. This plumbing
+// (viper, --config, ANGZARR_* env prefix) is retained per the CLI-review
+// L07 remediation rather than deleted, on the bet that a config-consuming
+// command (e.g. a default codegen output path) lands soon. Whoever adds
+// that command should read it via viper directly; don't re-derive the
+// explicit-vs-implicit failure semantics in loadConfig below.
 var rootCmd = &cobra.Command{
 	Use:   "angzarr",
 	Short: "Angzarr framework tooling",
@@ -19,6 +34,9 @@ var rootCmd = &cobra.Command{
 Capabilities grow as subcommands; codegen (per-language dispatch wiring
 from proto component declarations) is the first.`,
 	SilenceUsage: true,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return configErr
+	},
 }
 
 // Execute runs the CLI.
@@ -33,10 +51,31 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default $XDG_CONFIG_HOME/angzarr/config.yaml)")
 }
 
-// initConfig loads viper config: explicit --config, else the user config
-// dir, plus ANGZARR_* environment overrides.
+// initConfig runs via cobra.OnInitialize: after flags are parsed, before
+// any command's RunE. It loads config and records a hard failure (explicit
+// --config that didn't load) in configErr.
 func initConfig() {
-	if cfgFile != "" {
+	configErr = loadConfig(cfgFile, os.Stderr)
+}
+
+// loadConfig loads config into viper: explicit --config, else the user
+// config dir, plus ANGZARR_* environment overrides.
+//
+// Failure handling distinguishes explicit from implicit:
+//   - explicit (cfgFile != ""): any failure to load — missing file,
+//     malformed YAML, whatever — is a hard error. The user pointed at a
+//     specific file; silently proceeding as if it didn't exist would hide
+//     a real mistake.
+//   - implicit (auto-discovered): not-found is silent-OK, since most
+//     invocations have no config file at all and that's not an error.
+//     But a file that IS found and fails to parse is a real problem the
+//     user should hear about even though we still proceed — this is the
+//     case the original code silently swallowed
+//     (`if err := viper.ReadInConfig(); err == nil { ... }` had no else).
+func loadConfig(cfgFile string, warn io.Writer) error {
+	viper.Reset()
+	explicit := cfgFile != ""
+	if explicit {
 		viper.SetConfigFile(cfgFile)
 	} else {
 		if dir, err := os.UserConfigDir(); err == nil {
@@ -47,7 +86,19 @@ func initConfig() {
 	}
 	viper.SetEnvPrefix("ANGZARR")
 	viper.AutomaticEnv()
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stderr, "using config:", viper.ConfigFileUsed())
+
+	err := viper.ReadInConfig()
+	if err == nil {
+		fmt.Fprintln(warn, "using config:", viper.ConfigFileUsed())
+		return nil
 	}
+	if explicit {
+		return fmt.Errorf("load config %q: %w", cfgFile, err)
+	}
+	var notFound viper.ConfigFileNotFoundError
+	if errors.As(err, &notFound) {
+		return nil
+	}
+	fmt.Fprintln(warn, "warning: config found but failed to parse:", err)
+	return nil
 }
