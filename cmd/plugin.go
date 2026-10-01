@@ -52,10 +52,6 @@ func pluginFromRequest(raw []byte, keys paramKeys) (*protogen.Plugin, *pluginPar
 	pgo := protogen.Options{
 		ParamFunc: func(name, value string) error {
 			switch {
-			case name == "py_framework_package":
-				// The package a python consumer imports the angzarr framework
-				// protos from (e.g. angzarr_router_ffi.gen).
-				params.opts.PyFrameworkPackage = value
 			case name == "templates" && !keys.modelOnly:
 				// A client repo's template set: github.com/org/repo@rev
 				// (fetched and cached) or a local directory.

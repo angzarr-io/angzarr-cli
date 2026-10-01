@@ -687,7 +687,7 @@ func TestGenerate_QualifiedCompensatesKeyInEveryLanguage(t *testing.T) {
 		{"ReserveStock", nil},
 		{"CreateOrder", o.commandDecl(fq("State"))},
 	}
-	for _, lang := range codegen.Languages() {
+	for _, lang := range codegen.BuiltinLanguages() {
 		t.Run(lang, func(t *testing.T) {
 			resp, err := generate(t, lang, ioPkg, msgs...)
 			if err != nil {

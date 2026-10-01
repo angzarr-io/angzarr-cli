@@ -4,8 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"google.golang.org/protobuf/types/descriptorpb"
-
 	"github.com/angzarr-io/angzarr-cli/codegen"
 )
 
@@ -65,11 +63,6 @@ func TestGenerate_FactHandlersInEveryLanguage(t *testing.T) {
 			"rec.Fact = factAny",
 			"OnShippedFact(fact *Shipped, state *State) (_go.FactRecord, error)",
 		},
-		"python": {
-			`dispatch.on_fact("validation.test.Shipped", _fact_on_shipped_fact)`,
-			"return rec if rec is not None else _az.FactRecord.as_received(fact_any)",
-			"def on_shipped_fact(self, fact: _validation_test.Shipped, state: _validation_test.State) -> Optional[_az.FactRecord]",
-		},
 		"java": {
 			`.onFact("validation.test.Shipped", (factAny, state) -> {`,
 			"return rec == null ? io.angzarr.router.FactRecord.of(factAny) : rec;",
@@ -91,7 +84,7 @@ func TestGenerate_FactHandlersInEveryLanguage(t *testing.T) {
 			"onShippedFact(fact: Shipped, state: State): FactRecord | undefined",
 		},
 	}
-	for _, lang := range codegen.Languages() {
+	for _, lang := range codegen.BuiltinLanguages() {
 		t.Run(lang, func(t *testing.T) {
 			resp, err := generate(t, lang, ioPkg, msgs...)
 			if err != nil {
@@ -108,34 +101,11 @@ func TestGenerate_FactHandlersInEveryLanguage(t *testing.T) {
 				t.Fatalf("GenerateScaffold: %v", err)
 			}
 			if !strings.Contains(strings.ToLower(stub.File[0].GetContent()), "shipped") || !strings.Contains(stub.File[0].GetContent(), map[string]string{
-				"go": "OnShippedFact(", "python": "def on_shipped_fact(", "java": "onShippedFact(",
+				"go": "OnShippedFact(", "java": "onShippedFact(",
 				"csharp": "OnShippedFact(", "cpp": "OnShippedFact(", "typescript": "onShippedFact(",
 			}[lang]) {
 				t.Errorf("%s scaffold stub lacks the fact handler:\n%s", lang, stub.File[0].GetContent())
 			}
 		})
-	}
-}
-
-func TestGeneratePython_ImportsFactModuleFromAnotherPackage(t *testing.T) {
-	o := buildOptionTypes(t, ioPkg)
-	w := &codegenWorld{t: t, o: o, msgs: map[string]*descriptorpb.MessageOptions{}, anchors: map[string]string{}}
-	w.plain("shipping.ShipmentDispatched")
-	w.declare("order.OrderState", o.withList(o.ownedDecl(1, "order", "", ""), "facts", "shipping.ShipmentDispatched"))
-	gen, err := w.plugin()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := codegen.Generate(gen, "python", codegen.Options{}); err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	var c string
-	for _, f := range gen.Response().File {
-		if strings.Contains(f.GetName(), "order_state") {
-			c = f.GetContent()
-		}
-	}
-	if !strings.Contains(c, "shipping import decl_pb2 as _decl1") || !strings.Contains(c, "fact: _decl1.ShipmentDispatched") {
-		t.Errorf("python wiring must import the fact's module:\n%s", c)
 	}
 }

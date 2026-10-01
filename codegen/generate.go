@@ -39,7 +39,6 @@ func componentFile(file *protogen.File, stem, suffix string) string {
 // Emitter implementation and registering it here.
 var emitters = map[string]Emitter{
 	goEmitter{}.Lang():     goEmitter{},
-	pyEmitter{}.Lang():     pyEmitter{},
 	javaEmitter{}.Lang():   javaEmitter{},
 	csharpEmitter{}.Lang(): csharpEmitter{},
 	cppEmitter{}.Lang():    cppEmitter{},
@@ -61,21 +60,31 @@ func Languages() []string {
 	return langs
 }
 
+// BuiltinLanguages lists the languages the CLI generates with a built-in
+// emitter (no template set needed).
+func BuiltinLanguages() []string {
+	langs := make([]string, 0, len(emitters))
+	for lang := range emitters {
+		langs = append(langs, lang)
+	}
+	sort.Strings(langs)
+	return langs
+}
+
 // Options carries codegen settings parsed from the plugin parameter.
-// PyFrameworkPackage, when set, is the package a python consumer imports the
-// angzarr framework protos from (see pyEmitter.frameworkPkg). Templates, when
-// set, is a template source (ParseTemplateSource): the language is rendered
-// from that template set instead of a built-in emitter, with Params
-// overriding the set's declared parameters.
+// Templates, when set, is a template source (ParseTemplateSource): the
+// language is rendered from that template set instead of a built-in emitter,
+// with Params overriding the set's declared parameters.
 type Options struct {
-	PyFrameworkPackage string
-	Templates          string
-	Params             map[string]string
+	Templates string
+	Params    map[string]string
 }
 
 // templateLanguages are the languages generated only from a client repo's
 // template set (templates= is required).
-var templateLanguages = map[string]bool{}
+var templateLanguages = map[string]bool{
+	"python": true,
+}
 
 // renderFromTemplates resolves opts.Templates and renders its outputs of one
 // mode, refusing a set written for another language.
@@ -132,16 +141,6 @@ func GenerateModel(gen *protogen.Plugin, name string) error {
 	return err
 }
 
-// withOptions returns the emitter configured for opts. Only the python emitter
-// has options today; others are returned unchanged.
-func withOptions(emitter Emitter, opts Options) Emitter {
-	if pe, ok := emitter.(pyEmitter); ok {
-		pe.frameworkPkg = opts.PyFrameworkPackage
-		return pe
-	}
-	return emitter
-}
-
 // Generate validates every component declaration in the request and emits
 // wiring for the requested language. Validation (analyze) is language
 // independent, so a misdeclaration fails generation identically everywhere.
@@ -156,7 +155,6 @@ func Generate(gen *protogen.Plugin, lang string, opts Options) error {
 	if err != nil {
 		return err
 	}
-	emitter = withOptions(emitter, opts)
 	gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
 	model, diags := analyze(gen)
@@ -189,7 +187,6 @@ func GenerateScaffold(gen *protogen.Plugin, lang string, exists func(path string
 	if err != nil {
 		return err
 	}
-	emitter = withOptions(emitter, opts)
 	gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
 	model, diags := analyze(gen)

@@ -11,7 +11,7 @@ is the first.
 | `angzarr codegen <lang>` | protoc/buf plugin: per-component dispatch wiring, regenerated every run |
 | `angzarr scaffold <lang>` | protoc/buf plugin: a developer-owned handler stub, written once |
 | `angzarr codegen model` | protoc/buf plugin: the validated component model as versioned JSON (`angzarr.model.json`) |
-| `angzarr codegen languages` | list the target languages: `cpp`, `csharp`, `go`, `java`, `python`, `typescript` |
+| `angzarr codegen languages` | list the target languages: `cpp`, `csharp`, `go`, `java`, `python`, `typescript` (python renders angzarr-client-python's templates: `templates=` is required) |
 | `angzarr lint [image\|-]` | validate the declarations in a buf image / FileDescriptorSet (`--request` for a CodeGeneratorRequest) |
 | `angzarr version` / `--version` | print the build version (`just build` stamps `git describe`) |
 
@@ -67,8 +67,6 @@ plugins:
 - Every request file needs a `go_package` (or buf managed mode), whatever the
   target language: output paths follow protogen's rules, so use
   `paths=source_relative`.
-- `py_framework_package=<pkg>` (python) imports the framework protos from an
-  installed package instead of relative modules.
 - `templates=<repo>@<rev>` (or a local directory) renders the language from a
   client repository's template set instead of a built-in emitter;
   `param.<name>=<value>` overrides a parameter the set declares. See
@@ -107,7 +105,8 @@ A language is generated from templates in its client repository
 model schema, the manifest, the render data and the helper functions are
 specified in [docs/templates.md](docs/templates.md).
 
-The remaining built-in emitters implement `codegen.Emitter` (`Lang`, `WiringPath`, `EmitComponent`,
+Python is generated this way (angzarr-client-python's `codegen/`). The
+remaining built-in emitters (Go, Java, C#, C++, TypeScript) implement `codegen.Emitter` (`Lang`, `WiringPath`, `EmitComponent`,
 `ScaffoldPath`, `EmitScaffoldComponent`; see `codegen/generate.go`) and
 are registered in the `emitters` table; the `codegen` and `scaffold`
 subcommands appear automatically. Generated code must be a thin table

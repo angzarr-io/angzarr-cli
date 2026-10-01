@@ -176,7 +176,7 @@ func TestRunPlugin_EmitsWiring(t *testing.T) {
 
 func TestRunLint_RequestCarryingPluginParameters_Lints(t *testing.T) {
 	var out, errOut bytes.Buffer
-	raw := aggregateRequest(t, "paths=source_relative,py_framework_package=angzarr_router_ffi.gen")
+	raw := aggregateRequest(t, "paths=source_relative,templates=github.com/org/repo@v1,param.a=b")
 	if err := runLint(bytes.NewReader(raw), &out, &errOut, true); err != nil {
 		t.Fatalf("runLint --request: %v (stderr %s)", err, errOut.String())
 	}
