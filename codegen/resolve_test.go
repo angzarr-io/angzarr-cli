@@ -102,3 +102,80 @@ func TestLint_RequestWithoutAngzarrDeclarations_IsClean(t *testing.T) {
 		t.Fatalf("plain protos must lint clean, got %v", diags)
 	}
 }
+
+// splitAggregate puts the aggregate's anchor in anchor.proto and its command
+// and event in ops.proto (which imports anchor.proto), as two directories
+// would under buf's per-directory plugin strategy.
+func splitAggregate(t *testing.T, o optionTypes, generate ...string) *protogen.Plugin {
+	t.Helper()
+	anchor := &descriptorpb.FileDescriptorProto{
+		Name:        str("orders/state/anchor.proto"),
+		Package:     str(testPkg),
+		Syntax:      str("proto3"),
+		Dependency:  []string{optionsPath},
+		Options:     &descriptorpb.FileOptions{GoPackage: str("example.test/state;state")},
+		MessageType: []*descriptorpb.DescriptorProto{{Name: str("State"), Options: o.componentDecl(1, "orders", "", "OrderAggregate")}},
+	}
+	ops := &descriptorpb.FileDescriptorProto{
+		Name:       str("orders/ops/ops.proto"),
+		Package:    str(testPkg),
+		Syntax:     str("proto3"),
+		Dependency: []string{optionsPath, "orders/state/anchor.proto"},
+		Options:    &descriptorpb.FileOptions{GoPackage: str("example.test/ops;ops")},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{Name: str("CreateOrder"), Options: o.commandDecl(fq("State"), fq("OrderCreated"))},
+			{Name: str("OrderCreated"), Options: o.eventDecl(eventEntry{component: fq("State")})},
+		},
+	}
+	return requestGen(t, generate, optionsFDP(ioPkg), anchor, ops)
+}
+
+func TestLint_DeclarationsSplitFromAnchorAcrossRuns_Errors(t *testing.T) {
+	// ops.proto is generated, its anchor is not: this run cannot wire the
+	// handlers and the anchor's own run cannot see them.
+	o := buildOptionTypes(t, ioPkg)
+	diags := codegen.Lint(splitAggregate(t, o, "orders/ops/ops.proto"))
+	n := 0
+	for _, d := range diags {
+		if d.Code == "ANZ013" {
+			n++
+			if d.Severity != codegen.SeverityError || !strings.Contains(d.Message, "strategy: all") {
+				t.Errorf("ANZ013 should be an error pointing at strategy: all, got %v", d)
+			}
+		}
+	}
+	if n != 2 {
+		t.Fatalf("want ANZ013 for the command and the event, got %v", diags)
+	}
+	if err := codegen.Generate(splitAggregate(t, o, "orders/ops/ops.proto"), "go", codegen.Options{}); err == nil {
+		t.Fatal("Generate must refuse a request that splits a component's declarations")
+	}
+}
+
+func TestLint_AllDeclarationFilesGeneratedTogether_IsClean(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	gen := splitAggregate(t, o, "orders/state/anchor.proto", "orders/ops/ops.proto")
+	if diags := codegen.Lint(gen); hasCode(diags, "ANZ013") || codegen.HasErrors(diags) {
+		t.Fatalf("one run over every file must lint clean, got %v", diags)
+	}
+}
+
+func TestLint_AnchorGeneratedWithImportedDeclarations_IsClean(t *testing.T) {
+	// The anchor's run sees the declarations through an import: it wires them.
+	o := buildOptionTypes(t, ioPkg)
+	gen := splitAggregate(t, o, "orders/state/anchor.proto")
+	if diags := codegen.Lint(gen); hasCode(diags, "ANZ013") {
+		t.Fatalf("anchor-side run must not report ANZ013, got %v", diags)
+	}
+}
+
+func TestLint_UnknownComponentHintsAtStrategy(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t, declMsg{"CreateOrder", o.commandDecl(fq("Nope"))})
+	for _, d := range diags {
+		if d.Code == "ANZ002" && strings.Contains(d.Message, "strategy: all") {
+			return
+		}
+	}
+	t.Fatalf("ANZ002 should mention strategy: all for anchors outside the request, got %v", diags)
+}

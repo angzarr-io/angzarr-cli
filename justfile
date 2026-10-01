@@ -73,8 +73,9 @@ fmt-fix:
 # Run one plugin (codegen or scaffold) for every registered language over a
 # proto tree, writing <out>/<mode>/<lang>/. A smoke test of the emitters
 # against real protos; nothing is compiled.
+# strategy is buf's plugin strategy (all, or directory to reproduce split runs).
 # Usage: just smoke ../angzarr-project/proto /tmp/smoke codegen
-smoke protos out mode="codegen":
+smoke protos out mode="codegen" strategy="all":
     #!/usr/bin/env bash
     set -euo pipefail
     protos="$(realpath "{{protos}}")"
@@ -98,7 +99,7 @@ smoke protos out mode="codegen":
             echo "  - local: [\"$work/angzarr\", \"{{mode}}\", \"$lang\"]"
             echo "    out: $dir"
             echo "    opt: $opt"
-            echo "    strategy: all"
+            echo "    strategy: {{strategy}}"
         done
     } > "$work/buf.gen.yaml"
     cd "$out"

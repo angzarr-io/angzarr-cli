@@ -18,6 +18,7 @@ import (
 //	  - local: ["angzarr", "scaffold", "go"]
 //	    out: src
 //	    opt: [paths=source_relative, out_dir=src]
+//	    strategy: all
 //
 // A stub is emitted only when its file does not yet exist; once a developer
 // owns it, regeneration leaves it untouched. protoc never tells a plugin where

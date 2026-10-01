@@ -138,13 +138,19 @@ func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
 	}
 
 	// pass 2: attach commands and events to their owning component.
+	generated := make(map[string]bool)
+	for _, file := range gen.Files {
+		generated[file.Desc.Path()] = file.Generate
+	}
 	for _, file := range gen.Files {
 		for _, m := range allMessages(file.Messages) {
 			if cmd := commandOptions(m, exts); cmd != nil {
 				diags = append(diags, attachCommand(services, registry, m, cmd)...)
+				diags = append(diags, splitRunDiag(services, generated, file, m, cmd.Component)...)
 			}
 			for _, ev := range eventOptions(m, exts) {
 				diags = append(diags, attachEvent(services, m, ev)...)
+				diags = append(diags, splitRunDiag(services, generated, file, m, ev.Component)...)
 			}
 		}
 	}
@@ -222,12 +228,32 @@ func resolves(registry map[string]*protogen.Message, name string) bool {
 	return ok
 }
 
+// strategyHint explains the one-invocation requirement: components reference
+// their commands and events by name, not import, so every file declaring
+// part of a component must be in the same plugin run.
+const strategyHint = "run the angzarr plugins over every declaring file in one invocation (buf: strategy: all on the plugin; protoc: one call with all files)"
+
+// splitRunDiag reports a command or event generated in this run whose
+// component anchor lives in a file that is not: neither this run nor the
+// anchor's own run (which cannot see this file) would wire the handler.
+func splitRunDiag(services map[string]*Component, generated map[string]bool, file *protogen.File, m *protogen.Message, component string) []Diagnostic {
+	owner, ok := services[component]
+	if !ok || !file.Generate {
+		return nil
+	}
+	anchorFile := owner.Anchor.Desc.ParentFile().Path()
+	if generated[anchorFile] {
+		return nil
+	}
+	return []Diagnostic{errDiag("ANZ013", m, fmt.Sprintf("%q is generated in this run but its component %q is declared in %s, which is not; the handler would be wired by neither run — %s", m.Desc.FullName(), component, anchorFile, strategyHint))}
+}
+
 // attachCommand wires a command message to its aggregate owner, collecting a
 // diagnostic for every unresolved reference.
 func attachCommand(services map[string]*Component, registry map[string]*protogen.Message, m *protogen.Message, cmd *command) []Diagnostic {
 	owner, ok := services[cmd.Component]
 	if !ok {
-		return []Diagnostic{errDiag("ANZ002", m, fmt.Sprintf("(command).component %q is not a declared component", cmd.Component))}
+		return []Diagnostic{errDiag("ANZ002", m, fmt.Sprintf("(command).component %q is not a declared component in this request; if it is declared in another directory, %s", cmd.Component, strategyHint))}
 	}
 	if owner.Component.Kind != KindAggregate {
 		return []Diagnostic{errDiag("ANZ003", m, fmt.Sprintf("(command).component %q is a %v; commands are handled by aggregates", cmd.Component, owner.Component.Kind))}
@@ -256,7 +282,7 @@ func attachCommand(services map[string]*Component, registry map[string]*protogen
 func attachEvent(services map[string]*Component, m *protogen.Message, ev eventConsumer) []Diagnostic {
 	owner, ok := services[ev.Component]
 	if !ok {
-		return []Diagnostic{errDiag("ANZ005", m, fmt.Sprintf("(event).component %q is not a declared component", ev.Component))}
+		return []Diagnostic{errDiag("ANZ005", m, fmt.Sprintf("(event).component %q is not a declared component in this request; if it is declared in another directory, %s", ev.Component, strategyHint))}
 	}
 	switch owner.Component.Kind {
 	case KindAggregate:

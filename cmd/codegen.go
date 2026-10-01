@@ -14,7 +14,9 @@ import (
 //
 //	plugins:
 //	  - local: ["angzarr", "codegen", "go"]
-//	    out: proto
+//	    out: gen
+//	    opt: paths=source_relative
+//	    strategy: all
 //
 // Declaration validation is language-independent and runs identically for
 // every emitter — a misdeclared component fails generation the same way
@@ -22,14 +24,16 @@ import (
 var codegenCmd = &cobra.Command{
 	Use:   "codegen",
 	Short: "Generate per-language dispatch wiring from proto component declarations",
-	Long: `Generate dispatch wiring from proto services carrying
-(angzarr.v1.component) options: a strict handler interface plus an engine
-dispatch-table constructor per declared component.
+	Long: `Generate dispatch wiring from messages carrying the
+(io.angzarr.v1.component / .command / .event) options: a strict handler
+interface plus a dispatch-table constructor over the angzarr-router binding
+per declared component.
 
 Each language subcommand speaks the protoc plugin contract on
-stdin/stdout. Generated code is a thin table population over that
-language's angzarr client engine; transport stays on the generic
-framework services and the Any envelope.`,
+stdin/stdout. Components reference their commands and events by name, so
+every file declaring part of a component must be in the same plugin run:
+configure buf with strategy: all on the angzarr plugins (a split run fails
+with ANZ013).`,
 }
 
 func init() {
