@@ -473,3 +473,16 @@ func TestLint_TierB_UnnamedAndDistinctNamesDoNotCollideWithProtoTypes(t *testing
 		t.Fatalf("no generated identifier shadows a proto type here, got %v", diags)
 	}
 }
+
+func TestDuplicateAnchorFullNames_RejectedBeforeAnalysis(t *testing.T) {
+	// Components are keyed by anchor full name; protogen refuses a request
+	// declaring one full name twice, so analysis never sees duplicates.
+	o := buildOptionTypes(t, ioPkg)
+	_, err := buildGen(t, ioPkg,
+		declMsg{"State", o.componentDecl(1, "orders", "", "A")},
+		declMsg{"State", o.componentDecl(1, "orders", "", "B")},
+	)
+	if err == nil {
+		t.Fatal("protogen accepted two messages with the same full name")
+	}
+}

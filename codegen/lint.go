@@ -123,11 +123,9 @@ func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
 			if component == nil {
 				continue
 			}
+			// Keyed by full name: protogen rejects duplicate full names
+			// before analysis, so each anchor is seen once.
 			fq := string(m.Desc.FullName())
-			if _, dup := services[fq]; dup {
-				diags = append(diags, errDiag("ANZ001", m, fmt.Sprintf("duplicate component declaration %q", fq)))
-				continue
-			}
 			s := &Component{Anchor: m, Component: component, BaseName: baseName(m, component), StubName: stubName(m, component)}
 			if component.Kind != KindSaga {
 				s.State = m
