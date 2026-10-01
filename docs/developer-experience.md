@@ -96,9 +96,12 @@ cross-domain trigger reaction).
 
 Required fields by kind: aggregate → `input_domain`; saga → `input_domain` +
 `output_domain`; process manager → `output_domain` (+ every trigger event entry
-needs `domain`); projector → `input_domain`. Generation **fails** (it does not
-emit silently-broken wiring) on a missing required field or an unresolvable /
-short type reference.
+needs `domain`); projector → nothing (its domain filter is the union of
+`input_domain` and every handler's `(event).domain`; with none declared it
+consumes every domain). Generation **fails** (it does not emit
+silently-broken wiring) on a missing required field or an unresolvable /
+short type reference. `angzarr lint` runs the same checks standalone; the
+README lists the diagnostic codes.
 
 ---
 
@@ -125,23 +128,32 @@ plugins:
   - local: ["angzarr", "codegen", "go"]
     out: gen
     opt: paths=source_relative
+    strategy: all
   # handler stub — generated ONCE into your source tree, then yours
   - local: ["angzarr", "scaffold", "go"]
     out: .
-    opt: paths=source_relative
+    opt: [paths=source_relative, out_dir=.]
+    strategy: all
 ```
 
-Then `buf generate`. (`angzarr codegen languages` lists the supported targets —
-currently `go` and `python`.)
+Then `buf generate`. `angzarr codegen languages` lists the supported targets:
+`cpp`, `csharp`, `go`, `java`, `python`, `typescript`.
 
-- The **wiring** plugin emits `<proto>_angzarr.pb.go` (Go) /
-  `<proto>_angzarr.py` (Python). Treat it like any generated code: gitignore it,
-  regenerate on demand, never edit.
-- The **scaffold** plugin emits `<proto>_angzarr_handler.go` / `..._handler.py`
-  **only when the file does not already exist** — so it bootstraps your impl
-  once and then leaves it alone. Run it with `out: .` /
-  `paths=source_relative` so its existence check resolves against your source
-  tree. The scaffold is optional; you can also hand-write the impl.
+- **`strategy: all`** on both angzarr plugins is required. A component's
+  commands and events point at it by name, not by import, so all of its files
+  must reach the plugin together; buf's default per-directory invocation
+  splits them, and such a run fails with `ANZ013`.
+- The **wiring** plugin emits one file per component, named after the
+  component (`<Name>` = `(component).name`, else the anchor message name):
+  `snake(Name)_angzarr.pb.go` (Go), `.py` (Python), `.h` (C++), `.ts`
+  (TypeScript), `<Name>Angzarr.java` / `<Name>Angzarr.cs`. Treat it like any
+  generated code: gitignore it, regenerate on demand, never edit.
+- The **scaffold** plugin emits `snake(Name)_angzarr_handler.*`
+  (`<Stub>.java` / `<Stub>.cs`) **only when the file does not already exist**
+  — it bootstraps your impl once and then leaves it alone. protoc does not tell
+  a plugin where its output lands, so set `out_dir` to the same directory as
+  `out:` (relative to where buf runs); scaffold refuses to run without it.
+  The scaffold is optional; you can also hand-write the impl.
 
 ### Shared framework protos: generate them fully native (Python)
 
@@ -278,9 +290,9 @@ wire. `cctx` carries the historical-state evidence (`NextSequence`,
 
 The other kinds follow the same shape, with kind-appropriate signatures:
 
-- **saga** — `Increased(event, dests) ([]*CommandBook, []*EventBook, error)`:
+- **saga** — `Increased(event, dests, sourceCover) ([]*CommandBook, []*EventBook, error)`:
   translate a source event into commands (stamp them from `dests`) and/or
-  injected facts.
+  injected facts; `sourceCover` is the cover of the triggering event.
 - **process manager** — a trigger handler
   `Increased(event, state, dests) (*ProcessManagerHandleResponse, error)` plus
   appliers folding its own state.
@@ -368,11 +380,12 @@ one handler per type — model extra reactions as extra components.)
 ## Gotchas
 
 - **Name your component distinctly from its state message.** The generated
-  interface is `<name>Handler` and the scaffold struct is `<name>`. If `name`
-  defaults to the state message name (e.g. anchor `OrderState`, no `name`), the
-  scaffold struct `OrderState` collides with the generated `OrderState` type.
-  Set `name` to the component (e.g. `OrderAggregate`) — distinct from the state
-  message.
+  interface is `<Name>Handler` and the scaffold type is `<Name>`. Without a
+  `name`, `<Name>` is the anchor message's name and the scaffold type becomes
+  `<Anchor>Impl` (the anchor's own name is taken by the proto-generated
+  message in the same package). A `name` — or any generated type such as
+  `<Name>Handler` — equal to a message or enum in the package is rejected
+  (`ANZ012`).
 - **Fully-qualified type references only.** `component`, `emits`, and
   `compensates` must name fully-qualified message types present in the compiled
   set; short names never match dispatch, and generation fails on them rather
