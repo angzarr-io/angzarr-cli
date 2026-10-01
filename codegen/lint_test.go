@@ -538,3 +538,66 @@ func TestLint_CoherenceUsesAggregateOwnDomain(t *testing.T) {
 		t.Fatalf("billing is an aggregate's own domain; no dangling-domain warning expected, got %v", diags)
 	}
 }
+
+func TestLint_Undoes(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	agg := func(undoes ...string) []declMsg {
+		return []declMsg{
+			{"State", o.withUndoes(o.ownedDecl(1, "orders", "", "OrderAggregate"), undoes...)},
+			{"ReserveStock", o.commandDecl(fq("State"))},
+			{"Other", nil},
+		}
+	}
+	cases := []struct {
+		name string
+		msgs []declMsg
+		want string // "" = none of ANZ011/ANZ014/ANZ015
+	}{
+		{"aggregate undoing a command it handles", agg(fq("ReserveStock")), ""},
+		{"undo of a message that is not its command", agg(fq("Other")), "ANZ015"},
+		{"undo of an unresolvable command", agg(fq("Nope")), "ANZ015"},
+		{"undo by short name", agg("ReserveStock"), "ANZ015"},
+		{"duplicate undo entry", agg(fq("ReserveStock"), fq("ReserveStock")), "ANZ011"},
+		{"process manager undoes", []declMsg{
+			{"PMState", o.withUndoes(o.ownedDecl(3, "workflow", "orders", ""), fq("ReserveStock"))},
+			{"ReserveStock", nil},
+		}, "ANZ014"},
+		{"saga undoes", []declMsg{
+			{"OrderSaga", o.withUndoes(o.componentDecl(2, "orders", "billing", ""), fq("ReserveStock"))},
+			{"ReserveStock", nil},
+		}, "ANZ014"},
+		{"projector undoes", []declMsg{
+			{"Projection", o.withUndoes(o.componentDecl(4, "orders", "", ""), fq("ReserveStock"))},
+			{"ReserveStock", nil},
+		}, "ANZ014"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := lint(t, tc.msgs...)
+			for _, code := range []string{"ANZ011", "ANZ014", "ANZ015"} {
+				if got := hasCode(diags, code); got != (code == tc.want) {
+					t.Errorf("%s present = %v, want %v (diags %v)", code, got, code == tc.want, diags)
+				}
+			}
+			if tc.want != "" {
+				if sev, _ := severityOf(diags, tc.want); sev != codegen.SeverityError {
+					t.Errorf("%s should be an error", tc.want)
+				}
+			}
+		})
+	}
+}
+
+func TestLint_UndoMethodSharesTheNamespace(t *testing.T) {
+	// undoes ReserveStock generates OnReserveStockUndo; a command of that
+	// name collides with it.
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"State", o.withUndoes(o.ownedDecl(1, "orders", "", "OrderAggregate"), fq("ReserveStock"))},
+		declMsg{"ReserveStock", o.commandDecl(fq("State"))},
+		declMsg{"OnReserveStockUndo", o.commandDecl(fq("State"))},
+	)
+	if !hasCode(diags, "ANZ011") {
+		t.Fatalf("want ANZ011 for OnReserveStockUndo, got %v", diags)
+	}
+}

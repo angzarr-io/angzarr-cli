@@ -104,6 +104,7 @@ func optionsFDP(pkg string) *descriptorpb.FileDescriptorProto {
 					repeatedField("compensates", 5, str_),
 					repeatedField("output_domains", 6, str_),
 					field("domain", 7, str_),
+					repeatedField("undoes", 8, str_),
 				},
 			},
 			{
@@ -228,6 +229,16 @@ func (o optionTypes) withField(opts *descriptorpb.MessageOptions, field, value s
 	}
 	sub := opts.ProtoReflect().Get(o.component.TypeDescriptor()).Message()
 	sub.Set(sub.Descriptor().Fields().ByName(protoreflect.Name(field)), protoreflect.ValueOfString(value))
+	return opts
+}
+
+// withUndoes appends undoes entries to a componentDecl.
+func (o optionTypes) withUndoes(opts *descriptorpb.MessageOptions, commands ...string) *descriptorpb.MessageOptions {
+	sub := opts.ProtoReflect().Get(o.component.TypeDescriptor()).Message()
+	list := sub.Mutable(sub.Descriptor().Fields().ByName("undoes")).List()
+	for _, c := range commands {
+		list.Append(protoreflect.ValueOfString(c))
+	}
 	return opts
 }
 

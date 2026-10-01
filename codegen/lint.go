@@ -172,6 +172,7 @@ func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
 			s.Rejections = append(s.Rejections, Rejection{Command: cmd, MethodName: "On" + shortName(cmd) + "Rejected"})
 		}
 		diags = append(diags, requiredFields(s)...)
+		diags = append(diags, undoDiags(s)...)
 	}
 
 	diags = append(diags, collisionDiags(services, order)...)
@@ -350,6 +351,33 @@ func requiredFields(s *Component) []Diagnostic {
 	return diags
 }
 
+// undoDiags validates (component).undoes and records one undo handler per
+// valid entry. Only aggregates execute commands, so only they may undo one
+// (ANZ014 otherwise); each entry must name a command the aggregate handles
+// (ANZ015).
+func undoDiags(s *Component) []Diagnostic {
+	c := s.Component
+	if len(c.Undoes) == 0 {
+		return nil
+	}
+	if c.Kind != KindAggregate {
+		return []Diagnostic{errDiag("ANZ014", s.Anchor, fmt.Sprintf("%v must not set undoes (%s): only aggregates execute commands", c.Kind, strings.Join(c.Undoes, ", ")))}
+	}
+	handled := make(map[string]bool, len(s.Handlers))
+	for _, h := range s.Handlers {
+		handled[fqName(h.Message)] = true
+	}
+	var diags []Diagnostic
+	for _, cmd := range c.Undoes {
+		if !handled[cmd] {
+			diags = append(diags, errDiag("ANZ015", s.Anchor, fmt.Sprintf("(component).undoes %q is not a fully-qualified command this aggregate handles", cmd)))
+			continue
+		}
+		s.Undos = append(s.Undos, Undo{Command: cmd, MethodName: "On" + shortName(cmd) + "Undo"})
+	}
+	return diags
+}
+
 // projectorDomains computes a projector's domain filter: the sorted,
 // deduplicated union of its declared input_domain and every handler's
 // (event).domain. Every emitter renders this one list.
@@ -372,9 +400,10 @@ func projectorDomains(s *Component) []string {
 
 // collisionDiags catches generated-identifier clashes that would produce
 // uncompilable source: two components emitting the same base name, or one
-// component generating the same method twice. Handlers, appliers, rejections
-// and the projector's fixed Finish all land on the same generated interface,
-// so the duplicate check runs over their union as one namespace.
+// component generating the same method twice. Handlers, appliers, rejections,
+// undo handlers and the projector's fixed Finish all land on the same
+// generated interface, so the duplicate check runs over their union as one
+// namespace.
 func collisionDiags(services map[string]*Component, order []string) []Diagnostic {
 	var diags []Diagnostic
 
@@ -394,6 +423,9 @@ func collisionDiags(services map[string]*Component, order []string) []Diagnostic
 		names = append(names, handlerNames(s.Handlers)...)
 		names = append(names, applierNames(s.Appliers)...)
 		names = append(names, rejectionNames(s.Rejections)...)
+		for _, u := range s.Undos {
+			names = append(names, u.MethodName)
+		}
 		if s.Component.Kind == KindProjector {
 			names = append(names, projectorFinishMethod)
 		}

@@ -86,6 +86,7 @@ message OrderState {
 | `output_domain` / `output_domains` | domains it **sends commands** to (sagas, PMs) |
 | `name` | generated handler/dispatch base name; **defaults to the anchor message name** |
 | `compensates` | repeated FQ command types whose rejection this component compensates |
+| `undoes` | aggregates only: repeated FQ command types it handles and can undo when a CASCADE COMPENSATE `Compensate` arrives (`On<Command>Undo`) |
 
 `CommandOptions` (on a command message): `component` (anchor FQ), `emits`
 (repeated FQ event types — see [typed emit](#typed-emit-vs-the-escape-hatch)).

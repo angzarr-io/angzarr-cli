@@ -24,7 +24,9 @@ rpcs:
   aggregate / process manager / projector, or an empty marker for a saga):
   `kind`, `domain` (the stream it owns: aggregates and process managers),
   `input_domain` (a subscription: saga source, projector filter),
-  `output_domain` / `output_domains` (command targets), `name`, `compensates`.
+  `output_domain` / `output_domains` (command targets), `name`, `compensates`
+  (rejections of commands it caused elsewhere), `undoes` (aggregates only:
+  commands it executed and can undo on a CASCADE COMPENSATE `Compensate`).
 - `(io.angzarr.v1.command)` on a command: `component` (anchor, fully
   qualified) and `emits`.
 - repeated `(io.angzarr.v1.event)` on an event, one entry per consumer:
@@ -78,6 +80,7 @@ scaffold and `lint` share it. Errors block generation, warnings do not:
 | ANZ011 | error | one component generates the same method twice (in any language's casing) |
 | ANZ012 | error | a generated type (stub, `<Name>Handler`, …) equals a proto type in the package |
 | ANZ013 | error | a command/event is generated without its component's anchor (split run) |
+| ANZ015 | error | an `undoes` entry is not a fully-qualified command the aggregate handles |
 | ANZ014 | error | a domain field the kind must leave empty is set (e.g. `input_domain` on an aggregate, `domain` on a saga) |
 | ANZ100–103 | warning | incoherent wiring: unfolded emits, dangling domains, empty components |
 

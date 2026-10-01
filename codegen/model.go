@@ -100,6 +100,9 @@ type ComponentDecl struct {
 	// Compensates is the fully-qualified command types whose rejection this
 	// component compensates, in declaration order (C-0042).
 	Compensates []string
+	// Undoes is the fully-qualified command types this aggregate undoes on a
+	// CASCADE COMPENSATE Compensate notification, in declaration order.
+	Undoes []string
 }
 
 // command is the parsed (io.angzarr.v1.command) declaration on a command msg.
@@ -334,6 +337,7 @@ func componentOptions(m *protogen.Message, exts extensions) *ComponentDecl {
 		OutputDomain: reflString(sub, "output_domain"),
 		Name:         reflString(sub, "name"),
 		Compensates:  reflStrings(sub, "compensates"),
+		Undoes:       reflStrings(sub, "undoes"),
 	}
 	if kindFD := sub.Descriptor().Fields().ByName("kind"); kindFD != nil {
 		c.Kind = ComponentKind(sub.Get(kindFD).Enum())
@@ -424,6 +428,13 @@ type Rejection struct {
 	MethodName string // On<ShortCommand>Rejected
 }
 
+// Undo is one declared undo handler: the aggregate reverses a command it
+// executed when a Compensate for that command type arrives.
+type Undo struct {
+	Command    string // fully-qualified undone command type
+	MethodName string // On<ShortCommand>Undo
+}
+
 // Component is one validated component declaration ready for emission.
 type Component struct {
 	// Anchor is the message carrying (component): the state message for the
@@ -440,6 +451,7 @@ type Component struct {
 	Handlers   []Handler
 	Appliers   []Applier
 	Rejections []Rejection
+	Undos      []Undo
 	// State is the anchor message for stateful kinds; nil for the saga.
 	State *protogen.Message
 	// ProjectorDomains is a KindProjector component's domain filter: the
