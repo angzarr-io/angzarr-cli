@@ -24,38 +24,49 @@ lint:
 mutants pkg="./...":
     cd {{TOP}} && gremlins unleash --workers 1 --timeout-coefficient 20 {{pkg}}
 
-# Lint the canonical component declarations before they are generated:
-# resolution errors block, coherence warnings are reported. Codegen also
-# gates on the same analysis internally, so this is the standalone surface
-# for CI and pre-commit.
+# Lint component declarations before they are generated: resolution errors
+# block, coherence warnings are reported. Codegen gates on the same analysis
+# internally; this is the standalone surface for CI and pre-commit. Defaults
+# to the vendored angzarr-project protos (framework + blackjack example).
 lint-proto protos=(TOP / "angzarr-project/proto"):
     buf build {{protos}} -o - | go run {{TOP}} lint -
 
-# Generate from the vendored canonical protos and validate the output:
-# generation must succeed, emit wiring for every declared component, and
-# produce parseable Go (full compile validation lives in the client repos,
-# which own the engine the generated code targets).
+# Generate Go wiring for the vendored protos and validate it: generation must
+# succeed, emit one wiring file per blackjack component, and produce
+# parseable Go (compile validation against the binding lives in
+# angzarr-router).
 generate-check: lint-proto
     #!/usr/bin/env bash
     set -euo pipefail
     cd "{{TOP}}"
     rm -rf _gen
     buf generate angzarr-project/proto
-    # File-per-component: one wiring file per declared component (handler
-    # interface), emitted under the proto's source-relative package path.
-    expected=(
-        _gen/io/angzarr/examples/v1/table_aggregate_angzarr.pb.go
-        _gen/io/angzarr/examples/v1/table_hand_saga_angzarr.pb.go
+    bj=_gen/io/angzarr/examples/blackjack/v1
+    components=(
+        player_aggregate:PlayerAggregate
+        table_aggregate:TableAggregate
+        buy_in_process_manager:BuyInProcessManager
+        player_table_saga:PlayerTableSaga
+        table_player_settlement_saga:TablePlayerSettlementSaga
+        table_player_history_saga:TablePlayerHistorySaga
+        table_player_loyalty_saga:TablePlayerLoyaltySaga
+        ledger_projector:LedgerProjector
     )
-    for out in "${expected[@]}"; do
-        test -f "$out" || { echo "FAIL: $out not generated"; exit 1; }
+    for entry in "${components[@]}"; do
+        file="$bj/${entry%%:*}_angzarr.pb.go"
+        name="${entry##*:}"
+        test -f "$file" || { echo "FAIL: $file not generated"; exit 1; }
+        for sym in "${name}Handler" "New${name}Dispatch" "Register${name}"; do
+            grep -q "$sym" "$file" || { echo "FAIL: $file missing $sym"; exit 1; }
+        done
     done
+    unexpected="$(find _gen -name '*_angzarr.pb.go' | grep -v "^$bj/" || true)"
+    test -z "$unexpected" || { echo "$unexpected"; echo "FAIL: wiring generated outside the blackjack example"; exit 1; }
+    total="$(find _gen -name '*_angzarr.pb.go' | wc -l)"
+    test "$total" -eq "${#components[@]}" || { echo "FAIL: $total component files, want ${#components[@]}"; exit 1; }
     unformatted="$(gofmt -l _gen)"
     test -z "$unformatted" || { echo "$unformatted"; echo "FAIL: generated Go does not parse/format"; exit 1; }
-    for sym in TableAggregateHandler NewTableAggregateDispatch TableHandSagaHandler NewTableHandSagaDispatch; do
-        grep -rq "$sym" _gen || { echo "FAIL: generated wiring missing $sym"; exit 1; }
-    done
-    echo "generate-check OK: $(grep -rh 'func New' _gen | wc -l) constructors across $(find _gen -name '*_angzarr.pb.go' | wc -l) component files"
+    echo "generate-check OK: $total component files"
 
 # Full compile-against-engine validation lives in angzarr-router, which bakes
 # this CLI into its Go toolchain image and runs the FFI conformance suite. The
