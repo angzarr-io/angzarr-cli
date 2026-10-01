@@ -17,6 +17,13 @@ test:
 lint:
     go vet {{TOP}}/...
 
+# Mutation-test a package with gremlins (covered lines only). One worker and
+# a wide timeout keep each mutant's `go test` run from tripping gremlins'
+# coverage-derived deadline.
+# Usage: just mutants ./codegen
+mutants pkg="./...":
+    cd {{TOP}} && gremlins unleash --workers 1 --timeout-coefficient 20 {{pkg}}
+
 # Lint the canonical component declarations before they are generated:
 # resolution errors block, coherence warnings are reported. Codegen also
 # gates on the same analysis internally, so this is the standalone surface
