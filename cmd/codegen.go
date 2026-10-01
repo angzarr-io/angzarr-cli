@@ -4,12 +4,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/pluginpb"
-
 	"github.com/angzarr-io/angzarr-cli/codegen"
+	"github.com/spf13/cobra"
 )
 
 // codegenCmd hosts one subcommand per target language. Each language
@@ -65,44 +61,18 @@ func languageCommand(lang string) *cobra.Command {
 
 // runPlugin speaks the protoc plugin protocol. Generation failures travel
 // inside the response per the protocol (protoc/buf surface them); only
-// protocol-level failures (unreadable request) exit nonzero.
+// protocol-level failures (unreadable request, unknown parameter) exit
+// nonzero.
 //
 // protogen.Options.Run is not used: it inspects os.Args itself and
 // rejects the subcommand arguments cobra routes on.
 func runPlugin(in io.Reader, out io.Writer, lang string) error {
-	raw, err := io.ReadAll(in)
-	if err != nil {
-		return fmt.Errorf("read CodeGeneratorRequest: %w", err)
-	}
-	req := &pluginpb.CodeGeneratorRequest{}
-	if err := proto.Unmarshal(raw, req); err != nil {
-		return fmt.Errorf("parse CodeGeneratorRequest: %w", err)
-	}
-	var opts codegen.Options
-	pgo := protogen.Options{
-		// py_framework_package: the package a python consumer imports the angzarr
-		// framework protos from (e.g. angzarr_router_ffi.gen), so it doesn't
-		// regenerate them and double-register descriptors. Other params (paths,
-		// M<path>) are handled by protogen itself.
-		ParamFunc: func(name, value string) error {
-			if name == "py_framework_package" {
-				opts.PyFrameworkPackage = value
-				return nil
-			}
-			return fmt.Errorf("unknown parameter %q", name)
-		},
-	}
-	gen, err := pgo.New(req)
+	gen, params, err := readPlugin(in, paramKeys{})
 	if err != nil {
 		return err
 	}
-	if err := codegen.Generate(gen, lang, opts); err != nil {
+	if err := codegen.Generate(gen, lang, params.opts); err != nil {
 		gen.Error(err)
 	}
-	resp, err := proto.Marshal(gen.Response())
-	if err != nil {
-		return fmt.Errorf("marshal CodeGeneratorResponse: %w", err)
-	}
-	_, err = out.Write(resp)
-	return err
+	return writeResponse(out, gen)
 }
