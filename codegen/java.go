@@ -298,11 +298,8 @@ func (e javaEmitter) emitProjector(g *protogen.GeneratedFile, s *Component) erro
 	g.P("  /** Populates the projector table from the proto declaration. */")
 	g.P("  public static ", jProjDispatch, " new", s.BaseName, "Dispatch(", s.BaseName, "Handler h) {")
 	g.P("    return new ", jProjDispatch, "(", quote(s.BaseName), ", ", javaType(s.State), "::newBuilder)")
-	// The projector's domain filter is the union of its handlers' source
-	// domains (Component.ProjectorDomains), not the single declared
-	// input_domain — see the Go emitter for the full rationale. Empty means
-	// every handler's source domain was unset, so the call is omitted and the
-	// runtime default (consume every domain) applies.
+	// Domain filter (Component.ProjectorDomains); omitted when empty so the
+	// runtime default, consume every domain, applies.
 	if len(s.ProjectorDomains) > 0 {
 		g.P("        .forDomains(", quoteJoin(s.ProjectorDomains, quote), ")")
 	}

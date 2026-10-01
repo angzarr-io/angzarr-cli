@@ -148,10 +148,7 @@ func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
 		}
 	}
 
-	// Projector domain filter: the union of handler source domains, computed
-	// once here rather than per-emitter (the L01 bug: five of six emitters
-	// restricted to the single declared input_domain instead, silently
-	// dropping every secondary-domain event at runtime).
+	// Projector domain filter, computed once for every emitter.
 	for _, fq := range order {
 		s := services[fq]
 		if s.Component.Kind == KindProjector {
@@ -278,36 +275,31 @@ func requiredFields(s *Component) []Diagnostic {
 			return []Diagnostic{errDiag("ANZ008", s.Anchor, "process manager requires output_domain (its pm_domain and command-target domain)")}
 		}
 	case KindProjector:
-		// No required declared field: the domain filter is DERIVED
-		// (Component.ProjectorDomains, computed above from each handler's
-		// (event).domain) rather than the single declared input_domain — a
-		// projector legitimately spans multiple source domains. Requiring
-		// input_domain here would re-litigate the L01 bug at the lint layer:
-		// a projector whose handlers span several domains has no single
-		// correct value to put there.
+		// No required field: the domain filter (Component.ProjectorDomains)
+		// is the union of input_domain and the handlers' (event).domain, so
+		// a projector spanning several domains may declare them per event
+		// and leave input_domain empty.
 	default:
 		return []Diagnostic{errDiag("ANZ008", s.Anchor, fmt.Sprintf("unsupported component kind %v", c.Kind))}
 	}
 	return nil
 }
 
-// projectorDomains computes a projector's authoritative domain filter: the
-// sorted, deduplicated set of non-empty source domains across its handlers.
-// Decision (A) — the union of handler source domains, not the single
-// declared input_domain — is authoritative (L01 remediation): the Python
-// emitter already computed this and documented input_domain as wrong for
-// projectors, while the other five emitters silently restricted to
-// input_domain and dropped every secondary-domain event at runtime. Hoisted
-// here so every emitter consumes one computation instead of five diverging
-// ones.
+// projectorDomains computes a projector's domain filter: the sorted,
+// deduplicated union of its declared input_domain and every handler's
+// (event).domain. Every emitter renders this one list.
 func projectorDomains(s *Component) []string {
 	seen := make(map[string]bool)
 	var domains []string
-	for _, h := range s.Handlers {
-		if h.SourceDomain != "" && !seen[h.SourceDomain] {
-			seen[h.SourceDomain] = true
-			domains = append(domains, h.SourceDomain)
+	add := func(d string) {
+		if d != "" && !seen[d] {
+			seen[d] = true
+			domains = append(domains, d)
 		}
+	}
+	add(s.Component.InputDomain)
+	for _, h := range s.Handlers {
+		add(h.SourceDomain)
 	}
 	sort.Strings(domains)
 	return domains

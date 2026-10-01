@@ -379,17 +379,13 @@ type Component struct {
 	Rejections []Rejection
 	// State is the anchor message for stateful kinds; nil for the saga.
 	State *protogen.Message
-	// ProjectorDomains is the authoritative domain filter for a KindProjector
-	// component: the sorted, deduplicated set of source domains across its
-	// handlers (each handler's SourceDomain comes from its (event).domain
-	// entry). A projector routinely folds several domains at once — e.g. a
-	// display combining player, table and hand events — so the filter is the
-	// UNION of what its handlers actually source, not the single declared
-	// input_domain (which remains meaningful for aggregates/sagas, but is not
-	// authoritative here; see L01 remediation). Empty means the projector
-	// consumes every domain — either it declared no handlers, or none of its
-	// handlers declared a source domain. Computed once in analyze() and
-	// consumed identically by every emitter. Unset for every other kind.
+	// ProjectorDomains is a KindProjector component's domain filter: the
+	// sorted, deduplicated union of its input_domain and its handlers'
+	// (event).domain values. A projector may fold several domains (e.g. a
+	// display combining player, table and hand events). Empty means no domain
+	// was declared anywhere and the projector consumes every domain. Computed
+	// once in analyze() and rendered identically by every emitter; unset for
+	// every other kind.
 	ProjectorDomains []string
 }
 
@@ -426,12 +422,7 @@ func applierName(m *protogen.Message) string {
 }
 
 // quoteJoin renders a domain list as language string literals joined by
-// ", ", using the caller's per-language quoting function. Shared by every
-// emitter's projector domain-filter call so a multi-domain declaration
-// renders identically (modulo each language's own quoting/escaping) across
-// all six languages — the whole point of hoisting ProjectorDomains into the
-// shared model instead of leaving each emitter to recompute (and diverge on)
-// its own domain set.
+// ", ", using the caller's per-language quoting function.
 func quoteJoin(domains []string, quote func(string) string) string {
 	quoted := make([]string, len(domains))
 	for i, d := range domains {

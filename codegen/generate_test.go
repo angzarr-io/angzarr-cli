@@ -327,22 +327,9 @@ func orderAggregate(o optionTypes) []declMsg {
 	}
 }
 
-// projectorMultiDomain is the CLI-#1 reproduction fixture (L01): a projector
-// whose handlers source events from TWO domains ("table" and "hand", in that
-// declaration order — deliberately not alphabetical, so a test asserting the
-// sorted union catches an emitter that merely echoes declaration order) while
-// its declared input_domain names only ONE of them ("table"). This mirrors
-// the real angzarr-project example that shipped the bug: OutputProjection
-// declares input_domain: "hand" but its handlers span player/table/hand — see
-// io/angzarr/examples/v1/components.proto and the (event) entries in
-// player.proto/table.proto/hand.proto that name it as their consumer.
-//
-// Before the fix, Python folded the union {hand, table} while the other five
-// emitters restricted to the declared input_domain {table} alone, silently
-// dropping every "hand" event at runtime — same proto, different runtime
-// behavior per language. Decision A (this remediation) makes the union
-// authoritative for all six languages: every TestGenerate*_Projector_
-// MultiDomain test below asserts the identical two-domain, sorted result.
+// projectorMultiDomain declares a projector whose handlers source events from
+// two domains ("table", "hand" — declaration order deliberately not sorted)
+// while input_domain names only "table".
 func projectorMultiDomain(o optionTypes) []declMsg {
 	return []declMsg{
 		{"Projection", o.componentDecl(4, "table", "", "MultiDomainProjector")},
@@ -613,14 +600,6 @@ func TestGenerate_Validations_FailGeneration(t *testing.T) {
 			{"PMState", o.componentDecl(3, "", "fulfillment", "")},
 			{"Trig", o.eventDecl(eventEntry{component: fq("PMState")})},
 		}},
-		// NOTE: a "projector without domains" case previously lived here,
-		// asserting that COMPONENT_KIND_PROJECTOR required input_domain.
-		// Removed under decision A (L01 remediation): a projector's domain
-		// filter is the union of its handlers' source domains
-		// (Component.ProjectorDomains), not the single declared input_domain,
-		// so input_domain is no longer required. See
-		// TestLint_Projector_InputDomainNotRequired and the
-		// TestGenerate*_Projector_MultiDomain family below.
 		{"command to unknown component", []declMsg{
 			{"CreateOrder", o.commandDecl(fq("Nope"))},
 		}},
@@ -1017,7 +996,7 @@ func TestGenerateCppScaffold_EmitsOwnedStub(t *testing.T) {
 	for _, want := range []string{
 		// CreateOrder is a typed-emit command handler (non-void), so its stub
 		// throws std::runtime_error — the include below must actually be
-		// present or the scaffold fails to compile (CLI finding #10).
+		// present or the scaffold fails to compile.
 		"#include <stdexcept>",
 		"class OrderAggregate : public OrderAggregateHandler {",
 		`throw std::runtime_error("TODO: implement OrderAggregate::CreateOrder");`,
@@ -1084,111 +1063,63 @@ func TestLanguages_ListsGoAndPython(t *testing.T) {
 	}
 }
 
-// ----------------------------------------------------------------------------
-// L01: projector multi-domain folding — identical across all six languages.
-//
-// Before this remediation there was NO per-language projector test at all —
-// the coverage gap that let CLI finding #1 ship: Python computed the union of
-// handler source domains (with a comment explaining input_domain is wrong for
-// projectors) while golang.go, java.go, csharp.go, cpp.go and typescript.go
-// all restricted folding to the single declared input_domain, silently
-// dropping every event from a secondary domain at runtime. Each test below
-// generates the SAME projectorMultiDomain() declaration and asserts the SAME
-// two-domain, sorted result, so a future regression in any one emitter shows
-// up as a single-language test failure instead of a silent runtime divergence
-// only Python got right.
-// ----------------------------------------------------------------------------
-
-func TestGenerateGo_Projector_MultiDomain(t *testing.T) {
-	o := buildOptionTypes(t, ioPkg)
-	resp, err := generate(t, "go", ioPkg, projectorMultiDomain(o)...)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	content := resp.File[0].GetContent()
-	if !strings.Contains(content, `dispatch.ForDomains("hand", "table")`) {
-		t.Errorf("go projector wiring missing folded domain union; got:\n%s", content)
-	}
-	if strings.Contains(content, `dispatch.ForDomains("table")`) {
-		t.Errorf("go projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
-	}
-}
-
-func TestGenerateJava_Projector_MultiDomain(t *testing.T) {
-	o := buildOptionTypes(t, ioPkg)
-	resp, err := generate(t, "java", ioPkg, projectorMultiDomain(o)...)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	content := resp.File[0].GetContent()
-	if !strings.Contains(content, `.forDomains("hand", "table")`) {
-		t.Errorf("java projector wiring missing folded domain union; got:\n%s", content)
-	}
-	if strings.Contains(content, `.forDomains("table")`) {
-		t.Errorf("java projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
-	}
-}
-
-func TestGenerateCSharp_Projector_MultiDomain(t *testing.T) {
-	o := buildOptionTypes(t, ioPkg)
-	resp, err := generate(t, "csharp", ioPkg, projectorMultiDomain(o)...)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	content := resp.File[0].GetContent()
-	if !strings.Contains(content, `.ForDomains("hand", "table")`) {
-		t.Errorf("csharp projector wiring missing folded domain union; got:\n%s", content)
-	}
-	if strings.Contains(content, `.ForDomains("table")`) {
-		t.Errorf("csharp projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
-	}
-}
-
-func TestGenerateCpp_Projector_MultiDomain(t *testing.T) {
-	o := buildOptionTypes(t, ioPkg)
-	resp, err := generate(t, "cpp", ioPkg, projectorMultiDomain(o)...)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	content := resp.File[0].GetContent()
-	if !strings.Contains(content, `dispatch.ForDomains({"hand", "table"});`) {
-		t.Errorf("cpp projector wiring missing folded domain union; got:\n%s", content)
-	}
-	if strings.Contains(content, `dispatch.ForDomains({"table"});`) {
-		t.Errorf("cpp projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
-	}
-}
-
-func TestGenerateTypeScript_Projector_MultiDomain(t *testing.T) {
-	o := buildOptionTypes(t, ioPkg)
-	resp, err := generate(t, "typescript", ioPkg, projectorMultiDomain(o)...)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	content := resp.File[0].GetContent()
-	if !strings.Contains(content, `dispatch.forDomains("hand", "table");`) {
-		t.Errorf("typescript projector wiring missing folded domain union; got:\n%s", content)
-	}
-	if strings.Contains(content, `dispatch.forDomains("table");`) {
-		t.Errorf("typescript projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
-	}
-}
-
-func TestGeneratePython_Projector_MultiDomain(t *testing.T) {
-	o := buildOptionTypes(t, ioPkg)
-	resp, err := generate(t, "python", ioPkg, projectorMultiDomain(o)...)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	content := resp.File[0].GetContent()
-	if !strings.Contains(content, `dispatch.for_domains("hand", "table")`) {
-		t.Errorf("python projector wiring missing folded domain union; got:\n%s", content)
-	}
-	if strings.Contains(content, `dispatch.for_domains("table")`) {
-		t.Errorf("python projector wiring restricted to input_domain alone (L01 regression); got:\n%s", content)
-	}
-}
-
 // ensure proto import is used (the option-message round-trips rely on it via
 // the generator; this keeps the import live for any future direct assertion).
 var _ = proto.Marshal
+
+// projectorInputDomainOnly declares a projector whose handlers carry no
+// (event).domain: the declared input_domain is then the whole filter.
+func projectorInputDomainOnly(o optionTypes) []declMsg {
+	return []declMsg{
+		{"Projection", o.componentDecl(4, "hand", "", "HandProjector")},
+		{"HandStarted", o.eventDecl(eventEntry{component: fq("Projection")})},
+	}
+}
+
+// projectorInputPlusHandlerDomains declares input_domain "player" alongside
+// handler domains "table" and "hand": the filter is the sorted union of all.
+func projectorInputPlusHandlerDomains(o optionTypes) []declMsg {
+	return []declMsg{
+		{"Projection", o.componentDecl(4, "player", "", "DisplayProjector")},
+		{"TableCreated", o.eventDecl(eventEntry{component: fq("Projection"), domain: "table"})},
+		{"HandStarted", o.eventDecl(eventEntry{component: fq("Projection"), domain: "hand"})},
+	}
+}
+
+// projectorFilterCalls is each emitter's rendering of a projector domain
+// filter over the given quoted-and-joined domain list.
+var projectorFilterCalls = map[string]func(joined string) string{
+	"go":         func(j string) string { return "dispatch.ForDomains(" + j + ")" },
+	"python":     func(j string) string { return "dispatch.for_domains(" + j + ")" },
+	"java":       func(j string) string { return ".forDomains(" + j + ")" },
+	"csharp":     func(j string) string { return ".ForDomains(" + j + ")" },
+	"cpp":        func(j string) string { return "dispatch.ForDomains({" + j + "});" },
+	"typescript": func(j string) string { return "dispatch.forDomains(" + j + ");" },
+}
+
+func TestGenerate_Projector_DomainFilterIncludesInputDomain(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	cases := []struct {
+		name string
+		msgs []declMsg
+		want string
+	}{
+		{"input_domain only", projectorInputDomainOnly(o), `"hand"`},
+		{"handler domains span two", projectorMultiDomain(o), `"hand", "table"`},
+		{"input_domain plus handler domains", projectorInputPlusHandlerDomains(o), `"hand", "player", "table"`},
+	}
+	for _, lang := range codegen.Languages() {
+		for _, tc := range cases {
+			t.Run(lang+"/"+tc.name, func(t *testing.T) {
+				resp, err := generate(t, lang, ioPkg, tc.msgs...)
+				if err != nil {
+					t.Fatalf("Generate: %v", err)
+				}
+				want := projectorFilterCalls[lang](tc.want)
+				if content := resp.File[0].GetContent(); !strings.Contains(content, want) {
+					t.Errorf("%s projector wiring missing %q; got:\n%s", lang, want, content)
+				}
+			})
+		}
+	}
+}

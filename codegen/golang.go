@@ -379,12 +379,8 @@ func (e goEmitter) emitProjector(g *protogen.GeneratedFile, s *Component) error 
 	g.P("// New", name, "Dispatch populates the projector table from the proto declaration.")
 	g.P("func New", name, "Dispatch(h ", name, "Handler) *", ident(g, angzarrPkg, "ProjectorDispatch"), "[", statePtr, "] {")
 	g.P("dispatch := ", ident(g, angzarrPkg, "NewProjectorDispatch"), "(", quote(name), ", func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
-	// The projector's domain filter is the union of its handlers' source
-	// domains (Component.ProjectorDomains), not the single declared
-	// input_domain — a projector routinely spans several domains (e.g. a
-	// display folding player, table and hand events). Empty means every
-	// handler's source domain was unset, so the filter is left unset too:
-	// the runtime default is to consume every domain.
+	// Domain filter (Component.ProjectorDomains); omitted when empty so the
+	// runtime default, consume every domain, applies.
 	if len(s.ProjectorDomains) > 0 {
 		g.P("dispatch.ForDomains(", quoteJoin(s.ProjectorDomains, quote), ")")
 	}

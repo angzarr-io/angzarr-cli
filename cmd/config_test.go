@@ -60,10 +60,8 @@ func TestLoadConfig_ImplicitNotFound_RunsClean(t *testing.T) {
 	}
 }
 
-// TestLoadConfig_ImplicitMalformed_WarnsButSucceeds is the "silent swallow"
-// half of finding #6: an auto-discovered config that IS present but fails
-// to parse must not be silently ignored (the original code's
-// `if err := viper.ReadInConfig(); err == nil` skipped this path entirely).
+// TestLoadConfig_ImplicitMalformed_WarnsButSucceeds: an auto-discovered
+// config that IS present but fails to parse must be reported, not ignored.
 // It also must not hard-fail the run, since the user never asked for this
 // particular file.
 func TestLoadConfig_ImplicitMalformed_WarnsButSucceeds(t *testing.T) {

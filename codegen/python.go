@@ -449,13 +449,8 @@ func emitPyPMDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Component) {
 func emitPyProjectorDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Component) {
 	g.P("def new_", snake(s.BaseName), "_dispatch(handler: ", s.BaseName, "Handler) -> ", pyAz, ".ProjectorDispatch:")
 	g.P("    dispatch = ", pyAz, ".ProjectorDispatch(", pyQuote(s.BaseName), ", lambda: ", refs.ref(s.State), "())")
-	// The projector's domain filter is the union of its handlers' source
-	// domains (Component.ProjectorDomains, computed once in analyze() and
-	// shared by every emitter) — not the single declared input_domain, since
-	// a projector routinely folds several domains at once (e.g. a display
-	// combining player, table and hand events). Empty means every handler's
-	// source domain was unset, so the call is omitted and the runtime default
-	// (consume every domain) applies.
+	// Domain filter (Component.ProjectorDomains); omitted when empty so the
+	// runtime default, consume every domain, applies.
 	if len(s.ProjectorDomains) > 0 {
 		g.P("    dispatch.for_domains(", quoteJoin(s.ProjectorDomains, pyQuote), ")")
 	}
