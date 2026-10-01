@@ -302,32 +302,52 @@ func attachEvent(services map[string]*Component, m *protogen.Message, ev eventCo
 	return nil
 }
 
-// requiredFields enforces the per-kind required-field contract: an omitted
-// domain would wire a component that silently receives or targets nothing.
+// requiredFields enforces the per-kind domain-role contract of
+// options.proto. domain is the stream a component owns, input_domain a
+// subscription, output_domain(s) command targets:
+//
+//	kind             domain     input_domain  output_domain(s)
+//	AGGREGATE        required   empty         empty
+//	PROCESS_MANAGER  required   empty         targets
+//	SAGA             forbidden  required      targets (>= 1)
+//	PROJECTOR        forbidden  optional      empty
+//
+// A missing required field is ANZ008; a field the kind must leave empty is
+// ANZ014.
 func requiredFields(s *Component) []Diagnostic {
 	c := s.Component
+	var diags []Diagnostic
+	missing := func(msg string) { diags = append(diags, errDiag("ANZ008", s.Anchor, msg)) }
+	forbid := func(field, value, why string) {
+		if value != "" {
+			diags = append(diags, errDiag("ANZ014", s.Anchor, fmt.Sprintf("%v must not set %s (%q): %s", c.Kind, field, value, why)))
+		}
+	}
+	outputs := strings.Join(c.OutputDomains, ", ")
 	switch c.Kind {
 	case KindAggregate:
-		if c.InputDomain == "" {
-			return []Diagnostic{errDiag("ANZ008", s.Anchor, "aggregate requires input_domain (its own domain)")}
+		if c.Domain == "" {
+			missing("aggregate requires domain (the stream it owns)")
 		}
+		forbid("input_domain", c.InputDomain, "an aggregate subscribes to nothing; its own stream is domain")
+		forbid("output_domain(s)", outputs, "an aggregate issues no commands")
+	case KindProcessManager:
+		if c.Domain == "" {
+			missing("process manager requires domain (its own workflow stream)")
+		}
+		forbid("input_domain", c.InputDomain, "trigger domains come from each (event).domain")
 	case KindSaga:
 		if c.InputDomain == "" || len(c.OutputDomains) == 0 {
-			return []Diagnostic{errDiag("ANZ008", s.Anchor, "saga requires input_domain and at least one output domain (output_domain / output_domains)")}
+			missing("saga requires input_domain and at least one output domain (output_domain / output_domains)")
 		}
-	case KindProcessManager:
-		if c.OutputDomain == "" {
-			return []Diagnostic{errDiag("ANZ008", s.Anchor, "process manager requires output_domain (its pm_domain and command-target domain)")}
-		}
+		forbid("domain", c.Domain, "a saga owns no stream")
 	case KindProjector:
-		// No required field: the domain filter (Component.ProjectorDomains)
-		// is the union of input_domain and the handlers' (event).domain, so
-		// a projector spanning several domains may declare them per event
-		// and leave input_domain empty.
+		forbid("domain", c.Domain, "a projector owns no stream")
+		forbid("output_domain(s)", outputs, "a projector issues no commands")
 	default:
-		return []Diagnostic{errDiag("ANZ008", s.Anchor, fmt.Sprintf("unsupported component kind %v", c.Kind))}
+		missing(fmt.Sprintf("unsupported component kind %v", c.Kind))
 	}
-	return nil
+	return diags
 }
 
 // projectorDomains computes a projector's domain filter: the sorted,
@@ -497,8 +517,8 @@ func coherenceDiags(services map[string]*Component, order []string) []Diagnostic
 
 	aggDomains := make(map[string]bool)
 	for _, fq := range order {
-		if s := services[fq]; s.Component.Kind == KindAggregate && s.Component.InputDomain != "" {
-			aggDomains[s.Component.InputDomain] = true
+		if s := services[fq]; s.Component.Kind == KindAggregate && s.Component.Domain != "" {
+			aggDomains[s.Component.Domain] = true
 		}
 	}
 
@@ -528,7 +548,7 @@ func coherenceDiags(services map[string]*Component, order []string) []Diagnostic
 		if c.Kind == KindSaga || c.Kind == KindProcessManager {
 			for _, target := range c.OutputDomains {
 				if !aggDomains[target] {
-					diags = append(diags, warnDiag("ANZ101", s.Anchor, fmt.Sprintf("%v %q targets output domain %q, but no aggregate declares it as input_domain; emitted commands reach no handler", c.Kind, fq, target)))
+					diags = append(diags, warnDiag("ANZ101", s.Anchor, fmt.Sprintf("%v %q targets output domain %q, but no aggregate owns it (domain); emitted commands reach no handler", c.Kind, fq, target)))
 				}
 			}
 		}

@@ -244,7 +244,7 @@ func (e javaEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) erro
 	g.P("    ", jRebuilder, " rebuilder = new ", jRebuilder, "(", javaType(s.State), "::newBuilder);")
 	g.P("    rebuilder.withSnapshot((state, payload) -> ((", state, ") state).mergeFrom(payload.getValue()));")
 	emitJavaAppliers(g, s, state)
-	g.P("    return new ", jAggDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.InputDomain), ", rebuilder)")
+	g.P("    return new ", jAggDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.Domain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		g.P("        .onCommand(", quoteFQ(h.Message), ", (cmdAny, state, cctx) -> {")
 		g.P("          ", javaType(h.Message), " cmd = ", parseAny(h.Message, "cmdAny"), ";")
@@ -324,7 +324,7 @@ func (e javaEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 	g.P("    ", jRebuilder, " rebuilder = new ", jRebuilder, "(", javaType(s.State), "::newBuilder);")
 	g.P("    rebuilder.withSnapshot((state, payload) -> ((", state, ") state).mergeFrom(payload.getValue()));")
 	emitJavaAppliers(g, s, state)
-	g.P("    return new ", jPmDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.OutputDomain), ", rebuilder)")
+	g.P("    return new ", jPmDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.Domain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		g.P("        .onEvent(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", (eventAny, state, dests) -> {")
 		g.P("          ", javaType(h.Message), " event = ", parseAny(h.Message, "eventAny"), ";")

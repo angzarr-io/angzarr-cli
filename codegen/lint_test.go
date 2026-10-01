@@ -89,27 +89,27 @@ func TestLint_TierA_ResolutionErrors(t *testing.T) {
 			{"CreateOrder", o.commandDecl(fq("OrderSaga"))},
 		}},
 		{"command emits unresolvable", "ANZ004", []declMsg{
-			{"State", o.componentDecl(1, "orders", "", "")},
+			{"State", o.ownedDecl(1, "orders", "", "")},
 			{"CreateOrder", o.commandDecl(fq("State"), fq("Nope"))},
 		}},
 		{"event to unknown component", "ANZ005", []declMsg{
 			{"OrderCreated", o.eventDecl(eventEntry{component: fq("Nope")})},
 		}},
 		{"process manager trigger without domain", "ANZ006", []declMsg{
-			{"PMState", o.componentDecl(3, "", "fulfillment", "")},
+			{"PMState", o.ownedDecl(3, "workflow", "fulfillment", "")},
 			{"Trig", o.eventDecl(eventEntry{component: fq("PMState")})},
 		}},
 		{"compensates unresolvable", "ANZ007", []declMsg{
-			{"State", o.componentDecl(1, "orders", "", "", fq("Nope"))},
+			{"State", o.ownedDecl(1, "orders", "", "", fq("Nope"))},
 		}},
-		{"aggregate without input domain", "ANZ008", []declMsg{
-			{"State", o.componentDecl(1, "", "", "")},
+		{"aggregate without domain", "ANZ008", []declMsg{
+			{"State", o.ownedDecl(1, "", "", "")},
 		}},
 		{"saga without output domain", "ANZ008", []declMsg{
 			{"OrderSaga", o.componentDecl(2, "orders", "", "")},
 		}},
-		{"process manager without output domain", "ANZ008", []declMsg{
-			{"PMState", o.componentDecl(3, "", "", "")},
+		{"process manager without domain", "ANZ008", []declMsg{
+			{"PMState", o.componentDecl(3, "", "fulfillment", "")},
 		}},
 	}
 	for _, tt := range tests {
@@ -144,8 +144,8 @@ func TestLint_DuplicateGeneratedName(t *testing.T) {
 	// colliding Go/Python identifiers — uncompilable. ANZ010.
 	o := buildOptionTypes(t, ioPkg)
 	diags := lint(t,
-		declMsg{"StateA", o.componentDecl(1, "orders", "", "Dup")},
-		declMsg{"StateB", o.componentDecl(1, "orders", "", "Dup")},
+		declMsg{"StateA", o.ownedDecl(1, "orders", "", "Dup")},
+		declMsg{"StateB", o.ownedDecl(1, "orders", "", "Dup")},
 	)
 	if !hasCode(diags, "ANZ010") {
 		t.Fatalf("want ANZ010 generated-name collision, got %v", codesOf(diags))
@@ -170,7 +170,7 @@ func TestLint_TierB_MethodCollisionCrossCategory(t *testing.T) {
 	// escape the per-category check (handler vs. applier) missed. ANZ011.
 	o := buildOptionTypes(t, ioPkg)
 	diags := lint(t,
-		declMsg{"State", o.componentDecl(1, "orders", "", "")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "")},
 		declMsg{"ApplyCredit", o.commandDecl(fq("State"))},
 		declMsg{"Credit", o.eventDecl(eventEntry{component: fq("State")})},
 	)
@@ -201,7 +201,7 @@ func TestLint_TierB_MethodCollisionDuplicateCompensatesEntry(t *testing.T) {
 	// twice for the same aggregate. ANZ011.
 	o := buildOptionTypes(t, ioPkg)
 	diags := lint(t,
-		declMsg{"State", o.componentDecl(1, "orders", "", "", fq("Reserve"), fq("Reserve"))},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "", fq("Reserve"), fq("Reserve"))},
 		declMsg{"Reserve", nil},
 	)
 	if !hasCode(diags, "ANZ011") {
@@ -226,7 +226,7 @@ func TestLint_TierB_FinishIsOnlyReservedOnProjectors(t *testing.T) {
 	// An aggregate has no Finish method, so a command named Finish is fine.
 	o := buildOptionTypes(t, ioPkg)
 	diags := lint(t,
-		declMsg{"State", o.componentDecl(1, "orders", "", "")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "")},
 		declMsg{"Finish", o.commandDecl(fq("State"))},
 	)
 	if hasCode(diags, "ANZ011") {
@@ -239,7 +239,7 @@ func TestLint_TierB_MethodCollisionAfterLanguageCasing(t *testing.T) {
 	// render as Python's http_get. ANZ011 names the colliding language.
 	o := buildOptionTypes(t, ioPkg)
 	diags := lint(t,
-		declMsg{"State", o.componentDecl(1, "orders", "", "")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "")},
 		declMsg{"HTTPGet", o.commandDecl(fq("State"))},
 		declMsg{"HttpGet", o.commandDecl(fq("State"))},
 	)
@@ -260,7 +260,7 @@ func TestLint_TierB_MethodCollisionAfterLanguageCasing(t *testing.T) {
 func TestLint_TierB_DistinctNamesDoNotCollide(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	diags := lint(t,
-		declMsg{"State", o.componentDecl(1, "orders", "", "")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "")},
 		declMsg{"HttpGet", o.commandDecl(fq("State"))},
 		declMsg{"HttpPut", o.commandDecl(fq("State"))},
 	)
@@ -288,7 +288,7 @@ func buildGenRejectionCollisionAcrossPackages(t *testing.T, o optionTypes) *prot
 		Dependency: []string{optionsPath},
 		Options:    &descriptorpb.FileOptions{GoPackage: str("example.test/a;a")},
 		MessageType: []*descriptorpb.DescriptorProto{
-			{Name: str("State"), Options: o.componentDecl(1, "orders", "", "", pkgA+".Reserve", pkgB+".Reserve")},
+			{Name: str("State"), Options: o.ownedDecl(1, "orders", "", "", pkgA+".Reserve", pkgB+".Reserve")},
 			{Name: str("Reserve")},
 		},
 	}
@@ -321,7 +321,7 @@ func TestLint_TierC_EmitWithoutApplier_Warns(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	// Aggregate emits OrderCreated but declares no applier for it.
 	diags := lint(t,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"), fq("OrderCreated"))},
 		declMsg{"OrderCreated", nil}, // a plain message: resolvable, but no (event) applier
 	)
@@ -435,14 +435,14 @@ func TestLint_TierB_GeneratedTypeCollidesWithProtoType(t *testing.T) {
 		msgs []declMsg
 	}{
 		{"explicit name equals the anchor", []declMsg{
-			{"OrderState", o.componentDecl(1, "orders", "", "OrderState")},
+			{"OrderState", o.ownedDecl(1, "orders", "", "OrderState")},
 		}},
 		{"explicit name equals another message", []declMsg{
-			{"OrderState", o.componentDecl(1, "orders", "", "Order")},
+			{"OrderState", o.ownedDecl(1, "orders", "", "Order")},
 			{"Order", nil},
 		}},
 		{"derived handler interface equals a message", []declMsg{
-			{"OrderState", o.componentDecl(1, "orders", "", "Order")},
+			{"OrderState", o.ownedDecl(1, "orders", "", "Order")},
 			{"OrderHandler", nil},
 		}},
 		{"unnamed stub type equals a message", []declMsg{
@@ -467,7 +467,7 @@ func TestLint_TierB_UnnamedAndDistinctNamesDoNotCollideWithProtoTypes(t *testing
 	o := buildOptionTypes(t, ioPkg)
 	diags := lint(t,
 		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
-		declMsg{"OrderState", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"OrderState", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 	)
 	if hasCode(diags, "ANZ012") {
 		t.Fatalf("no generated identifier shadows a proto type here, got %v", diags)
@@ -479,10 +479,62 @@ func TestDuplicateAnchorFullNames_RejectedBeforeAnalysis(t *testing.T) {
 	// declaring one full name twice, so analysis never sees duplicates.
 	o := buildOptionTypes(t, ioPkg)
 	_, err := buildGen(t, ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "A")},
-		declMsg{"State", o.componentDecl(1, "orders", "", "B")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "A")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "B")},
 	)
 	if err == nil {
 		t.Fatal("protogen accepted two messages with the same full name")
+	}
+}
+
+func TestLint_DomainRolesPerKind(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	cases := []struct {
+		name string
+		decl *descriptorpb.MessageOptions
+		want string // "" = no ANZ008/ANZ014
+	}{
+		{"aggregate owns its domain", o.ownedDecl(1, "orders", "", ""), ""},
+		{"aggregate without domain", o.componentDecl(1, "", "", ""), "ANZ008"},
+		{"aggregate subscribing via input_domain", o.withField(o.ownedDecl(1, "orders", "", ""), "input_domain", "orders"), "ANZ014"},
+		{"aggregate with a command target", o.ownedDecl(1, "orders", "billing", ""), "ANZ014"},
+		{"aggregate with output_domains", o.withOutputDomains(o.ownedDecl(1, "orders", "", ""), "billing"), "ANZ014"},
+		{"process manager owns its workflow domain", o.ownedDecl(3, "workflow", "billing", ""), ""},
+		{"process manager without targets", o.ownedDecl(3, "workflow", "", ""), ""},
+		{"process manager without domain", o.componentDecl(3, "", "billing", ""), "ANZ008"},
+		{"process manager with input_domain", o.withField(o.ownedDecl(3, "workflow", "billing", ""), "input_domain", "orders"), "ANZ014"},
+		{"saga", o.componentDecl(2, "orders", "billing", ""), ""},
+		{"saga owning a domain", o.withField(o.componentDecl(2, "orders", "billing", ""), "domain", "orders"), "ANZ014"},
+		{"projector", o.componentDecl(4, "orders", "", ""), ""},
+		{"projector owning a domain", o.withField(o.componentDecl(4, "orders", "", ""), "domain", "orders"), "ANZ014"},
+		{"projector with a command target", o.componentDecl(4, "orders", "billing", ""), "ANZ014"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := lint(t, declMsg{"Anchor", tc.decl})
+			for _, code := range []string{"ANZ008", "ANZ014"} {
+				if got := hasCode(diags, code); got != (code == tc.want) {
+					t.Errorf("%s present = %v, want %v (diags %v)", code, got, code == tc.want, diags)
+				}
+			}
+			if tc.want != "" {
+				if sev, _ := severityOf(diags, tc.want); sev != codegen.SeverityError {
+					t.Errorf("%s should be an error", tc.want)
+				}
+			}
+		})
+	}
+}
+
+func TestLint_CoherenceUsesAggregateOwnDomain(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"State", o.ownedDecl(1, "billing", "", "BillingAggregate")},
+		declMsg{"Charge", o.commandDecl(fq("State"))},
+		declMsg{"OrderSaga", o.componentDecl(2, "billing", "billing", "")},
+		declMsg{"Charged", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "billing"})},
+	)
+	if hasCode(diags, "ANZ101") || hasCode(diags, "ANZ102") {
+		t.Fatalf("billing is an aggregate's own domain; no dangling-domain warning expected, got %v", diags)
 	}
 }

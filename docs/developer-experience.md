@@ -66,7 +66,7 @@ message OrderPlaced {
 message OrderState {
   option (io.angzarr.v1.component) = {
     kind: COMPONENT_KIND_AGGREGATE
-    input_domain: "orders"
+    domain: "orders"         // the stream this aggregate owns
     name: "OrderAggregate"   // generated base name; defaults to the message name
   };
   string sku = 1;
@@ -81,8 +81,9 @@ message OrderState {
 | field | meaning |
 |---|---|
 | `kind` | `COMPONENT_KIND_{AGGREGATE,SAGA,PROCESS_MANAGER,PROJECTOR}` |
-| `input_domain` | domain whose events this consumes (aggregate's own domain; saga/projector filter) |
-| `output_domain` | domain it issues commands to (saga); the PM's own domain |
+| `domain` | the stream the component **owns** (aggregate's domain, PM's workflow domain); forbidden for sagas/projectors |
+| `input_domain` | a domain it **subscribes** to (saga source, projector filter); empty for aggregates/PMs |
+| `output_domain` / `output_domains` | domains it **sends commands** to (sagas, PMs) |
 | `name` | generated handler/dispatch base name; **defaults to the anchor message name** |
 | `compensates` | repeated FQ command types whose rejection this component compensates |
 
@@ -94,11 +95,18 @@ consuming anchor FQ), `domain` (source-domain filter for a saga / projector /
 PM trigger), `applies` (PM-only: `true` folds the PM's own state, `false` is a
 cross-domain trigger reaction).
 
-Required fields by kind: aggregate → `input_domain`; saga → `input_domain` +
-`output_domain`; process manager → `output_domain` (+ every trigger event entry
-needs `domain`); projector → nothing (its domain filter is the union of
-`input_domain` and every handler's `(event).domain`; with none declared it
-consumes every domain). Generation **fails** (it does not emit
+Domain roles by kind (a missing required field is `ANZ008`, a field the kind
+must leave empty is `ANZ014`):
+
+| kind | `domain` | `input_domain` | `output_domain(s)` |
+|---|---|---|---|
+| aggregate | required | empty | empty |
+| process manager | required | empty (triggers use `(event).domain`, required) | command targets |
+| saga | forbidden | required | at least one |
+| projector | forbidden | optional | empty |
+
+A projector's domain filter is the union of `input_domain` and every handler's
+`(event).domain`; with none declared it consumes every domain. Generation **fails** (it does not emit
 silently-broken wiring) on a missing required field or an unresolvable /
 short type reference. `angzarr lint` runs the same checks standalone; the
 README lists the diagnostic codes.

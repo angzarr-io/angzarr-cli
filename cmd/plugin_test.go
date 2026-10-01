@@ -38,6 +38,7 @@ func optionsFile() *descriptorpb.FileDescriptorProto {
 				{Name: strp("kind"), Number: proto.Int32(1), Label: opt, Type: descriptorpb.FieldDescriptorProto_TYPE_ENUM.Enum(), TypeName: strp(".io.angzarr.v1.ComponentKind"), JsonName: strp("kind")},
 				{Name: strp("input_domain"), Number: proto.Int32(2), Label: opt, Type: str, JsonName: strp("inputDomain")},
 				{Name: strp("name"), Number: proto.Int32(4), Label: opt, Type: str, JsonName: strp("name")},
+				{Name: strp("domain"), Number: proto.Int32(7), Label: opt, Type: str, JsonName: strp("domain")},
 			},
 		}},
 		Extension: []*descriptorpb.FieldDescriptorProto{{
@@ -49,14 +50,14 @@ func optionsFile() *descriptorpb.FileDescriptorProto {
 }
 
 // aggregateOptions encodes (io.angzarr.v1.component) = {kind: AGGREGATE,
-// input_domain: "orders", name: "OrderAggregate"} as raw MessageOptions bytes,
+// domain: "orders", name: "OrderAggregate"} as raw MessageOptions bytes,
 // the way protoc delivers an extension the plugin binary has no bindings for.
 func aggregateOptions(t *testing.T) *descriptorpb.MessageOptions {
 	t.Helper()
 	var sub []byte
 	sub = protowire.AppendTag(sub, 1, protowire.VarintType)
 	sub = protowire.AppendVarint(sub, 1)
-	sub = protowire.AppendTag(sub, 2, protowire.BytesType)
+	sub = protowire.AppendTag(sub, 7, protowire.BytesType)
 	sub = protowire.AppendString(sub, "orders")
 	sub = protowire.AppendTag(sub, 4, protowire.BytesType)
 	sub = protowire.AppendString(sub, "OrderAggregate")

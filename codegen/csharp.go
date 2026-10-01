@@ -231,7 +231,7 @@ func (e csharpEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) er
 	g.P("        var rebuilder = new ", csGeneric(csRebuilder, state), "(() => new ", state, "());")
 	g.P("        rebuilder.WithSnapshot((state, payload) => Google.Protobuf.MessageExtensions.MergeFrom(state, payload.Value));")
 	emitCsAppliers(g, s)
-	g.P("        return new ", csGeneric(csAggDispatch, state), "(", quote(s.BaseName), ", ", quote(s.Component.InputDomain), ", rebuilder)")
+	g.P("        return new ", csGeneric(csAggDispatch, state), "(", quote(s.BaseName), ", ", quote(s.Component.Domain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		g.P("            .OnCommand(", quoteFQ(h.Message), ", (cmdAny, state, cctx) =>")
 		g.P("            {")
@@ -318,7 +318,7 @@ func (e csharpEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 	g.P("        var rebuilder = new ", csGeneric(csRebuilder, state), "(() => new ", state, "());")
 	g.P("        rebuilder.WithSnapshot((state, payload) => Google.Protobuf.MessageExtensions.MergeFrom(state, payload.Value));")
 	emitCsAppliers(g, s)
-	g.P("        return new ", csGeneric(csPmDispatch, state), "(", quote(s.BaseName), ", ", quote(s.Component.OutputDomain), ", rebuilder)")
+	g.P("        return new ", csGeneric(csPmDispatch, state), "(", quote(s.BaseName), ", ", quote(s.Component.Domain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		g.P("            .OnEvent(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", (eventAny, state, dests) =>")
 		g.P("            {")

@@ -81,8 +81,14 @@ func (k ComponentKind) String() string {
 
 // ComponentDecl is the parsed (io.angzarr.v1.component) declaration.
 type ComponentDecl struct {
-	Kind         ComponentKind
-	InputDomain  string
+	Kind ComponentKind
+	// Domain is the event stream the component owns: the aggregate's domain
+	// or the process manager's workflow domain. Empty for sagas/projectors.
+	Domain string
+	// InputDomain is a subscription: the saga's source domain or a
+	// projector's input filter.
+	InputDomain string
+	// OutputDomain is the single-target shorthand for a command target.
 	OutputDomain string
 	// OutputDomains is every domain the component issues commands to:
 	// output_domain (when set) followed by the output_domains entries,
@@ -323,6 +329,7 @@ func componentOptions(m *protogen.Message, exts extensions) *ComponentDecl {
 	}
 	sub := opts.Get(fd).Message()
 	c := &ComponentDecl{
+		Domain:       reflString(sub, "domain"),
 		InputDomain:  reflString(sub, "input_domain"),
 		OutputDomain: reflString(sub, "output_domain"),
 		Name:         reflString(sub, "name"),

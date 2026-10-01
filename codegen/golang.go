@@ -308,7 +308,7 @@ func (e goEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) error 
 	g.P("rebuilder := ", ident(g, angzarrPkg, "NewRebuilder"), "(func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
 	emitSnapshotLoader(g, s.State)
 	emitAppliers(g, s, statePtr)
-	g.P("dispatch := ", ident(g, angzarrPkg, "NewAggregateDispatch"), "(", quote(name), ", ", quote(component.InputDomain), ", rebuilder)")
+	g.P("dispatch := ", ident(g, angzarrPkg, "NewAggregateDispatch"), "(", quote(name), ", ", quote(component.Domain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		g.P("dispatch.OnCommand(", quoteFQ(h.Message), ", func(cmdAny ", star(g, anypbPkg, "Any"), ", state ", statePtr, ", cctx ", cctx, ") (", evtBook, ", error) {")
 		emitDecode(g, "cmd", "cmdAny", h.Message, "nil, ")
@@ -352,7 +352,7 @@ func (e goEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 	g.P("rebuilder := ", ident(g, angzarrPkg, "NewRebuilder"), "(func() ", statePtr, " { return &", g.QualifiedGoIdent(s.State.GoIdent), "{} })")
 	emitSnapshotLoader(g, s.State)
 	emitAppliers(g, s, statePtr)
-	g.P("dispatch := ", ident(g, angzarrPkg, "NewProcessManagerDispatch"), "(", quote(name), ", ", quote(component.OutputDomain), ", rebuilder)")
+	g.P("dispatch := ", ident(g, angzarrPkg, "NewProcessManagerDispatch"), "(", quote(name), ", ", quote(component.Domain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		g.P("dispatch.OnEvent(", quote(h.SourceDomain), ", ", quoteFQ(h.Message), ", func(eventAny ", star(g, anypbPkg, "Any"), ", state ", statePtr, ", dests ", dests, ") (", pmResp, ", error) {")
 		emitDecode(g, "event", "eventAny", h.Message, "nil, ")

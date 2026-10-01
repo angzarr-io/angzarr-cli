@@ -325,7 +325,7 @@ func (e tsEmitter) aggregateDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 		g.P("  const rebuilder = new ", tsRebuilder, "<", state, ">(() => create(", refs.schema(s.State), "));")
 		g.P("  rebuilder.withSnapshot((state, payload) => ", tsPack, ".merge(", refs.schema(s.State), ", state, payload));")
 		emitTSAppliers(g, refs, s)
-		g.P("  const dispatch = new ", tsAggDispatch, "<", state, ">(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.InputDomain), ", rebuilder);")
+		g.P("  const dispatch = new ", tsAggDispatch, "<", state, ">(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.Domain), ", rebuilder);")
 		for _, h := range s.Handlers {
 			g.P("  dispatch.onCommand(", tsQuote(fqName(h.Message)), ", (cmdAny, state, cctx) => {")
 			g.P("    const cmd = ", tsParseAny, "(", refs.schema(h.Message), ", cmdAny);")
@@ -409,7 +409,7 @@ func (e tsEmitter) pmDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Compon
 		g.P("  const rebuilder = new ", tsRebuilder, "<", state, ">(() => create(", refs.schema(s.State), "));")
 		g.P("  rebuilder.withSnapshot((state, payload) => ", tsPack, ".merge(", refs.schema(s.State), ", state, payload));")
 		emitTSAppliers(g, refs, s)
-		g.P("  const dispatch = new ", tsPmDispatch, "<", state, ">(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.OutputDomain), ", rebuilder);")
+		g.P("  const dispatch = new ", tsPmDispatch, "<", state, ">(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.Domain), ", rebuilder);")
 		for _, h := range s.Handlers {
 			g.P("  dispatch.onEvent(", tsQuote(h.SourceDomain), ", ", tsQuote(fqName(h.Message)), ", (eventAny, state, dests) => {")
 			g.P("    const ev = ", tsParseAny, "(", refs.schema(h.Message), ", eventAny);")

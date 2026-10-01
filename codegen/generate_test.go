@@ -103,6 +103,7 @@ func optionsFDP(pkg string) *descriptorpb.FileDescriptorProto {
 					field("name", 4, str_),
 					repeatedField("compensates", 5, str_),
 					repeatedField("output_domains", 6, str_),
+					field("domain", 7, str_),
 				},
 			},
 			{
@@ -210,6 +211,23 @@ func (o optionTypes) componentDecl(kind int32, inputDomain, outputDomain, name s
 	}
 	opts := &descriptorpb.MessageOptions{}
 	opts.ProtoReflect().Set(o.component.TypeDescriptor(), protoreflect.ValueOfMessage(sub))
+	return opts
+}
+
+// ownedDecl stamps a component that owns a stream (aggregate / process
+// manager): domain is its own domain, outputDomain its command target.
+func (o optionTypes) ownedDecl(kind int32, domain, outputDomain, name string, compensates ...string) *descriptorpb.MessageOptions {
+	opts := o.componentDecl(kind, "", outputDomain, name, compensates...)
+	return o.withField(opts, "domain", domain)
+}
+
+// withField sets a string field on a componentDecl (no-op for "").
+func (o optionTypes) withField(opts *descriptorpb.MessageOptions, field, value string) *descriptorpb.MessageOptions {
+	if value == "" {
+		return opts
+	}
+	sub := opts.ProtoReflect().Get(o.component.TypeDescriptor()).Message()
+	sub.Set(sub.Descriptor().Fields().ByName(protoreflect.Name(field)), protoreflect.ValueOfString(value))
 	return opts
 }
 
@@ -332,7 +350,7 @@ func scaffold(t *testing.T, lang, optionsPkg string, exists func(string) bool, m
 // (typed-emit of OrderCreated) and an OrderCreated applier, anchored on State.
 func orderAggregate(o optionTypes) []declMsg {
 	return []declMsg{
-		{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		{"CreateOrder", o.commandDecl(fq("State"), fq("OrderCreated"))},
 		{"OrderCreated", o.eventDecl(eventEntry{component: fq("State")})},
 	}
@@ -386,7 +404,7 @@ func TestGenerate_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	// A command with no declared emits returns the raw EventBook.
 	resp, err := generate(t, "go", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -430,7 +448,7 @@ func TestGenerate_PMSameEventApplierAndTrigger_NoMethodCollision(t *testing.T) {
 	// renamed (Apply<Event>) to avoid a duplicate interface method.
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "go", ioPkg,
-		declMsg{"PMState", o.componentDecl(3, "", "fulfillment", "")},
+		declMsg{"PMState", o.ownedDecl(3, "workflow", "fulfillment", "")},
 		declMsg{"Trig", o.eventDecl(
 			eventEntry{component: fq("PMState"), applies: true},
 			eventEntry{component: fq("PMState"), domain: "orders"},
@@ -509,7 +527,7 @@ func TestGeneratePython_SagaUsesMethodRegister(t *testing.T) {
 func TestGeneratePython_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "python", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -597,32 +615,32 @@ func TestGenerate_Validations_FailGeneration(t *testing.T) {
 		name string
 		msgs []declMsg
 	}{
-		{"aggregate without input domain", []declMsg{
-			{"State", o.componentDecl(1, "", "", "")},
+		{"aggregate without domain", []declMsg{
+			{"State", o.ownedDecl(1, "", "", "")},
 			{"CreateOrder", o.commandDecl(fq("State"))},
 		}},
 		{"saga without output domain", []declMsg{
 			{"OrderSaga", o.componentDecl(2, "orders", "", "")},
 		}},
-		{"process manager without output domain", []declMsg{
-			{"PMState", o.componentDecl(3, "", "", "")},
+		{"process manager without domain", []declMsg{
+			{"PMState", o.componentDecl(3, "", "fulfillment", "")},
 		}},
 		{"process manager trigger without domain", []declMsg{
-			{"PMState", o.componentDecl(3, "", "fulfillment", "")},
+			{"PMState", o.ownedDecl(3, "workflow", "fulfillment", "")},
 			{"Trig", o.eventDecl(eventEntry{component: fq("PMState")})},
 		}},
 		{"command to unknown component", []declMsg{
 			{"CreateOrder", o.commandDecl(fq("Nope"))},
 		}},
 		{"command emits unresolvable", []declMsg{
-			{"State", o.componentDecl(1, "orders", "", "")},
+			{"State", o.ownedDecl(1, "orders", "", "")},
 			{"CreateOrder", o.commandDecl(fq("State"), fq("Nope"))},
 		}},
 		{"event to unknown component", []declMsg{
 			{"OrderCreated", o.eventDecl(eventEntry{component: fq("Nope")})},
 		}},
 		{"compensates unresolvable", []declMsg{
-			{"State", o.componentDecl(1, "orders", "", "", fq("Nope"))},
+			{"State", o.ownedDecl(1, "orders", "", "", fq("Nope"))},
 		}},
 		{"command handled by non-aggregate", []declMsg{
 			{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
@@ -705,7 +723,7 @@ func TestGenerateJava_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 func TestGenerateJava_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "java", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -794,7 +812,7 @@ func TestGenerateCSharp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 func TestGenerateCSharp_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "csharp", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -873,7 +891,7 @@ func TestGenerateCpp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 func TestGenerateCpp_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "cpp", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -951,7 +969,7 @@ func TestGenerateTypeScript_SagaUsesFunctionRegisterAndTargets(t *testing.T) {
 func TestGenerateTypeScript_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "typescript", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -1022,7 +1040,7 @@ func TestGenerate_FilePerComponent_OneFileEach(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	// Two components declared in one proto file → two generated wiring files.
 	resp, err := generate(t, "go", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
 		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
@@ -1257,5 +1275,42 @@ func TestLint_SagaWithOnlyOutputDomains_IsValid(t *testing.T) {
 	}
 	if !warned {
 		t.Errorf("ANZ101 should cover output_domains entries, got %v", diags)
+	}
+}
+
+func TestGenerate_OwnedDomainRegistersAggregateAndProcessManager(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	agg := []declMsg{
+		{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
+		{"CreateOrder", o.commandDecl(fq("State"))},
+	}
+	pm := []declMsg{
+		{"PMState", o.ownedDecl(3, "workflow", "fulfillment", "Flow")},
+		{"Trig", o.eventDecl(eventEntry{component: fq("PMState"), domain: "orders"})},
+	}
+	want := map[string][2]string{
+		"go":         {`NewAggregateDispatch("OrderAggregate", "orders", rebuilder)`, `NewProcessManagerDispatch("Flow", "workflow", rebuilder)`},
+		"python":     {`AggregateDispatch("OrderAggregate", "orders", rebuilder)`, `ProcessManagerDispatch("Flow", "workflow", rebuilder)`},
+		"java":       {`("OrderAggregate", "orders", rebuilder)`, `("Flow", "workflow", rebuilder)`},
+		"csharp":     {`("OrderAggregate", "orders", rebuilder)`, `("Flow", "workflow", rebuilder)`},
+		"cpp":        {`dispatch("OrderAggregate", "orders", std::move(rebuilder));`, `dispatch("Flow", "workflow", std::move(rebuilder));`},
+		"typescript": {`("OrderAggregate", "orders", rebuilder);`, `("Flow", "workflow", rebuilder);`},
+	}
+	for _, lang := range codegen.Languages() {
+		t.Run(lang, func(t *testing.T) {
+			for i, msgs := range [][]declMsg{agg, pm} {
+				resp, err := generate(t, lang, ioPkg, msgs...)
+				if err != nil {
+					t.Fatalf("Generate: %v", err)
+				}
+				c := resp.File[0].GetContent()
+				if !strings.Contains(c, want[lang][i]) {
+					t.Errorf("%s wiring missing %s:\n%s", lang, want[lang][i], c)
+				}
+				if i == 1 && strings.Contains(c, `"fulfillment", rebuilder`) {
+					t.Errorf("%s PM registered under its command target instead of its own domain", lang)
+				}
+			}
+		})
 	}
 }

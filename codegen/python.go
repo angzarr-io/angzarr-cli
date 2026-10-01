@@ -401,7 +401,7 @@ func emitPyAggregateDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Compone
 	g.P("    rebuilder = ", pyAz, ".Rebuilder(lambda: ", refs.ref(s.State), "())")
 	g.P("    rebuilder.with_snapshot(lambda state, payload: state.ParseFromString(payload.value))")
 	emitPyAppliers(g, refs, s)
-	g.P("    dispatch = ", pyAz, ".AggregateDispatch(", pyQuote(s.BaseName), ", ", pyQuote(c.InputDomain), ", rebuilder)")
+	g.P("    dispatch = ", pyAz, ".AggregateDispatch(", pyQuote(s.BaseName), ", ", pyQuote(c.Domain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		fn := "_on_" + snake(h.MethodName)
 		g.P("    def ", fn, "(cmd_any, state, cctx):")
@@ -431,7 +431,7 @@ func emitPyPMDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Component) {
 	g.P("    rebuilder = ", pyAz, ".Rebuilder(lambda: ", refs.ref(s.State), "())")
 	g.P("    rebuilder.with_snapshot(lambda state, payload: state.ParseFromString(payload.value))")
 	emitPyAppliers(g, refs, s)
-	g.P("    dispatch = ", pyAz, ".ProcessManagerDispatch(", pyQuote(s.BaseName), ", ", pyQuote(c.OutputDomain), ", rebuilder)")
+	g.P("    dispatch = ", pyAz, ".ProcessManagerDispatch(", pyQuote(s.BaseName), ", ", pyQuote(c.Domain), ", rebuilder)")
 	for _, h := range s.Handlers {
 		fn := "_on_" + snake(h.MethodName)
 		g.P("    def ", fn, "(event_any, state, dests):")

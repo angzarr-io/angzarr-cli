@@ -22,7 +22,9 @@ rpcs:
 
 - `(io.angzarr.v1.component)` on the anchor message (the state message of an
   aggregate / process manager / projector, or an empty marker for a saga):
-  `kind`, `input_domain`, `output_domain`, `name`, `compensates`.
+  `kind`, `domain` (the stream it owns: aggregates and process managers),
+  `input_domain` (a subscription: saga source, projector filter),
+  `output_domain` / `output_domains` (command targets), `name`, `compensates`.
 - `(io.angzarr.v1.command)` on a command: `component` (anchor, fully
   qualified) and `emits`.
 - repeated `(io.angzarr.v1.event)` on an event, one entry per consumer:
@@ -70,12 +72,13 @@ scaffold and `lint` share it. Errors block generation, warnings do not:
 | ANZ003 | error | a command targets a non-aggregate |
 | ANZ004 / ANZ007 | error | `emits` / `compensates` is not a fully-qualified message in the request |
 | ANZ006 | error | a process-manager trigger has no `(event).domain` |
-| ANZ008 | error | a required component field is missing |
+| ANZ008 | error | a required component field is missing (`domain` for aggregates/PMs; saga source and targets) |
 | ANZ009 | error | a message carries angzarr option bytes that no `options.proto` in the request defines |
 | ANZ010 | error | two components share a generated name |
 | ANZ011 | error | one component generates the same method twice (in any language's casing) |
 | ANZ012 | error | a generated type (stub, `<Name>Handler`, …) equals a proto type in the package |
 | ANZ013 | error | a command/event is generated without its component's anchor (split run) |
+| ANZ014 | error | a domain field the kind must leave empty is set (e.g. `input_domain` on an aggregate, `domain` on a saga) |
 | ANZ100–103 | warning | incoherent wiring: unfolded emits, dangling domains, empty components |
 
 The option extensions are read dynamically (by extension number) from the

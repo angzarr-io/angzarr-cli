@@ -238,7 +238,7 @@ func (e cppEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) error
 	g.P("    ", cppCoded, "::Merge(state, payload);")
 	g.P("  });")
 	emitCppAppliers(g, s, state)
-	g.P("  ", disp, " dispatch(", cppQuote(s.BaseName), ", ", cppQuote(s.Component.InputDomain), ", std::move(rebuilder));")
+	g.P("  ", disp, " dispatch(", cppQuote(s.BaseName), ", ", cppQuote(s.Component.Domain), ", std::move(rebuilder));")
 	for _, h := range s.Handlers {
 		g.P("  dispatch.OnCommand(", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& cmdAny, ", state, "& state, const ", cppCctx, "& cctx) -> ", cppEventBook, " {")
 		g.P("    auto cmd = ", cppParse(h.Message, "cmdAny"), ";")
@@ -328,7 +328,7 @@ func (e cppEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 	g.P("    ", cppCoded, "::Merge(state, payload);")
 	g.P("  });")
 	emitCppAppliers(g, s, state)
-	g.P("  ", disp, " dispatch(", cppQuote(s.BaseName), ", ", cppQuote(s.Component.OutputDomain), ", std::move(rebuilder));")
+	g.P("  ", disp, " dispatch(", cppQuote(s.BaseName), ", ", cppQuote(s.Component.Domain), ", std::move(rebuilder));")
 	for _, h := range s.Handlers {
 		g.P("  dispatch.OnEvent(", cppQuote(h.SourceDomain), ", ", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& eventAny, ", state, "& state, const ", cppDestinations, "& dests) {")
 		g.P("    auto ev = ", cppParse(h.Message, "eventAny"), ";")

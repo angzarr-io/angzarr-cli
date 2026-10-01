@@ -115,7 +115,7 @@ func splitAggregate(t *testing.T, o optionTypes, generate ...string) *protogen.P
 		Syntax:      str("proto3"),
 		Dependency:  []string{optionsPath},
 		Options:     &descriptorpb.FileOptions{GoPackage: str("example.test/state;state")},
-		MessageType: []*descriptorpb.DescriptorProto{{Name: str("State"), Options: o.componentDecl(1, "orders", "", "OrderAggregate")}},
+		MessageType: []*descriptorpb.DescriptorProto{{Name: str("State"), Options: o.ownedDecl(1, "orders", "", "OrderAggregate")}},
 	}
 	ops := &descriptorpb.FileDescriptorProto{
 		Name:       str("orders/ops/ops.proto"),
@@ -185,7 +185,7 @@ func TestLint_UnresolvableOptionAfterOtherOptions_Errors(t *testing.T) {
 	// The angzarr bytes follow a standard option on the wire; the scan must
 	// step past the earlier field to find them.
 	o := buildOptionTypes(t, ioPkg)
-	raw, err := proto.Marshal(o.componentDecl(1, "orders", "", "OrderAggregate"))
+	raw, err := proto.Marshal(o.ownedDecl(1, "orders", "", "OrderAggregate"))
 	if err != nil {
 		t.Fatal(err)
 	}
