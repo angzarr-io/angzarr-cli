@@ -210,3 +210,36 @@ func TestGenerateCSharp_ProcessManagerWithoutTargets(t *testing.T) {
 		t.Errorf("an untargeted PM needs a typed empty array:\n%s", c)
 	}
 }
+
+func TestGenerate_ProjectorWithoutDomainsHasNoFilter(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	msgs := []declMsg{
+		{"Ledger", o.componentDecl(4, "", "", "LedgerProjector")},
+		{"OrderPlaced", o.eventDecl(eventEntry{component: fq("Ledger")})},
+	}
+	for _, lang := range codegen.Languages() {
+		t.Run(lang, func(t *testing.T) {
+			resp, err := generate(t, lang, ioPkg, msgs...)
+			if err != nil {
+				t.Fatalf("Generate: %v", err)
+			}
+			if c := strings.ToLower(resp.File[0].GetContent()); strings.Contains(c, "fordomains") || strings.Contains(c, "for_domains") {
+				t.Errorf("%s projector with no declared domain must not filter:\n%s", lang, c)
+			}
+		})
+	}
+}
+
+func TestLint_ProcessManagerTargetWithoutAggregateWarns(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"FlowState", o.ownedDecl(3, "flow", "billing", "Flow")},
+		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("FlowState"), domain: "orders"})},
+	)
+	for _, d := range diags {
+		if d.Code == "ANZ101" && strings.Contains(d.Message, `"billing"`) {
+			return
+		}
+	}
+	t.Fatalf("want ANZ101 for the PM's unowned target billing, got %v", diags)
+}
