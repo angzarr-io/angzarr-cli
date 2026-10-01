@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
@@ -178,4 +179,20 @@ func TestLint_UnknownComponentHintsAtStrategy(t *testing.T) {
 		}
 	}
 	t.Fatalf("ANZ002 should mention strategy: all for anchors outside the request, got %v", diags)
+}
+
+func TestLint_UnresolvableOptionAfterOtherOptions_Errors(t *testing.T) {
+	// The angzarr bytes follow a standard option on the wire; the scan must
+	// step past the earlier field to find them.
+	o := buildOptionTypes(t, ioPkg)
+	raw, err := proto.Marshal(o.componentDecl(1, "orders", "", "OrderAggregate"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := &descriptorpb.MessageOptions{Deprecated: proto.Bool(true)}
+	opts.ProtoReflect().SetUnknown(raw) // unknown fields marshal after known ones
+	gen := requestGen(t, []string{testPath}, declFile(nil, declMsg{"State", opts}))
+	if diags := codegen.Lint(gen); !hasCode(diags, "ANZ009") {
+		t.Fatalf("want ANZ009 behind a deprecated option, got %v", diags)
+	}
 }
