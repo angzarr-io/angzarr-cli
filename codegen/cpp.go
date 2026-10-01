@@ -38,6 +38,7 @@ const (
 	cppCoded        = "angzarr::router::CodedError"
 	cppSagaEmission = "angzarr::router::SagaEmission"
 	cppPageContext  = "angzarr::router::PageContext"
+	cppFactRecord   = "angzarr::router::FactRecord"
 	cppCompensate   = "io::angzarr::v1::Compensate"
 	cppAny          = "google::protobuf::Any"
 	cppCover        = "io::angzarr::v1::Cover"
@@ -163,7 +164,7 @@ func (e cppEmitter) aggregateMethods(s *Component) []cppMethod {
 		out = append(out, cppMethod{
 			name:    f.MethodName,
 			params:  "const " + cppType(f.Message) + "& fact, const " + state + "& state",
-			results: "std::optional<" + cppType(f.Message) + ">",
+			results: "std::optional<" + cppFactRecord + ">",
 		})
 	}
 	for _, u := range s.Undos {
@@ -268,11 +269,11 @@ func (e cppEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) error
 		g.P("  });")
 	}
 	for _, f := range s.Facts {
-		g.P("  dispatch.OnFact(", cppQuote(fqName(f.Message)), ", [&h](const ", cppAny, "& factAny, const ", state, "& state) -> std::optional<", cppAny, "> {")
+		g.P("  dispatch.OnFact(", cppQuote(fqName(f.Message)), ", [&h](const ", cppAny, "& factAny, const ", state, "& state) -> ", cppFactRecord, " {")
 		g.P("    auto fact = ", cppParse(f.Message, "factAny"), ";")
-		g.P("    auto recorded = h.", f.MethodName, "(fact, state);")
-		g.P("    if (!recorded) return std::nullopt;")
-		g.P("    return ", cppPack, "::Wrap(*recorded);")
+		g.P("    auto rec = h.", f.MethodName, "(fact, state);")
+		g.P("    if (!rec) return factAny;")
+		g.P("    return *rec;")
 		g.P("  });")
 	}
 	for _, u := range s.Undos {

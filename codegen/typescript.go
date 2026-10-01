@@ -55,6 +55,7 @@ const (
 	tsParseAny     = "parseAny"
 	tsSagaEmission = "SagaEmission"
 	tsPageContext  = "PageContext"
+	tsFactRecord   = "FactRecord"
 
 	tsEventBook    = "EventBook"
 	tsCommandBook  = "CommandBook"
@@ -248,7 +249,7 @@ func (e tsEmitter) aggregateSigs(refs *tsRefs, s *Component) []tsSig {
 		out = append(out, tsSig{
 			name:    lowerFirst(f.MethodName),
 			params:  "fact: " + refs.ref(f.Message) + ", state: " + state,
-			returns: refs.ref(f.Message) + " | undefined",
+			returns: refs.use(tsFactRecord) + " | undefined",
 		})
 	}
 	for _, u := range s.Undos {
@@ -351,10 +352,9 @@ func (e tsEmitter) aggregateDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 			g.P("  );")
 		}
 		for _, f := range s.Facts {
-			g.P("  dispatch.onFact(", tsQuote(fqName(f.Message)), ", (factAny, state) => {")
-			g.P("    const recorded = h.", lowerFirst(f.MethodName), "(", tsParseAny, "(", refs.schema(f.Message), ", factAny), state);")
-			g.P("    return recorded === undefined ? undefined : ", tsPack, ".wrap(", refs.schema(f.Message), ", recorded);")
-			g.P("  });")
+			g.P("  dispatch.onFact(", tsQuote(fqName(f.Message)), ", (factAny, state) =>")
+			g.P("    h.", lowerFirst(f.MethodName), "(", tsParseAny, "(", refs.schema(f.Message), ", factAny), state) ?? ", tsFactRecord, ".asReceived(factAny),")
+			g.P("  );")
 		}
 		for _, u := range s.Undos {
 			g.P("  dispatch.onUndo(", tsQuote(u.Command), ", (n, compensate, state, cctx) =>")

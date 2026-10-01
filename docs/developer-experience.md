@@ -87,7 +87,7 @@ message OrderState {
 | `output_domain` / `output_domains` | domains it **sends commands** to (sagas, PMs) |
 | `name` | generated handler/dispatch base name; **defaults to the anchor message name** |
 | `compensates` | aggregates and process managers: rejected commands this component compensates — `"fq.Type"` (sent to any domain, `On<Command>Rejected`) or `"domain:fq.Type"` (sent to that domain only, `On<Command>From<Domain>Rejected`); a type appears once unqualified or once per domain, never both |
-| `facts` | aggregates only: repeated FQ event types it records as facts — one `On<Event>Fact(fact, state)` handler each, returning the fact to record (optionally annotated) or nothing to record it unchanged; it cannot refuse. An undeclared fact is refused by the router (NO_FACT_HANDLER) |
+| `facts` | aggregates only: repeated FQ event types it records as facts — one `On<Event>Fact(fact, state)` handler each, returning a `FactRecord`: the fact to record (as received, or annotated) plus optional flagging events; returning nothing (or, in Go, a record with no fact) records the fact as received. It cannot refuse. An undeclared fact is refused by the router (NO_FACT_HANDLER) |
 | `emits_facts` | sagas and process managers: repeated FQ fact types they inject; each must appear in `facts` of an aggregate owning one of their output domains (`ANZ018`) |
 | `undoes` | aggregates only: repeated FQ command types it handles and can undo when a CASCADE COMPENSATE `Compensate` arrives (`On<Command>Undo`) |
 

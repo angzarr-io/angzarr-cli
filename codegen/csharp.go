@@ -36,6 +36,7 @@ const (
 	csCoded        = "Angzarr.Router.CodedError"
 	csSagaEmission = "Angzarr.Router.SagaEmission"
 	csPageContext  = "Angzarr.Router.PageContext"
+	csFactRecord   = "Angzarr.Router.FactRecord"
 	csCompensate   = "Angzarr.Compensate"
 	csCover        = "Angzarr.Cover"
 	csEventBook    = "Angzarr.EventBook"
@@ -158,7 +159,7 @@ func (e csharpEmitter) aggregateMethods(s *Component) []csMethod {
 		out = append(out, csMethod{
 			name:    f.MethodName,
 			params:  csType(f.Message) + " fact, " + state + " state",
-			results: csType(f.Message) + "?",
+			results: csFactRecord + "?",
 		})
 	}
 	for _, u := range s.Undos {
@@ -265,8 +266,7 @@ func (e csharpEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) er
 		g.P("            .OnFact(", quoteFQ(f.Message), ", (factAny, state) =>")
 		g.P("            {")
 		g.P("                ", csType(f.Message), " fact = ", csParseAny(f.Message, "factAny"), ";")
-		g.P("                var recorded = h.", f.MethodName, "(fact, state);")
-		g.P("                return recorded == null ? null : ", csPack, ".Wrap(recorded);")
+		g.P("                return h.", f.MethodName, "(fact, state) ?? ", csFactRecord, ".AsReceived(factAny);")
 		g.P("            })")
 	}
 	for _, u := range s.Undos {

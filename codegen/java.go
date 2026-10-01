@@ -38,6 +38,7 @@ const (
 	jCoded        = "io.angzarr.router.CodedError"
 	jSagaEmission = "io.angzarr.router.Thunks.SagaEmission"
 	jPageContext  = "io.angzarr.router.PageContext"
+	jFactRecord   = "io.angzarr.router.FactRecord"
 	jCompensate   = "io.angzarr.Compensate"
 	jCover        = "io.angzarr.Cover"
 	jEventBook    = "io.angzarr.EventBook"
@@ -166,7 +167,7 @@ func (e javaEmitter) aggregateMethods(s *Component) []javaMethod {
 		out = append(out, javaMethod{
 			name:    lowerFirst(f.MethodName),
 			params:  javaType(f.Message) + " fact, " + state + " state",
-			results: javaType(f.Message),
+			results: jFactRecord,
 			throws:  " throws Exception",
 		})
 	}
@@ -276,8 +277,8 @@ func (e javaEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) erro
 	for _, f := range s.Facts {
 		g.P("        .onFact(", quoteFQ(f.Message), ", (factAny, state) -> {")
 		g.P("          ", javaType(f.Message), " fact = ", parseAny(f.Message, "factAny"), ";")
-		g.P("          ", javaType(f.Message), " recorded = h.", lowerFirst(f.MethodName), "(fact, (", state, ") state);")
-		g.P("          return recorded == null ? null : ", jPack, ".pack(recorded);")
+		g.P("          ", jFactRecord, " rec = h.", lowerFirst(f.MethodName), "(fact, (", state, ") state);")
+		g.P("          return rec == null ? ", jFactRecord, ".of(factAny) : rec;")
 		g.P("        })")
 	}
 	for _, u := range s.Undos {

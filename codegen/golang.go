@@ -200,11 +200,10 @@ func (goEmitter) aggregateMethods(g *protogen.GeneratedFile, s *Component) []met
 		})
 	}
 	for _, f := range s.Facts {
-		fact := "*" + g.QualifiedGoIdent(f.Message.GoIdent)
 		out = append(out, methodSig{
 			name:    f.MethodName,
-			params:  "(fact " + fact + ", state " + statePtr + ")",
-			results: " (" + fact + ", error)",
+			params:  "(fact *" + g.QualifiedGoIdent(f.Message.GoIdent) + ", state " + statePtr + ")",
+			results: " (" + ident(g, angzarrPkg, "FactRecord") + ", error)",
 		})
 	}
 	for _, u := range s.Undos {
@@ -331,11 +330,13 @@ func (e goEmitter) emitAggregate(g *protogen.GeneratedFile, s *Component) error 
 		g.P("dispatch.OnRejected(", quote(r.Key), ", h.", r.MethodName, ")")
 	}
 	for _, f := range s.Facts {
-		g.P("dispatch.OnFact(", quoteFQ(f.Message), ", func(factAny ", star(g, anypbPkg, "Any"), ", state ", statePtr, ") (", star(g, anypbPkg, "Any"), ", error) {")
-		emitDecode(g, "fact", "factAny", f.Message, "nil, ")
-		g.P("recorded, err := h.", f.MethodName, "(fact, state)")
-		g.P("if err != nil || recorded == nil { return nil, err }")
-		g.P("return ", ident(g, angzarrPkg, "Pack"), "(recorded)")
+		record := ident(g, angzarrPkg, "FactRecord")
+		g.P("dispatch.OnFact(", quoteFQ(f.Message), ", func(factAny ", star(g, anypbPkg, "Any"), ", state ", statePtr, ") (", record, ", error) {")
+		emitDecode(g, "fact", "factAny", f.Message, record+"{}, ")
+		g.P("rec, err := h.", f.MethodName, "(fact, state)")
+		g.P("if err != nil { return ", record, "{}, err }")
+		g.P("if rec.Fact == nil { rec.Fact = factAny }")
+		g.P("return rec, nil")
 		g.P("})")
 	}
 	for _, u := range s.Undos {

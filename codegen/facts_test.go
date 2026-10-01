@@ -60,29 +60,35 @@ func TestGenerate_FactHandlersInEveryLanguage(t *testing.T) {
 	}
 	want := map[string][]string{
 		"go": {
-			`dispatch.OnFact("validation.test.Shipped", func(factAny *anypb.Any, state *State) (*anypb.Any, error) {`,
-			"recorded, err := h.OnShippedFact(fact, state)",
-			"OnShippedFact(fact *Shipped, state *State) (*Shipped, error)",
+			`dispatch.OnFact("validation.test.Shipped", func(factAny *anypb.Any, state *State) (_go.FactRecord, error) {`,
+			"rec, err := h.OnShippedFact(fact, state)",
+			"rec.Fact = factAny",
+			"OnShippedFact(fact *Shipped, state *State) (_go.FactRecord, error)",
 		},
 		"python": {
 			`dispatch.on_fact("validation.test.Shipped", _fact_on_shipped_fact)`,
-			"def on_shipped_fact(self, fact: _validation_test.Shipped, state: _validation_test.State) -> Optional[_validation_test.Shipped]",
+			"return rec if rec is not None else _az.FactRecord.as_received(fact_any)",
+			"def on_shipped_fact(self, fact: _validation_test.Shipped, state: _validation_test.State) -> Optional[_az.FactRecord]",
 		},
 		"java": {
 			`.onFact("validation.test.Shipped", (factAny, state) -> {`,
-			"onShippedFact(validation.test.ValidationTest.Shipped fact, validation.test.ValidationTest.State.Builder state)",
+			"return rec == null ? io.angzarr.router.FactRecord.of(factAny) : rec;",
+			"io.angzarr.router.FactRecord onShippedFact(validation.test.ValidationTest.Shipped fact, validation.test.ValidationTest.State.Builder state)",
 		},
 		"csharp": {
 			`.OnFact("validation.test.Shipped", (factAny, state) =>`,
-			"Validation.Test.Shipped? OnShippedFact(Validation.Test.Shipped fact, Validation.Test.State state)",
+			"?? Angzarr.Router.FactRecord.AsReceived(factAny);",
+			"Angzarr.Router.FactRecord? OnShippedFact(Validation.Test.Shipped fact, Validation.Test.State state)",
 		},
 		"cpp": {
-			`dispatch.OnFact("validation.test.Shipped", [&h](const google::protobuf::Any& factAny, const validation::test::State& state) -> std::optional<google::protobuf::Any> {`,
-			"std::optional<validation::test::Shipped> OnShippedFact(const validation::test::Shipped& fact, const validation::test::State& state)",
+			`dispatch.OnFact("validation.test.Shipped", [&h](const google::protobuf::Any& factAny, const validation::test::State& state) -> angzarr::router::FactRecord {`,
+			"if (!rec) return factAny;",
+			"std::optional<angzarr::router::FactRecord> OnShippedFact(const validation::test::Shipped& fact, const validation::test::State& state)",
 		},
 		"typescript": {
-			`dispatch.onFact("validation.test.Shipped", (factAny, state) => {`,
-			"onShippedFact(fact: Shipped, state: State): Shipped | undefined",
+			`dispatch.onFact("validation.test.Shipped", (factAny, state) =>`,
+			"?? FactRecord.asReceived(factAny)",
+			"onShippedFact(fact: Shipped, state: State): FactRecord | undefined",
 		},
 	}
 	for _, lang := range codegen.Languages() {

@@ -330,7 +330,7 @@ func pyAggregateSigs(refs *pyRefs, s *Component) []pySig {
 		out = append(out, pySig{
 			name:    snake(f.MethodName),
 			params:  "(self, fact: " + refs.ref(f.Message) + ", state: " + refs.ref(s.State) + ")",
-			returns: " -> Optional[" + refs.ref(f.Message) + "]",
+			returns: " -> Optional[" + pyAz + ".FactRecord]",
 		})
 	}
 	for _, u := range s.Undos {
@@ -433,7 +433,8 @@ func emitPyAggregateDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Compone
 		g.P("    def ", fn, "(fact_any, state):")
 		g.P("        fact = ", refs.ref(f.Message), "()")
 		emitPyUnpack(g, "fact", "fact_any")
-		g.P("        return handler.", snake(f.MethodName), "(fact, state)")
+		g.P("        rec = handler.", snake(f.MethodName), "(fact, state)")
+		g.P("        return rec if rec is not None else ", pyAz, ".FactRecord.as_received(fact_any)")
 		g.P("    dispatch.on_fact(", pyQuote(fqName(f.Message)), ", ", fn, ")")
 	}
 	for _, u := range s.Undos {
