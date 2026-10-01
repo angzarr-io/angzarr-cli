@@ -69,3 +69,38 @@ fmt:
 # Auto-format code
 fmt-fix:
     gofmt -w {{TOP}}
+
+# Run one plugin (codegen or scaffold) for every registered language over a
+# proto tree, writing <out>/<mode>/<lang>/. A smoke test of the emitters
+# against real protos; nothing is compiled.
+# Usage: just smoke ../angzarr-project/proto /tmp/smoke codegen
+smoke protos out mode="codegen":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    protos="$(realpath "{{protos}}")"
+    mkdir -p "{{out}}"
+    out="$(realpath "{{out}}")"
+    work="$(mktemp -d)"
+    trap 'rm -f "$work/angzarr" "$work/buf.gen.yaml"; rmdir "$work"' EXIT
+    go build -o "$work/angzarr" "{{TOP}}"
+    {
+        echo "version: v2"
+        echo "managed:"
+        echo "  enabled: true"
+        echo "  override:"
+        echo "    - file_option: go_package_prefix"
+        echo "      value: smoke.local/gen"
+        echo "plugins:"
+        for lang in $("$work/angzarr" codegen languages); do
+            dir="{{mode}}/$lang"
+            opt="paths=source_relative"
+            if [ "{{mode}}" = scaffold ]; then opt="$opt,out_dir=$dir"; fi
+            echo "  - local: [\"$work/angzarr\", \"{{mode}}\", \"$lang\"]"
+            echo "    out: $dir"
+            echo "    opt: $opt"
+            echo "    strategy: all"
+        done
+    } > "$work/buf.gen.yaml"
+    cd "$out"
+    buf generate "$protos" --template "$work/buf.gen.yaml"
+    find "{{mode}}" -type f | sort
