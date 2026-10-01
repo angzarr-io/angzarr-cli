@@ -270,7 +270,7 @@ func (e cppEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 	e.emitInterface(g, s, s.BaseName+" saga")
 	g.P("// Populates the saga table from the proto declaration.")
 	g.P("inline ", cppSagaDispatch, " New", s.BaseName, "Dispatch(", s.BaseName, "Handler& h) {")
-	g.P("  ", cppSagaDispatch, " dispatch(", cppQuote(s.BaseName), ", ", cppQuote(s.Component.InputDomain), ", {", cppQuote(s.Component.OutputDomain), "});")
+	g.P("  ", cppSagaDispatch, " dispatch(", cppQuote(s.BaseName), ", ", cppQuote(s.Component.InputDomain), ", {", quoteJoin(s.Component.OutputDomains, cppQuote), "});")
 	for _, h := range s.Handlers {
 		g.P("  dispatch.OnEvent(", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& eventAny, const ", cppDestinations, "& dests, const ", cppCover, "& sourceCover) {")
 		g.P("    auto ev = ", cppParse(h.Message, "eventAny"), ";")

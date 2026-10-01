@@ -102,6 +102,7 @@ func optionsFDP(pkg string) *descriptorpb.FileDescriptorProto {
 					field("output_domain", 3, str_),
 					field("name", 4, str_),
 					repeatedField("compensates", 5, str_),
+					repeatedField("output_domains", 6, str_),
 				},
 			},
 			{
@@ -209,6 +210,16 @@ func (o optionTypes) componentDecl(kind int32, inputDomain, outputDomain, name s
 	}
 	opts := &descriptorpb.MessageOptions{}
 	opts.ProtoReflect().Set(o.component.TypeDescriptor(), protoreflect.ValueOfMessage(sub))
+	return opts
+}
+
+// withOutputDomains appends output_domains entries to a componentDecl.
+func (o optionTypes) withOutputDomains(opts *descriptorpb.MessageOptions, domains ...string) *descriptorpb.MessageOptions {
+	sub := opts.ProtoReflect().Get(o.component.TypeDescriptor()).Message()
+	list := sub.Mutable(sub.Descriptor().Fields().ByName("output_domains")).List()
+	for _, d := range domains {
+		list.Append(protoreflect.ValueOfString(d))
+	}
 	return opts
 }
 
@@ -1199,5 +1210,52 @@ func TestGenerateCppScaffold_IncludesTheWiringWhereItIsWritten(t *testing.T) {
 	want := `#include "` + wiring.File[0].GetName() + `"`
 	if content := stub.File[0].GetContent(); !strings.Contains(content, want) {
 		t.Errorf("scaffold should %s (the wiring's output path); got:\n%s", want, content)
+	}
+}
+
+func TestGenerate_SagaTargetsAllOutputDomains(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	msgs := []declMsg{
+		{"OrderSaga", o.withOutputDomains(o.componentDecl(2, "orders", "fulfillment", ""), "billing", "fulfillment")},
+		{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	}
+	want := map[string]string{
+		"go":         `NewSagaDispatch("OrderSaga", "orders", "fulfillment", "billing")`,
+		"python":     `SagaDispatch("OrderSaga", "orders", targets=["fulfillment", "billing"])`,
+		"java":       `"OrderSaga", "orders", java.util.List.of("fulfillment", "billing"))`,
+		"csharp":     `("OrderSaga", "orders", "fulfillment", "billing")`,
+		"cpp":        `dispatch("OrderSaga", "orders", {"fulfillment", "billing"});`,
+		"typescript": `("OrderSaga", "orders", ["fulfillment", "billing"]);`,
+	}
+	for _, lang := range codegen.Languages() {
+		t.Run(lang, func(t *testing.T) {
+			resp, err := generate(t, lang, ioPkg, msgs...)
+			if err != nil {
+				t.Fatalf("Generate: %v", err)
+			}
+			if c := resp.File[0].GetContent(); !strings.Contains(c, want[lang]) {
+				t.Errorf("%s saga wiring missing %s:\n%s", lang, want[lang], c)
+			}
+		})
+	}
+}
+
+func TestLint_SagaWithOnlyOutputDomains_IsValid(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"OrderSaga", o.withOutputDomains(o.componentDecl(2, "orders", "", ""), "billing")},
+		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	)
+	if hasCode(diags, "ANZ008") {
+		t.Fatalf("output_domains alone satisfies the saga target requirement, got %v", diags)
+	}
+	warned := false
+	for _, d := range diags {
+		if d.Code == "ANZ101" && strings.Contains(d.Message, `"billing"`) {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Errorf("ANZ101 should cover output_domains entries, got %v", diags)
 	}
 }

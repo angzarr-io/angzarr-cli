@@ -312,8 +312,8 @@ func requiredFields(s *Component) []Diagnostic {
 			return []Diagnostic{errDiag("ANZ008", s.Anchor, "aggregate requires input_domain (its own domain)")}
 		}
 	case KindSaga:
-		if c.InputDomain == "" || c.OutputDomain == "" {
-			return []Diagnostic{errDiag("ANZ008", s.Anchor, "saga requires input_domain and output_domain")}
+		if c.InputDomain == "" || len(c.OutputDomains) == 0 {
+			return []Diagnostic{errDiag("ANZ008", s.Anchor, "saga requires input_domain and at least one output domain (output_domain / output_domains)")}
 		}
 	case KindProcessManager:
 		if c.OutputDomain == "" {
@@ -525,8 +525,12 @@ func coherenceDiags(services map[string]*Component, order []string) []Diagnostic
 			}
 		}
 
-		if (c.Kind == KindSaga || c.Kind == KindProcessManager) && c.OutputDomain != "" && !aggDomains[c.OutputDomain] {
-			diags = append(diags, warnDiag("ANZ101", s.Anchor, fmt.Sprintf("%v %q targets output_domain %q, but no aggregate declares it as input_domain; emitted commands reach no handler", c.Kind, fq, c.OutputDomain)))
+		if c.Kind == KindSaga || c.Kind == KindProcessManager {
+			for _, target := range c.OutputDomains {
+				if !aggDomains[target] {
+					diags = append(diags, warnDiag("ANZ101", s.Anchor, fmt.Sprintf("%v %q targets output domain %q, but no aggregate declares it as input_domain; emitted commands reach no handler", c.Kind, fq, target)))
+				}
+			}
 		}
 
 		for _, h := range s.Handlers {

@@ -265,7 +265,7 @@ func (e csharpEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 	g.P("    /// <summary>Populates the saga table from the proto declaration.</summary>")
 	g.P("    public static ", csSagaDispatch, " New", s.BaseName, "Dispatch(", s.BaseName, "Handler h)")
 	g.P("    {")
-	g.P("        return new ", csSagaDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.InputDomain), ", ", quote(s.Component.OutputDomain), ")")
+	g.P("        return new ", csSagaDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.InputDomain), ", ", quoteJoin(s.Component.OutputDomains, quote), ")")
 	for _, h := range s.Handlers {
 		g.P("            .OnEvent(", quoteFQ(h.Message), ", (eventAny, dests, sourceCover) =>")
 		g.P("            {")

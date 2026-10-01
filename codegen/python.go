@@ -379,7 +379,7 @@ func pyProjectorSigs(refs *pyRefs, s *Component) []pySig {
 func emitPySagaDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Component) {
 	c := s.Component
 	g.P("def new_", snake(s.BaseName), "_dispatch(handler: ", s.BaseName, "Handler) -> ", pyAz, ".SagaDispatch:")
-	g.P("    dispatch = ", pyAz, ".SagaDispatch(", pyQuote(s.BaseName), ", ", pyQuote(c.InputDomain), ", targets=[", pyQuote(c.OutputDomain), "])")
+	g.P("    dispatch = ", pyAz, ".SagaDispatch(", pyQuote(s.BaseName), ", ", pyQuote(c.InputDomain), ", targets=[", quoteJoin(c.OutputDomains, pyQuote), "])")
 	for _, h := range s.Handlers {
 		fn := "_on_" + snake(h.MethodName)
 		g.P("    def ", fn, "(event_any, dests, source_cover):")

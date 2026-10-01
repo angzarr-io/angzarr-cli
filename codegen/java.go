@@ -275,7 +275,7 @@ func (e javaEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 	e.emitInterface(g, s, s.BaseName+" saga")
 	g.P("  /** Populates the saga table from the proto declaration. */")
 	g.P("  public static ", jSagaDispatch, " new", s.BaseName, "Dispatch(", s.BaseName, "Handler h) {")
-	g.P("    return new ", jSagaDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.InputDomain), ", ", jList, ".of(", quote(s.Component.OutputDomain), "))")
+	g.P("    return new ", jSagaDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.InputDomain), ", ", jList, ".of(", quoteJoin(s.Component.OutputDomains, quote), "))")
 	for _, h := range s.Handlers {
 		g.P("        .onEvent(", quoteFQ(h.Message), ", (eventAny, dests, sourceCover) -> {")
 		g.P("          ", javaType(h.Message), " event = ", parseAny(h.Message, "eventAny"), ";")

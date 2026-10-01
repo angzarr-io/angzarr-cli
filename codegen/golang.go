@@ -274,7 +274,7 @@ func (e goEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 	emitInterface(g, name, name+" saga", e.sagaMethods(g, s))
 	g.P("// New", name, "Dispatch populates the saga table from the proto declaration.")
 	g.P("func New", name, "Dispatch(h ", name, "Handler) *", ident(g, angzarrPkg, "SagaDispatch"), " {")
-	g.P("dispatch := ", ident(g, angzarrPkg, "NewSagaDispatch"), "(", quote(name), ", ", quote(component.InputDomain), ", ", quote(component.OutputDomain), ")")
+	g.P("dispatch := ", ident(g, angzarrPkg, "NewSagaDispatch"), "(", quote(name), ", ", quote(component.InputDomain), ", ", quoteJoin(component.OutputDomains, quote), ")")
 	for _, h := range s.Handlers {
 		g.P("dispatch.OnEvent(", quoteFQ(h.Message), ", func(eventAny ", star(g, anypbPkg, "Any"), ", dests ", dests, ", sourceCover ", cover, ") ([]", cmdBook, ", []", evtBook, ", error) {")
 		emitDecode(g, "event", "eventAny", h.Message, "nil, nil, ")

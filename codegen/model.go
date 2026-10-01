@@ -84,6 +84,10 @@ type ComponentDecl struct {
 	Kind         ComponentKind
 	InputDomain  string
 	OutputDomain string
+	// OutputDomains is every domain the component issues commands to:
+	// output_domain (when set) followed by the output_domains entries,
+	// deduplicated in declaration order.
+	OutputDomains []string
 	// Name is the generated handler/dispatch base name; empty means default
 	// to the anchor message name.
 	Name string
@@ -330,6 +334,7 @@ func componentOptions(m *protogen.Message, exts extensions) *ComponentDecl {
 	if c.Kind == KindUnspecified {
 		return nil
 	}
+	c.OutputDomains = dedupNonEmpty(append([]string{c.OutputDomain}, reflStrings(sub, "output_domains")...))
 	return c
 }
 
@@ -520,6 +525,19 @@ func quoteLiteral(s string) string {
 	}
 	b.WriteByte('"')
 	return b.String()
+}
+
+// dedupNonEmpty drops empty and repeated entries, keeping first-seen order.
+func dedupNonEmpty(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	var out []string
+	for _, v := range in {
+		if v != "" && !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // shortName returns the trailing segment of a fully-qualified type name.

@@ -354,7 +354,7 @@ func (e tsEmitter) sagaDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Comp
 	return func() {
 		g.P("// Populates the saga dispatch table from the proto declaration.")
 		g.P("export function new", s.BaseName, "Dispatch(h: ", s.BaseName, "Handler): ", disp, " {")
-		g.P("  const dispatch = new ", tsSagaDispatch, "(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.InputDomain), ", [", tsQuote(s.Component.OutputDomain), "]);")
+		g.P("  const dispatch = new ", tsSagaDispatch, "(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.InputDomain), ", [", quoteJoin(s.Component.OutputDomains, tsQuote), "]);")
 		for _, h := range s.Handlers {
 			g.P("  dispatch.onEvent(", tsQuote(fqName(h.Message)), ", (eventAny, dests, sourceCover) => {")
 			g.P("    const ev = ", tsParseAny, "(", refs.schema(h.Message), ", eventAny);")
