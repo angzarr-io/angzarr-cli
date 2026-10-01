@@ -427,3 +427,49 @@ func buildGenMultiPkg(t *testing.T, o optionTypes) *protogen.Plugin {
 	}
 	return gen
 }
+
+func TestLint_TierB_GeneratedTypeCollidesWithProtoType(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	cases := []struct {
+		name string
+		msgs []declMsg
+	}{
+		{"explicit name equals the anchor", []declMsg{
+			{"OrderState", o.componentDecl(1, "orders", "", "OrderState")},
+		}},
+		{"explicit name equals another message", []declMsg{
+			{"OrderState", o.componentDecl(1, "orders", "", "Order")},
+			{"Order", nil},
+		}},
+		{"derived handler interface equals a message", []declMsg{
+			{"OrderState", o.componentDecl(1, "orders", "", "Order")},
+			{"OrderHandler", nil},
+		}},
+		{"unnamed stub type equals a message", []declMsg{
+			{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+			{"OrderSagaImpl", nil},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := lint(t, tc.msgs...)
+			if !hasCode(diags, "ANZ012") {
+				t.Fatalf("want ANZ012, got %v", codesOf(diags))
+			}
+			if sev, _ := severityOf(diags, "ANZ012"); sev != codegen.SeverityError {
+				t.Errorf("ANZ012 should be an error, got %v", sev)
+			}
+		})
+	}
+}
+
+func TestLint_TierB_UnnamedAndDistinctNamesDoNotCollideWithProtoTypes(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+		declMsg{"OrderState", o.componentDecl(1, "orders", "", "OrderAggregate")},
+	)
+	if hasCode(diags, "ANZ012") {
+		t.Fatalf("no generated identifier shadows a proto type here, got %v", diags)
+	}
+}

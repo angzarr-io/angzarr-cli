@@ -380,14 +380,14 @@ func (e cppEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *proto
 	g.P("namespace ", cppNamespace(file), " {")
 	g.P()
 	g.P("// Implement ", s.BaseName, "Handler here.")
-	g.P("class ", s.BaseName, " : public ", s.BaseName, "Handler {")
+	g.P("class ", s.StubName, " : public ", s.BaseName, "Handler {")
 	g.P(" public:")
 	for _, m := range e.methods(s) {
 		g.P("  ", m.results, " ", m.name, "(", m.params, ") override {")
 		if m.results == "void" {
-			g.P("    // TODO: implement ", s.BaseName, "::", m.name)
+			g.P("    // TODO: implement ", s.StubName, "::", m.name)
 		} else {
-			g.P("    throw std::runtime_error(", cppQuote("TODO: implement "+s.BaseName+"::"+m.name), ");")
+			g.P("    throw std::runtime_error(", cppQuote("TODO: implement "+s.StubName+"::"+m.name), ");")
 		}
 		g.P("  }")
 	}

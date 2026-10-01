@@ -371,8 +371,13 @@ type Component struct {
 	// Anchor is the message carrying (component): the state message for the
 	// stateful kinds, or an empty marker for the saga.
 	Anchor *protogen.Message
-	// BaseName is the generated handler/dispatch base name.
-	BaseName   string
+	// BaseName is the generated handler/dispatch base name and the runtime
+	// component name.
+	BaseName string
+	// StubName is the type the scaffold stub declares: the declared
+	// (component).name, or <Anchor>Impl when no name is declared (the anchor's
+	// own name is taken by the proto-generated message in the same package).
+	StubName   string
 	Component  *ComponentDecl
 	Handlers   []Handler
 	Appliers   []Applier
@@ -443,6 +448,15 @@ func shortName(fq string) string {
 type fileComponents struct {
 	File       *protogen.File
 	Components []*Component
+}
+
+// stubName resolves the scaffold stub's type name: the declared name, or the
+// anchor message's name suffixed with Impl.
+func stubName(m *protogen.Message, c *ComponentDecl) string {
+	if c.Name != "" {
+		return c.Name
+	}
+	return string(m.Desc.Name()) + "Impl"
 }
 
 // baseName resolves the component's generated base name: the declared name, or

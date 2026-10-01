@@ -1123,3 +1123,65 @@ func TestGenerate_Projector_DomainFilterIncludesInputDomain(t *testing.T) {
 		}
 	}
 }
+
+// unnamedSaga is a saga declared on a marker message with no (component).name:
+// the generated base name is the marker's own name.
+func unnamedSaga(o optionTypes) []declMsg {
+	return []declMsg{
+		{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+		{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	}
+}
+
+func TestGenerateScaffold_UnnamedComponentStubDoesNotShadowAnchor(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	cases := map[string]struct {
+		path      string
+		want      []string
+		forbidden string
+	}{
+		"go": {"order_saga_angzarr_handler.go",
+			[]string{"type OrderSagaImpl struct{}", "var _ OrderSagaHandler = OrderSagaImpl{}", "func (OrderSagaImpl) OrderPlaced("},
+			"type OrderSaga struct"},
+		"python": {"order_saga_angzarr_handler.py", []string{"class OrderSagaImpl:"}, "class OrderSaga:"},
+		"java": {"OrderSagaImpl.java",
+			[]string{"public final class OrderSagaImpl implements OrderSagaAngzarr.OrderSagaHandler {"},
+			"class OrderSaga "},
+		"csharp": {"OrderSagaImpl.cs",
+			[]string{"public sealed class OrderSagaImpl : OrderSagaAngzarr.OrderSagaHandler"},
+			"class OrderSaga "},
+		"cpp": {"order_saga_angzarr_handler.h",
+			[]string{"class OrderSagaImpl : public OrderSagaHandler {"},
+			"class OrderSaga "},
+		"typescript": {"order_saga_angzarr_handler.ts",
+			[]string{"export class OrderSagaImpl implements OrderSagaHandler {"},
+			"class OrderSaga "},
+	}
+	for _, lang := range codegen.Languages() {
+		tc, ok := cases[lang]
+		if !ok {
+			t.Fatalf("no stub-name expectation for language %q", lang)
+		}
+		t.Run(lang, func(t *testing.T) {
+			resp, err := scaffold(t, lang, ioPkg, func(string) bool { return false }, unnamedSaga(o)...)
+			if err != nil {
+				t.Fatalf("GenerateScaffold: %v", err)
+			}
+			if len(resp.File) != 1 {
+				t.Fatalf("scaffolded %d files, want 1", len(resp.File))
+			}
+			if got := resp.File[0].GetName(); !strings.HasSuffix(got, tc.path) {
+				t.Errorf("stub path = %q, want suffix %q", got, tc.path)
+			}
+			content := resp.File[0].GetContent()
+			for _, w := range tc.want {
+				if !strings.Contains(content, w) {
+					t.Errorf("stub missing %q:\n%s", w, content)
+				}
+			}
+			if strings.Contains(content, tc.forbidden) {
+				t.Errorf("stub declares %q, which shadows the anchor message:\n%s", tc.forbidden, content)
+			}
+		})
+	}
+}

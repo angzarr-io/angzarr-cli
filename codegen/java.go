@@ -62,7 +62,7 @@ func (javaEmitter) WiringPath(file *protogen.File, s *Component) string {
 }
 
 func (javaEmitter) ScaffoldPath(file *protogen.File, s *Component) string {
-	return componentFile(file, s.BaseName, ".java")
+	return componentFile(file, s.StubName, ".java")
 }
 
 func (e javaEmitter) EmitComponent(g *protogen.GeneratedFile, file *protogen.File, s *Component) error {
@@ -370,13 +370,13 @@ func (e javaEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *prot
 	g.P("package ", javaPackage(file), ";")
 	g.P()
 	g.P("/** Implement ", s.BaseName, "Handler here. */")
-	g.P("public final class ", s.BaseName, " implements ", s.BaseName, "Angzarr.", s.BaseName, "Handler {")
+	g.P("public final class ", s.StubName, " implements ", s.BaseName, "Angzarr.", s.BaseName, "Handler {")
 	for _, m := range e.methods(s) {
 		g.P("  @Override public ", m.results, " ", m.name, "(", m.params, ")", m.throws, " {")
 		if m.results == "void" {
-			g.P("    // TODO: implement ", s.BaseName, ".", m.name)
+			g.P("    // TODO: implement ", s.StubName, ".", m.name)
 		} else {
-			g.P("    throw new UnsupportedOperationException(", quote("TODO: implement "+s.BaseName+"."+m.name), ");")
+			g.P("    throw new UnsupportedOperationException(", quote("TODO: implement "+s.StubName+"."+m.name), ");")
 		}
 		g.P("  }")
 	}

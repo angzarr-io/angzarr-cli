@@ -58,7 +58,7 @@ func (csharpEmitter) WiringPath(file *protogen.File, s *Component) string {
 }
 
 func (csharpEmitter) ScaffoldPath(file *protogen.File, s *Component) string {
-	return componentFile(file, s.BaseName, ".cs")
+	return componentFile(file, s.StubName, ".cs")
 }
 
 func (e csharpEmitter) EmitComponent(g *protogen.GeneratedFile, file *protogen.File, s *Component) error {
@@ -365,15 +365,15 @@ func (e csharpEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *pr
 	g.P("namespace ", csNamespace(file), ";")
 	g.P()
 	g.P("/// <summary>Implement ", s.BaseName, "Handler here.</summary>")
-	g.P("public sealed class ", s.BaseName, " : ", s.BaseName, "Angzarr.", s.BaseName, "Handler")
+	g.P("public sealed class ", s.StubName, " : ", s.BaseName, "Angzarr.", s.BaseName, "Handler")
 	g.P("{")
 	for _, m := range e.methods(s) {
 		g.P("    public ", m.results, " ", m.name, "(", m.params, ")")
 		g.P("    {")
 		if m.results == "void" {
-			g.P("        // TODO: implement ", s.BaseName, ".", m.name)
+			g.P("        // TODO: implement ", s.StubName, ".", m.name)
 		} else {
-			g.P("        throw new System.NotImplementedException(", quote("TODO: implement "+s.BaseName+"."+m.name), ");")
+			g.P("        throw new System.NotImplementedException(", quote("TODO: implement "+s.StubName+"."+m.name), ");")
 		}
 		g.P("    }")
 	}

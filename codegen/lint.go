@@ -24,6 +24,7 @@ import (
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // Severity ranks a diagnostic: errors block code generation, warnings inform.
@@ -127,7 +128,7 @@ func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
 				diags = append(diags, errDiag("ANZ001", m, fmt.Sprintf("duplicate component declaration %q", fq)))
 				continue
 			}
-			s := &Component{Anchor: m, Component: component, BaseName: baseName(m, component)}
+			s := &Component{Anchor: m, Component: component, BaseName: baseName(m, component), StubName: stubName(m, component)}
 			if component.Kind != KindSaga {
 				s.State = m
 			}
@@ -170,6 +171,7 @@ func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
 	}
 
 	diags = append(diags, collisionDiags(services, order)...)
+	diags = append(diags, typeCollisionDiags(gen, services, order)...)
 	diags = append(diags, coherenceDiags(services, order)...)
 
 	// group by anchor file, preserving message declaration order within a file.
@@ -335,6 +337,54 @@ func collisionDiags(services map[string]*Component, order []string) []Diagnostic
 		diags = append(diags, dupMethods(s, fq, names)...)
 	}
 	return diags
+}
+
+// typeCollisionDiags catches generated top-level identifiers that coincide with
+// a proto-generated type in the anchor's package. The wiring and the scaffold
+// stub are emitted beside the proto types (same Go package, Java package, C#
+// and C++ namespace), so such a name is a redeclaration in those languages.
+func typeCollisionDiags(gen *protogen.Plugin, services map[string]*Component, order []string) []Diagnostic {
+	types := make(map[protoreflect.FullName]map[string]bool) // package -> type names
+	for _, f := range gen.Files {
+		pkg := f.Desc.Package()
+		if types[pkg] == nil {
+			types[pkg] = make(map[string]bool)
+		}
+		for _, e := range f.Enums {
+			types[pkg][e.GoIdent.GoName] = true
+		}
+		for _, m := range allMessages(f.Messages) {
+			types[pkg][m.GoIdent.GoName] = true
+			for _, e := range m.Enums {
+				types[pkg][e.GoIdent.GoName] = true
+			}
+		}
+	}
+	var diags []Diagnostic
+	for _, fq := range order {
+		s := services[fq]
+		pkgTypes := types[s.Anchor.Desc.ParentFile().Package()]
+		for _, id := range generatedTypeNames(s) {
+			if pkgTypes[id] {
+				diags = append(diags, errDiag("ANZ012", s.Anchor, fmt.Sprintf("component %q generates %q, which collides with the proto type %q in package %q; set a (component).name distinct from every message and enum in the package", fq, id, id, s.Anchor.Desc.ParentFile().Package())))
+			}
+		}
+	}
+	return diags
+}
+
+// generatedTypeNames lists the top-level identifiers emitted for a component
+// across the target languages: the scaffold stub type, the handler interface,
+// the Java/C# wiring class, and the Go/C++ dispatch constructor and register
+// functions.
+func generatedTypeNames(s *Component) []string {
+	return []string{
+		s.StubName,
+		s.BaseName + "Handler",
+		s.BaseName + "Angzarr",
+		"New" + s.BaseName + "Dispatch",
+		"Register" + s.BaseName,
+	}
 }
 
 // projectorFinishMethod is the fixed method every projector interface carries

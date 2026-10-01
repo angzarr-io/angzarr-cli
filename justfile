@@ -28,8 +28,8 @@ mutants pkg="./...":
 # resolution errors block, coherence warnings are reported. Codegen also
 # gates on the same analysis internally, so this is the standalone surface
 # for CI and pre-commit.
-lint-proto:
-    buf build {{TOP}}/angzarr-project/proto -o - | go run {{TOP}} lint -
+lint-proto protos=(TOP / "angzarr-project/proto"):
+    buf build {{protos}} -o - | go run {{TOP}} lint -
 
 # Generate from the vendored canonical protos and validate the output:
 # generation must succeed, emit wiring for every declared component, and

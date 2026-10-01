@@ -87,17 +87,17 @@ func (e goEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *protog
 	if err != nil {
 		return err
 	}
-	g.P("// ", s.BaseName, " implements ", s.BaseName, "Handler.")
-	g.P("type ", s.BaseName, " struct{}")
+	g.P("// ", s.StubName, " implements ", s.BaseName, "Handler.")
+	g.P("type ", s.StubName, " struct{}")
 	g.P()
-	g.P("var _ ", s.BaseName, "Handler = ", s.BaseName, "{}")
+	g.P("var _ ", s.BaseName, "Handler = ", s.StubName, "{}")
 	g.P()
 	for _, m := range methods {
-		g.P("func (", s.BaseName, ") ", m.name, m.params, m.results, " {")
+		g.P("func (", s.StubName, ") ", m.name, m.params, m.results, " {")
 		if m.results == "" {
-			g.P("\t// TODO: implement ", s.BaseName, ".", m.name)
+			g.P("\t// TODO: implement ", s.StubName, ".", m.name)
 		} else {
-			g.P("\tpanic(", quote("TODO: implement "+s.BaseName+"."+m.name), ")")
+			g.P("\tpanic(", quote("TODO: implement "+s.StubName+"."+m.name), ")")
 		}
 		g.P("}")
 		g.P()

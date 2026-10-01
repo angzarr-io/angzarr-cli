@@ -465,10 +465,10 @@ func (e tsEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *protog
 	g.P()
 	g.P(`import { type `, s.BaseName, `Handler } from "./`, snake(s.BaseName), `_angzarr";`)
 	refs.emitImports(g)
-	g.P("export class ", s.BaseName, " implements ", s.BaseName, "Handler {")
+	g.P("export class ", s.StubName, " implements ", s.BaseName, "Handler {")
 	for _, m := range sigs {
 		g.P("  ", m.name, "(", m.params, "): ", m.returns, " {")
-		g.P("    throw new Error(", tsQuote("TODO: implement "+s.BaseName+"."+m.name), ");")
+		g.P("    throw new Error(", tsQuote("TODO: implement "+s.StubName+"."+m.name), ");")
 		g.P("  }")
 	}
 	g.P("}")

@@ -240,12 +240,12 @@ func (e pyEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *protog
 	g.P("# method until you add it here.")
 	g.P()
 	refs.emitImports(g, pyFilePkg(file), e.frameworkPkg)
-	g.P("class ", s.BaseName, ":")
+	g.P("class ", s.StubName, ":")
 	g.P("    \"\"\"Implements ", s.BaseName, "Handler.\"\"\"")
 	g.P()
 	for _, m := range e.pySigs(refs, s) {
 		g.P("    def ", m.name, m.params, m.returns, ":")
-		g.P("        raise NotImplementedError(", pyQuote("TODO: implement "+s.BaseName+"."+m.name), ")")
+		g.P("        raise NotImplementedError(", pyQuote("TODO: implement "+s.StubName+"."+m.name), ")")
 		g.P()
 	}
 	return nil
