@@ -9,7 +9,7 @@ TOP := `git rev-parse --show-toplevel`
 default: test
 
 build:
-    go build -o {{TOP}}/angzarr {{TOP}}
+    go build -ldflags "-X github.com/angzarr-io/angzarr-cli/cmd.version=$(git -C {{TOP}} describe --tags --always)" -o {{TOP}}/angzarr {{TOP}}
 
 test:
     go test {{TOP}}/...
