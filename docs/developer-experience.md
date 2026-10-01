@@ -33,9 +33,10 @@ no rpcs. The annotations *are* the declaration:
 - `repeated (io.angzarr.v1.event)` on an **event** message — **one entry per
   consuming component** (an event folded into its aggregate *and* triggering a
   saga carries two entries).
-- Compensation is declared on the **compensator** via
-  `(component).compensates` — a list of fully-qualified command types whose
-  rejection this component reacts to.
+- Compensation is declared on the **compensator** — an aggregate or process
+  manager whose event caused the command — via `(component).compensates`:
+  entries `"fq.Type"` or `"domain:fq.Type"` naming rejected commands it
+  reacts to. Sagas and projectors never receive rejections.
 
 A minimal aggregate:
 
