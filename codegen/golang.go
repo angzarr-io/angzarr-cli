@@ -2,7 +2,7 @@ package codegen
 
 // Go emitter. For each declared component it emits two files:
 //
-//   - the WIRING file (Suffix, e.g. *_angzarr.pb.go): a STRICT
+//   - the WIRING file (<component>_angzarr.pb.go): a STRICT
 //     <Component>Handler interface (one typed method per declared
 //     command/event — a missing handler is a compile error, never a silent
 //     no-op), a New<Component>Dispatch constructor that populates the
@@ -10,12 +10,12 @@ package codegen
 //     methods, and a Register<Component> convenience hiding the per-kind
 //     registration split. This file is regenerated wholesale every run.
 //
-//   - the SCAFFOLD file (ScaffoldSuffix, e.g. *_angzarr_handler.go): a stub
-//     <Component> struct implementing the interface, one TODO method per
+//   - the SCAFFOLD file (<component>_angzarr_handler.go): a stub
+//     struct implementing the interface, one TODO method per
 //     declared command/event. It is generated ONCE — the plugin skips it when
 //     the file already exists — then owned and edited by the developer;
 //     regeneration never overwrites it. A compile-time
-//     `var _ <Component>Handler = <Component>{}` assertion means a command or
+//     `var _ <Component>Handler = <Stub>{}` assertion means a command or
 //     event added to the proto surfaces as a build error pointing the
 //     developer at the new method to implement.
 //

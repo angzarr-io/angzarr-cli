@@ -355,8 +355,8 @@ func (e csharpEmitter) emitRegister(g *protogen.GeneratedFile, s *Component, rou
 	g.P()
 }
 
-// EmitScaffold writes the generate-once developer stub: one outer static class
-// per proto file with a public sealed <Component> stub implementing the Handler.
+// EmitScaffoldComponent writes the generate-once developer stub: a public
+// sealed class implementing the component's nested Handler interface.
 func (e csharpEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *protogen.File, s *Component) error {
 	g.P("// Scaffolded ONCE by angzarr codegen csharp — this file is YOURS.")
 	g.P("// Regeneration will NOT overwrite it; keep the generated Handler interface")

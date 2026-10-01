@@ -56,13 +56,6 @@ func Languages() []string {
 	return langs
 }
 
-// Generate walks the request's messages, validates every component
-// declaration, and emits wiring for the requested language. All declaration
-// validation happens in buildModel regardless of language — the same
-// misdeclaration fails generation identically everywhere. Components are
-// declared by message annotations, and a component's commands/events may live
-// in other files than its anchor, so the model is built globally and then
-// grouped by the file each anchor lives in.
 // Options carries language-specific codegen settings parsed from the plugin
 // parameter. PyFrameworkPackage, when set, is the package a python consumer
 // imports the angzarr framework protos from (see pyEmitter.frameworkPkg).
@@ -80,6 +73,12 @@ func withOptions(emitter Emitter, opts Options) Emitter {
 	return emitter
 }
 
+// Generate validates every component declaration in the request and emits
+// wiring for the requested language. Validation (analyze) is language
+// independent, so a misdeclaration fails generation identically everywhere.
+// A component's commands and events may live in other files than its anchor,
+// so the model is built over the whole request and then grouped by the file
+// each anchor lives in.
 func Generate(gen *protogen.Plugin, lang string, opts Options) error {
 	emitter, ok := emitters[lang]
 	if !ok {

@@ -109,7 +109,7 @@ func (e javaEmitter) emitInterface(g *protogen.GeneratedFile, s *Component, doc 
 	g.P()
 }
 
-// methodSig is one handler method, shared by the interface and (future) scaffold.
+// methodSig is one handler method, shared by the interface and the scaffold stub.
 type javaMethod struct {
 	name    string
 	params  string

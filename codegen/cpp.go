@@ -365,8 +365,8 @@ func (e cppEmitter) emitRegister(g *protogen.GeneratedFile, s *Component, router
 	g.P()
 }
 
-// EmitScaffold writes the generate-once developer stub: one struct per component
-// implementing the Handler, with TODO bodies.
+// EmitScaffoldComponent writes the generate-once developer stub: a class
+// implementing the component's Handler, with TODO bodies.
 func (e cppEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *protogen.File, s *Component) error {
 	g.P("// Scaffolded ONCE by angzarr codegen cpp — this file is YOURS.")
 	g.P("// Regeneration will NOT overwrite it; keep the generated Handler interface")
