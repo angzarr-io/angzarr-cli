@@ -289,7 +289,7 @@ func pySagaSigs(refs *pyRefs, s *Component) []pySig {
 	for _, h := range s.Handlers {
 		out = append(out, pySig{
 			name:    snake(h.MethodName),
-			params:  "(self, event: " + refs.ref(h.Message) + ", dests: " + pyAz + ".Destinations, source_cover: " + pyTypes + ".Cover)",
+			params:  "(self, event: " + refs.ref(h.Message) + ", dests: " + pyAz + ".Destinations, source: " + pyAz + ".PageContext)",
 			returns: " -> tuple[list[" + pyTypes + ".CommandBook], list[" + pyTypes + ".EventBook]]",
 		})
 	}
@@ -312,7 +312,7 @@ func pyAggregateSigs(refs *pyRefs, s *Component) []pySig {
 	for _, a := range s.Appliers {
 		out = append(out, pySig{
 			name:    snake(a.MethodName),
-			params:  "(self, state: " + refs.ref(s.State) + ", event: " + refs.ref(a.Message) + ")",
+			params:  "(self, state: " + refs.ref(s.State) + ", event: " + refs.ref(a.Message) + ", ctx: " + pyAz + ".PageContext)",
 			returns: " -> None",
 		})
 	}
@@ -345,7 +345,7 @@ func pyPMSigs(refs *pyRefs, s *Component) []pySig {
 	for _, a := range s.Appliers {
 		out = append(out, pySig{
 			name:    snake(a.MethodName),
-			params:  "(self, state: " + refs.ref(s.State) + ", event: " + refs.ref(a.Message) + ")",
+			params:  "(self, state: " + refs.ref(s.State) + ", event: " + refs.ref(a.Message) + ", ctx: " + pyAz + ".PageContext)",
 			returns: " -> None",
 		})
 	}
@@ -382,11 +382,11 @@ func emitPySagaDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Component) {
 	g.P("    dispatch = ", pyAz, ".SagaDispatch(", pyQuote(s.BaseName), ", ", pyQuote(c.InputDomain), ", targets=[", quoteJoin(c.OutputDomains, pyQuote), "])")
 	for _, h := range s.Handlers {
 		fn := "_on_" + snake(h.MethodName)
-		g.P("    def ", fn, "(event_any, dests, source_cover):")
+		g.P("    def ", fn, "(event_any, dests, source):")
 		g.P("        event = ", refs.ref(h.Message), "()")
 		emitPyUnpack(g, "event", "event_any")
-		g.P("        return handler.", snake(h.MethodName), "(event, dests, source_cover)")
-		g.P("    dispatch.on_event(", pyQuote(fqName(h.Message)), ", ", fn, ")")
+		g.P("        return handler.", snake(h.MethodName), "(event, dests, source)")
+		g.P("    dispatch.on_event_with_context(", pyQuote(fqName(h.Message)), ", ", fn, ")")
 	}
 	g.P("    return dispatch")
 	g.P()
@@ -474,11 +474,11 @@ func emitPyProjectorDispatch(g *protogen.GeneratedFile, refs *pyRefs, s *Compone
 func emitPyAppliers(g *protogen.GeneratedFile, refs *pyRefs, s *Component) {
 	for _, a := range s.Appliers {
 		fn := "_apply_" + snake(a.MethodName)
-		g.P("    def ", fn, "(state, payload):")
+		g.P("    def ", fn, "(state, payload, ctx):")
 		g.P("        event = ", refs.ref(a.Message), "()")
 		emitPyUnpack(g, "event", "payload")
-		g.P("        handler.", snake(a.MethodName), "(state, event)")
-		g.P("    rebuilder.apply(", pyQuote(fqName(a.Message)), ", ", fn, ")")
+		g.P("        handler.", snake(a.MethodName), "(state, event, ctx)")
+		g.P("    rebuilder.apply_with_context(", pyQuote(fqName(a.Message)), ", ", fn, ")")
 	}
 }
 

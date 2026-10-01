@@ -243,3 +243,123 @@ func TestLint_ProcessManagerTargetWithoutAggregateWarns(t *testing.T) {
 	}
 	t.Fatalf("want ANZ101 for the PM's unowned target billing, got %v", diags)
 }
+
+// pageContextSurface declares an aggregate applier, a process-manager own-
+// state applier and a saga trigger: every handler the router now hands a
+// PageContext.
+func pageContextSurface(o optionTypes) []declMsg {
+	return []declMsg{
+		{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
+		{"PlaceOrder", o.commandDecl(fq("State"), fq("OrderPlaced"))},
+		{"FlowState", o.ownedDecl(3, "flow", "inventory", "Flow")},
+		{"FlowAdvanced", o.eventDecl(eventEntry{component: fq("FlowState"), applies: true})},
+		{"OrderSaga", o.componentDecl(2, "orders", "inventory", "")},
+		{"OrderPlaced", o.eventDecl(
+			eventEntry{component: fq("State")},
+			eventEntry{component: fq("FlowState"), domain: "orders"},
+			eventEntry{component: fq("OrderSaga"), domain: "orders"},
+		)},
+	}
+}
+
+var pageContextWant = map[string]map[string][]string{
+	"go": {
+		"OrderAggregate": {
+			`rebuilder.ApplyWithContext("validation.test.OrderPlaced", func(state *State, payload *anypb.Any, ctx _go.PageContext) error {`,
+			"ApplyOrderPlaced(state *State, event *OrderPlaced, ctx _go.PageContext)",
+		},
+		"Flow": {
+			`rebuilder.ApplyWithContext("validation.test.FlowAdvanced", func(state *FlowState, payload *anypb.Any, ctx _go.PageContext) error {`,
+			"ApplyFlowAdvanced(state *FlowState, event *FlowAdvanced, ctx _go.PageContext)",
+		},
+		"OrderSaga": {
+			`dispatch.OnEventWithContext("validation.test.OrderPlaced", func(eventAny *anypb.Any, dests *_go.Destinations, source _go.PageContext)`,
+			"OrderPlaced(event *OrderPlaced, dests *_go.Destinations, source _go.PageContext) (",
+		},
+	},
+	"python": {
+		"OrderAggregate": {
+			`rebuilder.apply_with_context("validation.test.OrderPlaced", _apply_apply_order_placed)`,
+			"def apply_order_placed(self, state: _validation_test.State, event: _validation_test.OrderPlaced, ctx: _az.PageContext) -> None",
+		},
+		"Flow": {
+			`rebuilder.apply_with_context("validation.test.FlowAdvanced", `,
+		},
+		"OrderSaga": {
+			`dispatch.on_event_with_context("validation.test.OrderPlaced", _on_order_placed)`,
+			"def order_placed(self, event: _validation_test.OrderPlaced, dests: _az.Destinations, source: _az.PageContext)",
+		},
+	},
+	"java": {
+		"OrderAggregate": {
+			`rebuilder.applyWithContext("validation.test.OrderPlaced", (state, payload, ctx) ->`,
+			"OrderPlaced event, io.angzarr.router.PageContext ctx);",
+		},
+		"Flow": {`rebuilder.applyWithContext("validation.test.FlowAdvanced", (state, payload, ctx) ->`},
+		"OrderSaga": {
+			`.onEventWithContext("validation.test.OrderPlaced", (eventAny, dests, source) -> {`,
+			"io.angzarr.router.PageContext source)",
+		},
+	},
+	"csharp": {
+		"OrderAggregate": {
+			`rebuilder.ApplyWithContext("validation.test.OrderPlaced", (state, payload, page) =>`,
+			"void ApplyOrderPlaced(Validation.Test.State state, Validation.Test.OrderPlaced ev, Angzarr.Router.PageContext page)",
+		},
+		"Flow": {`rebuilder.ApplyWithContext("validation.test.FlowAdvanced", (state, payload, page) =>`},
+		"OrderSaga": {
+			`.OnEventWithContext("validation.test.OrderPlaced", (eventAny, dests, source) =>`,
+			"Angzarr.Router.PageContext source)",
+		},
+	},
+	"cpp": {
+		"OrderAggregate": {
+			`rebuilder.ApplyWithContext("validation.test.OrderPlaced", [&h](validation::test::State& state, const google::protobuf::Any& payload, const angzarr::router::PageContext& ctx) {`,
+			"void ApplyOrderPlaced(validation::test::State& state, const validation::test::OrderPlaced& ev, const angzarr::router::PageContext& ctx)",
+		},
+		"Flow": {`rebuilder.ApplyWithContext("validation.test.FlowAdvanced", [&h](`},
+		"OrderSaga": {
+			`dispatch.OnEventWithContext("validation.test.OrderPlaced", [&h](const google::protobuf::Any& eventAny, const angzarr::router::Destinations& dests, const angzarr::router::PageContext& source) {`,
+			"const angzarr::router::PageContext& source)",
+		},
+	},
+	"typescript": {
+		"OrderAggregate": {
+			`rebuilder.applyWithContext("validation.test.OrderPlaced", (state, payload, ctx) => {`,
+			"applyOrderPlaced(state: State, ev: OrderPlaced, ctx: PageContext): void",
+			`new Rebuilder<State>(() => create(StateSchema), StateSchema);`,
+		},
+		"Flow": {
+			`rebuilder.applyWithContext("validation.test.FlowAdvanced", (state, payload, ctx) => {`,
+			`new Rebuilder<FlowState>(() => create(FlowStateSchema), FlowStateSchema);`,
+		},
+		"OrderSaga": {
+			`dispatch.onEventWithContext("validation.test.OrderPlaced", (eventAny, dests, source) => {`,
+			"source: PageContext",
+		},
+	},
+}
+
+func TestGenerate_PageContextSurface(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	for _, lang := range codegen.Languages() {
+		t.Run(lang, func(t *testing.T) {
+			resp, err := generate(t, lang, ioPkg, pageContextSurface(o)...)
+			if err != nil {
+				t.Fatalf("Generate: %v", err)
+			}
+			files := map[string]string{}
+			for _, f := range resp.File {
+				files[f.GetName()] = f.GetContent()
+			}
+			for base, wants := range pageContextWant[lang] {
+				content := componentFileFor(t, lang, base, files)
+				for _, w := range wants {
+					if !strings.Contains(content, w) {
+						t.Errorf("%s %s wiring missing %q:\n%s", lang, base, w, content)
+					}
+				}
+			}
+		})
+	}
+}

@@ -216,7 +216,7 @@ dispatch constructor, and a one-call registration:
 // compile error, never a silent no-op.
 type OrderAggregateHandler interface {
     PlaceOrder(cmd *PlaceOrder, state *OrderState, cctx ffirouter.CommandContext) ([]*OrderPlaced, error)
-    ApplyOrderPlaced(state *OrderState, event *OrderPlaced)
+    ApplyOrderPlaced(state *OrderState, event *OrderPlaced, ctx ffirouter.PageContext)
 }
 
 func NewOrderAggregateDispatch(h OrderAggregateHandler) *ffirouter.AggregateDispatch[*OrderState] { … }
@@ -242,7 +242,7 @@ func (OrderAggregate) PlaceOrder(cmd *PlaceOrder, state *OrderState, cctx ffirou
     panic("TODO: implement OrderAggregate.PlaceOrder")
 }
 
-func (OrderAggregate) ApplyOrderPlaced(state *OrderState, event *OrderPlaced) {
+func (OrderAggregate) ApplyOrderPlaced(state *OrderState, event *OrderPlaced, ctx ffirouter.PageContext) {
     // TODO: implement OrderAggregate.ApplyOrderPlaced
 }
 ```
@@ -271,7 +271,7 @@ func (OrderAggregate) PlaceOrder(cmd *PlaceOrder, state *OrderState, cctx ffirou
 }
 
 // applier: fold the event into rebuilt state (no return)
-func (OrderAggregate) ApplyOrderPlaced(state *OrderState, event *OrderPlaced) {
+func (OrderAggregate) ApplyOrderPlaced(state *OrderState, event *OrderPlaced, ctx ffirouter.PageContext) {
     state.Sku = event.Sku
     state.Quantity = event.Quantity
 }
@@ -286,12 +286,13 @@ class OrderAggregate:
             raise reject("QUANTITY_NOT_POSITIVE", "quantity must be positive")
         return [order_pb2.OrderPlaced(sku=cmd.sku, quantity=cmd.quantity)]
 
-    def apply_order_placed(self, state, event):
+    def apply_order_placed(self, state, event, ctx):
         state.sku = event.sku
         state.quantity = event.quantity
 ```
 
-`state` is your own state message, reconstructed by the framework from prior
+Appliers receive a `PageContext` too: the folded event's book cover and page
+sequence. `state` is your own state message, reconstructed by the framework from prior
 events (and snapshots) before the command runs — host state never crosses the
 wire. `cctx` carries the historical-state evidence (`NextSequence`,
 `HadPriorEvents`). To reject a command, return/raise a coded error
@@ -300,11 +301,11 @@ wire. `cctx` carries the historical-state evidence (`NextSequence`,
 
 The other kinds follow the same shape, with kind-appropriate signatures:
 
-- **saga** — `Increased(event, dests, sourceCover) ([]*CommandBook, []*EventBook, error)`:
+- **saga** — `Increased(event, dests, source) ([]*CommandBook, []*EventBook, error)`:
   translate a source event into commands and/or injected facts. `dests` are
   the saga's declared output domains; emitted commands are deferred (the
-  router stamps their provenance, never a sequence). `sourceCover` is the
-  cover of the triggering event.
+  router stamps their provenance, never a sequence). `source` (`PageContext`)
+  is the triggering event's book cover and page sequence.
 - **process manager** — a trigger handler
   `Increased(event, state, dests, triggerCover) (*ProcessManagerHandleResponse, error)`
   plus appliers folding its own state; a compensator

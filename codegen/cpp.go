@@ -148,7 +148,7 @@ func (e cppEmitter) aggregateMethods(s *Component) []cppMethod {
 	for _, a := range s.Appliers {
 		out = append(out, cppMethod{
 			name:    a.MethodName,
-			params:  state + "& state, const " + cppType(a.Message) + "& ev",
+			params:  state + "& state, const " + cppType(a.Message) + "& ev, const " + cppPageContext + "& ctx",
 			results: "void",
 		})
 	}
@@ -174,7 +174,7 @@ func (e cppEmitter) sagaMethods(s *Component) []cppMethod {
 	for _, h := range s.Handlers {
 		out = append(out, cppMethod{
 			name:    h.MethodName,
-			params:  "const " + cppType(h.Message) + "& ev, const " + cppDestinations + "& dests, const " + cppCover + "& sourceCover",
+			params:  "const " + cppType(h.Message) + "& ev, const " + cppDestinations + "& dests, const " + cppPageContext + "& source",
 			results: cppSagaEmission,
 		})
 	}
@@ -212,7 +212,7 @@ func (e cppEmitter) pmMethods(s *Component) []cppMethod {
 	for _, a := range s.Appliers {
 		out = append(out, cppMethod{
 			name:    a.MethodName,
-			params:  state + "& state, const " + cppType(a.Message) + "& ev",
+			params:  state + "& state, const " + cppType(a.Message) + "& ev, const " + cppPageContext + "& ctx",
 			results: "void",
 		})
 	}
@@ -278,9 +278,9 @@ func (e cppEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 	g.P("inline ", cppSagaDispatch, " New", s.BaseName, "Dispatch(", s.BaseName, "Handler& h) {")
 	g.P("  ", cppSagaDispatch, " dispatch(", cppQuote(s.BaseName), ", ", cppQuote(s.Component.InputDomain), ", {", quoteJoin(s.Component.OutputDomains, cppQuote), "});")
 	for _, h := range s.Handlers {
-		g.P("  dispatch.OnEvent(", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& eventAny, const ", cppDestinations, "& dests, const ", cppCover, "& sourceCover) {")
+		g.P("  dispatch.OnEventWithContext(", cppQuote(fqName(h.Message)), ", [&h](const ", cppAny, "& eventAny, const ", cppDestinations, "& dests, const ", cppPageContext, "& source) {")
 		g.P("    auto ev = ", cppParse(h.Message, "eventAny"), ";")
-		g.P("    return h.", h.MethodName, "(ev, dests, sourceCover);")
+		g.P("    return h.", h.MethodName, "(ev, dests, source);")
 		g.P("  });")
 	}
 	g.P("  return dispatch;")
@@ -352,8 +352,8 @@ func (e cppEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 // aggregates and process managers (both rebuild their own state).
 func emitCppAppliers(g *protogen.GeneratedFile, s *Component, state string) {
 	for _, a := range s.Appliers {
-		g.P("  rebuilder.Apply(", cppQuote(fqName(a.Message)), ", [&h](", state, "& state, const ", cppAny, "& payload) {")
-		g.P("    h.", a.MethodName, "(state, ", cppParse(a.Message, "payload"), ");")
+		g.P("  rebuilder.ApplyWithContext(", cppQuote(fqName(a.Message)), ", [&h](", state, "& state, const ", cppAny, "& payload, const ", cppPageContext, "& ctx) {")
+		g.P("    h.", a.MethodName, "(state, ", cppParse(a.Message, "payload"), ", ctx);")
 		g.P("  });")
 	}
 }

@@ -143,7 +143,7 @@ func (e csharpEmitter) aggregateMethods(s *Component) []csMethod {
 	for _, a := range s.Appliers {
 		out = append(out, csMethod{
 			name:    a.MethodName,
-			params:  state + " state, " + csType(a.Message) + " ev",
+			params:  state + " state, " + csType(a.Message) + " ev, " + csPageContext + " page",
 			results: "void",
 		})
 	}
@@ -169,7 +169,7 @@ func (e csharpEmitter) sagaMethods(s *Component) []csMethod {
 	for _, h := range s.Handlers {
 		out = append(out, csMethod{
 			name:    h.MethodName,
-			params:  csType(h.Message) + " ev, " + csDestinations + " dests, " + csCover + " sourceCover",
+			params:  csType(h.Message) + " ev, " + csDestinations + " dests, " + csPageContext + " source",
 			results: csSagaEmission,
 		})
 	}
@@ -207,7 +207,7 @@ func (e csharpEmitter) pmMethods(s *Component) []csMethod {
 	for _, a := range s.Appliers {
 		out = append(out, csMethod{
 			name:    a.MethodName,
-			params:  state + " state, " + csType(a.Message) + " ev",
+			params:  state + " state, " + csType(a.Message) + " ev, " + csPageContext + " page",
 			results: "void",
 		})
 	}
@@ -272,10 +272,10 @@ func (e csharpEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 	g.P("    {")
 	g.P("        return new ", csSagaDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.InputDomain), ", ", quoteJoin(s.Component.OutputDomains, quote), ")")
 	for _, h := range s.Handlers {
-		g.P("            .OnEvent(", quoteFQ(h.Message), ", (eventAny, dests, sourceCover) =>")
+		g.P("            .OnEventWithContext(", quoteFQ(h.Message), ", (eventAny, dests, source) =>")
 		g.P("            {")
 		g.P("                ", csType(h.Message), " ev = ", csParseAny(h.Message, "eventAny"), ";")
-		g.P("                return h.", h.MethodName, "(ev, dests, sourceCover);")
+		g.P("                return h.", h.MethodName, "(ev, dests, source);")
 		g.P("            })")
 	}
 	g.P("            ;")
@@ -343,8 +343,8 @@ func (e csharpEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 // aggregates and process managers (both rebuild their own state).
 func emitCsAppliers(g *protogen.GeneratedFile, s *Component) {
 	for _, a := range s.Appliers {
-		g.P("        rebuilder.Apply(", quoteFQ(a.Message), ", (state, payload) =>")
-		g.P("            h.", a.MethodName, "(state, ", csParse(a.Message, "payload.Value"), "));")
+		g.P("        rebuilder.ApplyWithContext(", quoteFQ(a.Message), ", (state, payload, page) =>")
+		g.P("            h.", a.MethodName, "(state, ", csParse(a.Message, "payload.Value"), ", page));")
 	}
 }
 

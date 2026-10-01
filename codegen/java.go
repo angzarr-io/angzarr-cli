@@ -150,7 +150,7 @@ func (e javaEmitter) aggregateMethods(s *Component) []javaMethod {
 	for _, a := range s.Appliers {
 		out = append(out, javaMethod{
 			name:    lowerFirst(a.MethodName),
-			params:  state + " state, " + javaType(a.Message) + " event",
+			params:  state + " state, " + javaType(a.Message) + " event, " + jPageContext + " ctx",
 			results: "void",
 		})
 	}
@@ -178,7 +178,7 @@ func (e javaEmitter) sagaMethods(s *Component) []javaMethod {
 	for _, h := range s.Handlers {
 		out = append(out, javaMethod{
 			name:    lowerFirst(h.MethodName),
-			params:  javaType(h.Message) + " event, " + jDestinations + " dests, " + jCover + " sourceCover",
+			params:  javaType(h.Message) + " event, " + jDestinations + " dests, " + jPageContext + " source",
 			results: jSagaEmission,
 			throws:  " throws Exception",
 		})
@@ -220,7 +220,7 @@ func (e javaEmitter) pmMethods(s *Component) []javaMethod {
 	for _, a := range s.Appliers {
 		out = append(out, javaMethod{
 			name:    lowerFirst(a.MethodName),
-			params:  state + " state, " + javaType(a.Message) + " event",
+			params:  state + " state, " + javaType(a.Message) + " event, " + jPageContext + " ctx",
 			results: "void",
 		})
 	}
@@ -282,9 +282,9 @@ func (e javaEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 	g.P("  public static ", jSagaDispatch, " new", s.BaseName, "Dispatch(", s.BaseName, "Handler h) {")
 	g.P("    return new ", jSagaDispatch, "(", quote(s.BaseName), ", ", quote(s.Component.InputDomain), ", ", jList, ".of(", quoteJoin(s.Component.OutputDomains, quote), "))")
 	for _, h := range s.Handlers {
-		g.P("        .onEvent(", quoteFQ(h.Message), ", (eventAny, dests, sourceCover) -> {")
+		g.P("        .onEventWithContext(", quoteFQ(h.Message), ", (eventAny, dests, source) -> {")
 		g.P("          ", javaType(h.Message), " event = ", parseAny(h.Message, "eventAny"), ";")
-		g.P("          return h.", lowerFirst(h.MethodName), "(event, dests, sourceCover);")
+		g.P("          return h.", lowerFirst(h.MethodName), "(event, dests, source);")
 		g.P("        })")
 	}
 	g.P("        ;")
@@ -349,8 +349,8 @@ func (e javaEmitter) emitPM(g *protogen.GeneratedFile, s *Component) error {
 // state Builder type the appliers fold into.
 func emitJavaAppliers(g *protogen.GeneratedFile, s *Component, state string) {
 	for _, a := range s.Appliers {
-		g.P("    rebuilder.apply(", quoteFQ(a.Message), ", (state, payload) ->")
-		g.P("        h.", lowerFirst(a.MethodName), "((", state, ") state, ", javaType(a.Message), ".parseFrom(payload.getValue())));")
+		g.P("    rebuilder.applyWithContext(", quoteFQ(a.Message), ", (state, payload, ctx) ->")
+		g.P("        h.", lowerFirst(a.MethodName), "((", state, ") state, ", javaType(a.Message), ".parseFrom(payload.getValue()), ctx));")
 	}
 }
 

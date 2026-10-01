@@ -233,7 +233,7 @@ func (e tsEmitter) aggregateSigs(refs *tsRefs, s *Component) []tsSig {
 	for _, a := range s.Appliers {
 		out = append(out, tsSig{
 			name:    lowerFirst(a.MethodName),
-			params:  "state: " + state + ", ev: " + refs.ref(a.Message),
+			params:  "state: " + state + ", ev: " + refs.ref(a.Message) + ", ctx: " + refs.use(tsPageContext),
 			returns: "void",
 		})
 	}
@@ -259,7 +259,7 @@ func (e tsEmitter) sagaSigs(refs *tsRefs, s *Component) []tsSig {
 	for _, h := range s.Handlers {
 		out = append(out, tsSig{
 			name:    lowerFirst(h.MethodName),
-			params:  "ev: " + refs.ref(h.Message) + ", dests: " + refs.use(tsDestinations) + ", sourceCover?: " + refs.use(tsCover),
+			params:  "ev: " + refs.ref(h.Message) + ", dests: " + refs.use(tsDestinations) + ", source: " + refs.use(tsPageContext),
 			returns: refs.use(tsSagaEmission),
 		})
 	}
@@ -297,7 +297,7 @@ func (e tsEmitter) pmSigs(refs *tsRefs, s *Component) []tsSig {
 	for _, a := range s.Appliers {
 		out = append(out, tsSig{
 			name:    lowerFirst(a.MethodName),
-			params:  "state: " + state + ", ev: " + refs.ref(a.Message),
+			params:  "state: " + state + ", ev: " + refs.ref(a.Message) + ", ctx: " + refs.use(tsPageContext),
 			returns: "void",
 		})
 	}
@@ -323,7 +323,7 @@ func (e tsEmitter) aggregateDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 	return func() {
 		g.P("// Populates the aggregate dispatch table from the proto declaration.")
 		g.P("export function new", s.BaseName, "Dispatch(h: ", s.BaseName, "Handler): ", disp, " {")
-		g.P("  const rebuilder = new ", tsRebuilder, "<", state, ">(() => create(", refs.schema(s.State), "));")
+		g.P("  const rebuilder = new ", tsRebuilder, "<", state, ">(() => create(", refs.schema(s.State), "), ", refs.schema(s.State), ");")
 		g.P("  rebuilder.withSnapshot((state, payload) => ", tsPack, ".merge(", refs.schema(s.State), ", state, payload));")
 		emitTSAppliers(g, refs, s)
 		g.P("  const dispatch = new ", tsAggDispatch, "<", state, ">(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.Domain), ", rebuilder);")
@@ -362,9 +362,9 @@ func (e tsEmitter) sagaDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Comp
 		g.P("export function new", s.BaseName, "Dispatch(h: ", s.BaseName, "Handler): ", disp, " {")
 		g.P("  const dispatch = new ", tsSagaDispatch, "(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.InputDomain), ", [", quoteJoin(s.Component.OutputDomains, tsQuote), "]);")
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onEvent(", tsQuote(fqName(h.Message)), ", (eventAny, dests, sourceCover) => {")
+			g.P("  dispatch.onEventWithContext(", tsQuote(fqName(h.Message)), ", (eventAny, dests, source) => {")
 			g.P("    const ev = ", tsParseAny, "(", refs.schema(h.Message), ", eventAny);")
-			g.P("    return h.", lowerFirst(h.MethodName), "(ev, dests, sourceCover);")
+			g.P("    return h.", lowerFirst(h.MethodName), "(ev, dests, source);")
 			g.P("  });")
 		}
 		g.P("  return dispatch;")
@@ -409,7 +409,7 @@ func (e tsEmitter) pmDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Compon
 	return func() {
 		g.P("// Populates the process-manager dispatch table from the proto declaration.")
 		g.P("export function new", s.BaseName, "Dispatch(h: ", s.BaseName, "Handler): ", disp, " {")
-		g.P("  const rebuilder = new ", tsRebuilder, "<", state, ">(() => create(", refs.schema(s.State), "));")
+		g.P("  const rebuilder = new ", tsRebuilder, "<", state, ">(() => create(", refs.schema(s.State), "), ", refs.schema(s.State), ");")
 		g.P("  rebuilder.withSnapshot((state, payload) => ", tsPack, ".merge(", refs.schema(s.State), ", state, payload));")
 		emitTSAppliers(g, refs, s)
 		g.P("  const dispatch = new ", tsPmDispatch, "<", state, ">(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.Domain), ", rebuilder, [", quoteJoin(s.Component.OutputDomains, tsQuote), "]);")
@@ -434,8 +434,8 @@ func (e tsEmitter) pmDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Compon
 // aggregates and process managers (both rebuild their own state).
 func emitTSAppliers(g *protogen.GeneratedFile, refs *tsRefs, s *Component) {
 	for _, a := range s.Appliers {
-		g.P("  rebuilder.apply(", tsQuote(fqName(a.Message)), ", (state, payload) => {")
-		g.P("    h.", lowerFirst(a.MethodName), "(state, ", tsParseAny, "(", refs.schema(a.Message), ", payload));")
+		g.P("  rebuilder.applyWithContext(", tsQuote(fqName(a.Message)), ", (state, payload, ctx) => {")
+		g.P("    h.", lowerFirst(a.MethodName), "(state, ", tsParseAny, "(", refs.schema(a.Message), ", payload), ctx);")
 		g.P("  });")
 	}
 }

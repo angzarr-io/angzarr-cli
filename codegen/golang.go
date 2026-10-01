@@ -154,14 +154,13 @@ func star(g *protogen.GeneratedFile, pkg protogen.GoImportPath, name string) str
 
 func (goEmitter) sagaMethods(g *protogen.GeneratedFile, s *Component) []methodSig {
 	dests := star(g, angzarrPkg, "Destinations")
-	cover := star(g, angzarrPb, "Cover")
 	cmdBook := star(g, angzarrPb, "CommandBook")
 	evtBook := star(g, angzarrPb, "EventBook")
 	var out []methodSig
 	for _, h := range s.Handlers {
 		out = append(out, methodSig{
 			name:    h.MethodName,
-			params:  "(event *" + g.QualifiedGoIdent(h.Message.GoIdent) + ", dests " + dests + ", sourceCover " + cover + ")",
+			params:  "(event *" + g.QualifiedGoIdent(h.Message.GoIdent) + ", dests " + dests + ", source " + ident(g, angzarrPkg, "PageContext") + ")",
 			results: " ([]" + cmdBook + ", []" + evtBook + ", error)",
 		})
 	}
@@ -190,7 +189,7 @@ func (goEmitter) aggregateMethods(g *protogen.GeneratedFile, s *Component) []met
 	for _, a := range s.Appliers {
 		out = append(out, methodSig{
 			name:   a.MethodName,
-			params: "(state " + statePtr + ", event *" + g.QualifiedGoIdent(a.Message.GoIdent) + ")",
+			params: "(state " + statePtr + ", event *" + g.QualifiedGoIdent(a.Message.GoIdent) + ", ctx " + ident(g, angzarrPkg, "PageContext") + ")",
 		})
 	}
 	for _, r := range s.Rejections {
@@ -227,7 +226,7 @@ func (goEmitter) pmMethods(g *protogen.GeneratedFile, s *Component) []methodSig 
 	for _, a := range s.Appliers {
 		out = append(out, methodSig{
 			name:   a.MethodName,
-			params: "(state " + statePtr + ", event *" + g.QualifiedGoIdent(a.Message.GoIdent) + ")",
+			params: "(state " + statePtr + ", event *" + g.QualifiedGoIdent(a.Message.GoIdent) + ", ctx " + ident(g, angzarrPkg, "PageContext") + ")",
 		})
 	}
 	for _, r := range s.Rejections {
@@ -264,7 +263,6 @@ func (e goEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 	name := s.BaseName
 	component := s.Component
 	dests := star(g, angzarrPkg, "Destinations")
-	cover := star(g, angzarrPb, "Cover")
 	cmdBook := star(g, angzarrPb, "CommandBook")
 	evtBook := star(g, angzarrPb, "EventBook")
 
@@ -273,9 +271,9 @@ func (e goEmitter) emitSaga(g *protogen.GeneratedFile, s *Component) error {
 	g.P("func New", name, "Dispatch(h ", name, "Handler) *", ident(g, angzarrPkg, "SagaDispatch"), " {")
 	g.P("dispatch := ", ident(g, angzarrPkg, "NewSagaDispatch"), "(", quote(name), ", ", quote(component.InputDomain), ", ", quoteJoin(component.OutputDomains, quote), ")")
 	for _, h := range s.Handlers {
-		g.P("dispatch.OnEvent(", quoteFQ(h.Message), ", func(eventAny ", star(g, anypbPkg, "Any"), ", dests ", dests, ", sourceCover ", cover, ") ([]", cmdBook, ", []", evtBook, ", error) {")
+		g.P("dispatch.OnEventWithContext(", quoteFQ(h.Message), ", func(eventAny ", star(g, anypbPkg, "Any"), ", dests ", dests, ", source ", ident(g, angzarrPkg, "PageContext"), ") ([]", cmdBook, ", []", evtBook, ", error) {")
 		emitDecode(g, "event", "eventAny", h.Message, "nil, nil, ")
-		g.P("return h.", h.MethodName, "(event, dests, sourceCover)")
+		g.P("return h.", h.MethodName, "(event, dests, source)")
 		g.P("})")
 	}
 	g.P("return dispatch")
@@ -424,10 +422,10 @@ func emitDecode(g *protogen.GeneratedFile, name, anyVar string, m *protogen.Mess
 // so the two emitters share it.
 func emitAppliers(g *protogen.GeneratedFile, s *Component, statePtr string) {
 	for _, a := range s.Appliers {
-		g.P("rebuilder.Apply(", quoteFQ(a.Message), ", func(state ", statePtr, ", payload ", star(g, anypbPkg, "Any"), ") error {")
+		g.P("rebuilder.ApplyWithContext(", quoteFQ(a.Message), ", func(state ", statePtr, ", payload ", star(g, anypbPkg, "Any"), ", ctx ", ident(g, angzarrPkg, "PageContext"), ") error {")
 		g.P("event := &", g.QualifiedGoIdent(a.Message.GoIdent), "{}")
 		g.P("if err := payload.UnmarshalTo(event); err != nil { return err }")
-		g.P("h.", a.MethodName, "(state, event)")
+		g.P("h.", a.MethodName, "(state, event, ctx)")
 		g.P("return nil")
 		g.P("})")
 	}

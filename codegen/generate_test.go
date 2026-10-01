@@ -400,7 +400,7 @@ func TestGenerate_ValidAggregate_EmitsStrictSeam(t *testing.T) {
 				"func NewOrderAggregateDispatch(",
 				"rebuilder.WithSnapshot(", // snapshot loader for stateful kinds
 				`OnCommand("validation.test.CreateOrder"`,
-				`Apply("validation.test.OrderCreated"`,
+				`ApplyWithContext("validation.test.OrderCreated"`,
 				"func RegisterOrderAggregate(",
 			} {
 				if !strings.Contains(content, want) {
@@ -444,8 +444,8 @@ func TestGenerate_ValidSaga_EmitsMethodRegister(t *testing.T) {
 		"type OrderSagaHandler interface",
 		"func NewOrderSagaDispatch(",
 		"r.RegisterSaga(NewOrderSagaDispatch(h))", // saga registers via a method
-		`OnEvent("validation.test.OrderPlaced"`,
-		"sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
+		`OnEventWithContext("validation.test.OrderPlaced"`,
+		"source _go.PageContext", // saga handler receives the source page context (cover + sequence)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("generated file missing %q", want)
@@ -500,7 +500,7 @@ func TestGeneratePython_EmitsProtocolSeam(t *testing.T) {
 		"import angzarr_router_ffi as _az",
 		"class OrderAggregateHandler(Protocol):",
 		"def create_order(self, cmd: _validation_test.CreateOrder, state: _validation_test.State, cctx: _az.CommandContext) -> list[_validation_test.OrderCreated]: ...",
-		"def apply_order_created(self, state: _validation_test.State, event: _validation_test.OrderCreated) -> None: ...",
+		"def apply_order_created(self, state: _validation_test.State, event: _validation_test.OrderCreated, ctx: _az.PageContext) -> None: ...",
 		"def new_order_aggregate_dispatch(handler: OrderAggregateHandler) -> _az.AggregateDispatch:",
 		`dispatch.on_command("validation.test.CreateOrder"`,
 		"book.pages.add().event.CopyFrom(_az.pack(ev))", // typed-emit
@@ -526,7 +526,7 @@ func TestGeneratePython_SagaUsesMethodRegister(t *testing.T) {
 	content := resp.File[0].GetContent()
 	for _, want := range []string{
 		`_az.SagaDispatch("OrderSaga", "orders", targets=["fulfillment"])`,
-		`dispatch.on_event("validation.test.OrderPlaced"`,
+		`dispatch.on_event_with_context("validation.test.OrderPlaced"`,
 		"router.register_saga(new_order_saga_dispatch(handler))",
 	} {
 		if !strings.Contains(content, want) {
@@ -692,12 +692,12 @@ func TestGenerateJava_EmitsNestedSeam(t *testing.T) {
 		"java.util.List<validation.test.ValidationTest.OrderCreated> createOrder(",
 		"validation.test.ValidationTest.CreateOrder cmd",
 		"validation.test.ValidationTest.State.Builder state, io.angzarr.router.CommandContext cctx) throws Exception;",
-		"void applyOrderCreated(validation.test.ValidationTest.State.Builder state, validation.test.ValidationTest.OrderCreated event);",
+		"void applyOrderCreated(validation.test.ValidationTest.State.Builder state, validation.test.ValidationTest.OrderCreated event, io.angzarr.router.PageContext ctx);",
 		"public static io.angzarr.router.AggregateDispatch newOrderAggregateDispatch(OrderAggregateHandler h) {",
 		"new io.angzarr.router.Rebuilder(validation.test.ValidationTest.State::newBuilder)",
 		"rebuilder.withSnapshot(",
 		`.onCommand("validation.test.CreateOrder"`,
-		`rebuilder.apply("validation.test.OrderCreated"`,
+		`rebuilder.applyWithContext("validation.test.OrderCreated"`,
 		"io.angzarr.EventPage.newBuilder().setEvent(io.angzarr.router.Pack.pack(ev))",
 		"public static void registerOrderAggregate(io.angzarr.router.Router r, OrderAggregateHandler h) {",
 		"r.registerAggregate(newOrderAggregateDispatch(h));",
@@ -721,9 +721,9 @@ func TestGenerateJava_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 	for _, want := range []string{
 		"public interface OrderSagaHandler {",
 		`new io.angzarr.router.SagaDispatch("OrderSaga", "orders", java.util.List.of("fulfillment"))`,
-		`.onEvent("validation.test.OrderPlaced"`,
+		`.onEventWithContext("validation.test.OrderPlaced"`,
 		"r.registerSaga(newOrderSagaDispatch(h));",
-		"io.angzarr.Cover sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
+		"io.angzarr.router.PageContext source", // saga handler receives the source page context (cover + sequence)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("java saga wiring missing %q\n---\n%s", want, content)
@@ -774,13 +774,13 @@ func TestGenerateCSharp_EmitsNestedSeam(t *testing.T) {
 		"System.Collections.Generic.IReadOnlyList<Validation.Test.OrderCreated> CreateOrder(",
 		"Validation.Test.CreateOrder cmd, Validation.Test.State state, Angzarr.Router.CommandContext cctx)",
 		// applier: state is the mutable message itself (no Builder); ev param
-		"void ApplyOrderCreated(Validation.Test.State state, Validation.Test.OrderCreated ev)",
+		"void ApplyOrderCreated(Validation.Test.State state, Validation.Test.OrderCreated ev, Angzarr.Router.PageContext page)",
 		// dispatch surfaces are generic in the state message → cast-free wiring
 		"public static Angzarr.Router.AggregateDispatch<Validation.Test.State> NewOrderAggregateDispatch(OrderAggregateHandler h)",
 		"var rebuilder = new Angzarr.Router.Rebuilder<Validation.Test.State>(() => new Validation.Test.State());",
 		"rebuilder.WithSnapshot((state, payload) => Google.Protobuf.MessageExtensions.MergeFrom(state, payload.Value));",
 		`.OnCommand("validation.test.CreateOrder"`,
-		`rebuilder.Apply("validation.test.OrderCreated"`,
+		`rebuilder.ApplyWithContext("validation.test.OrderCreated"`,
 		"var events = h.CreateOrder(cmd, state, cctx);",
 		"book.Pages.Add(new Angzarr.EventPage { Event = Angzarr.Router.Pack.Wrap(ev) });",
 		"public static void RegisterOrderAggregate(Angzarr.Router.Router r, OrderAggregateHandler h)",
@@ -810,9 +810,9 @@ func TestGenerateCSharp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 	for _, want := range []string{
 		"public interface OrderSagaHandler",
 		`new Angzarr.Router.SagaDispatch("OrderSaga", "orders", "fulfillment")`,
-		`.OnEvent("validation.test.OrderPlaced"`,
+		`.OnEventWithContext("validation.test.OrderPlaced"`,
 		"r.RegisterSaga(NewOrderSagaDispatch(h));",
-		"Angzarr.Cover sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
+		"Angzarr.Router.PageContext source", // saga handler receives the source page context (cover + sequence)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("csharp saga wiring missing %q\n---\n%s", want, content)
@@ -860,12 +860,12 @@ func TestGenerateCpp_EmitsNestedSeam(t *testing.T) {
 		"virtual ~OrderAggregateHandler() = default;",
 		// command handler: typed-emit return, const-ref command, ref state
 		"virtual std::vector<validation::test::OrderCreated> CreateOrder(const validation::test::CreateOrder& cmd, validation::test::State& state, const angzarr::router::CommandContext& cctx) = 0;",
-		"virtual void ApplyOrderCreated(validation::test::State& state, const validation::test::OrderCreated& ev) = 0;",
+		"virtual void ApplyOrderCreated(validation::test::State& state, const validation::test::OrderCreated& ev, const angzarr::router::PageContext& ctx) = 0;",
 		"inline angzarr::router::AggregateDispatch<validation::test::State> NewOrderAggregateDispatch(OrderAggregateHandler& h) {",
 		"angzarr::router::Rebuilder<validation::test::State> rebuilder;",
 		"rebuilder.WithSnapshot(",
 		`dispatch.OnCommand("validation.test.CreateOrder"`,
-		`rebuilder.Apply("validation.test.OrderCreated"`,
+		`rebuilder.ApplyWithContext("validation.test.OrderCreated"`,
 		"*book.add_pages()->mutable_event() = angzarr::router::Pack::Wrap(ev);",
 		"inline void RegisterOrderAggregate(angzarr::router::Router& r, OrderAggregateHandler& h) {",
 		"r.RegisterAggregate(NewOrderAggregateDispatch(h));",
@@ -889,9 +889,9 @@ func TestGenerateCpp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 	for _, want := range []string{
 		"class OrderSagaHandler {",
 		`angzarr::router::SagaDispatch dispatch("OrderSaga", "orders", {"fulfillment"});`,
-		`dispatch.OnEvent("validation.test.OrderPlaced"`,
+		`dispatch.OnEventWithContext("validation.test.OrderPlaced"`,
 		"r.RegisterSaga(NewOrderSagaDispatch(h));",
-		"io::angzarr::v1::Cover& sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
+		"angzarr::router::PageContext& source", // saga handler receives the source page context (cover + sequence)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("cpp saga wiring missing %q\n---\n%s", want, content)
@@ -938,12 +938,12 @@ func TestGenerateTypeScript_EmitsStrictSeam(t *testing.T) {
 		"export interface OrderAggregateHandler {",
 		// command handler: lowerCamel method, typed-emit array return
 		"createOrder(cmd: CreateOrder, state: State, cctx: CommandContext): OrderCreated[];",
-		"applyOrderCreated(state: State, ev: OrderCreated): void;",
+		"applyOrderCreated(state: State, ev: OrderCreated, ctx: PageContext): void;",
 		"export function newOrderAggregateDispatch(h: OrderAggregateHandler): AggregateDispatch<State> {",
-		"const rebuilder = new Rebuilder<State>(() => create(StateSchema));",
+		"const rebuilder = new Rebuilder<State>(() => create(StateSchema), StateSchema);",
 		"rebuilder.withSnapshot((state, payload) => Pack.merge(StateSchema, state, payload));",
 		`dispatch.onCommand("validation.test.CreateOrder"`,
-		`rebuilder.apply("validation.test.OrderCreated"`,
+		`rebuilder.applyWithContext("validation.test.OrderCreated"`,
 		"return Pack.eventBook(events.map((ev) => Pack.wrap(OrderCreatedSchema, ev)));",
 		"export function registerOrderAggregate(r: Router, h: OrderAggregateHandler): void {",
 		"r.registerAggregate(newOrderAggregateDispatch(h));",
@@ -967,9 +967,9 @@ func TestGenerateTypeScript_SagaUsesFunctionRegisterAndTargets(t *testing.T) {
 	for _, want := range []string{
 		"export interface OrderSagaHandler {",
 		`const dispatch = new SagaDispatch("OrderSaga", "orders", ["fulfillment"]);`,
-		`dispatch.onEvent("validation.test.OrderPlaced"`,
+		`dispatch.onEventWithContext("validation.test.OrderPlaced"`,
 		"r.registerSaga(newOrderSagaDispatch(h));",
-		"sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
+		"source: PageContext", // saga handler receives the source page context (cover + sequence)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("typescript saga wiring missing %q\n---\n%s", want, content)
