@@ -109,9 +109,9 @@ func diagError(diags []Diagnostic) error {
 // The model it returns is only sound when HasErrors(diags) is false; codegen
 // gates emission on that, so an invalid model is never handed to an emitter.
 func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
-	exts := resolveExtensions(gen)
+	exts, failures := resolveExtensions(gen)
 	registry := messageRegistry(gen)
-	var diags []Diagnostic
+	diags := unresolvedOptionDiags(gen, exts, failures)
 
 	// pass 1: one Component per component anchor; declaration order is captured
 	// for deterministic cross-checks and diagnostics.
@@ -191,6 +191,25 @@ func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
 		}
 	}
 	return result, diags
+}
+
+// unresolvedOptionDiags reports every message carrying angzarr option bytes
+// (component 50100, command 50104, event 50105) that no resolved extension
+// decodes. Without it such a request would lint clean and generate nothing.
+func unresolvedOptionDiags(gen *protogen.Plugin, exts extensions, failures []string) []Diagnostic {
+	why := "no file in the request defines it (is io/angzarr/v1/options.proto imported and part of the request?)"
+	if len(failures) > 0 {
+		why = "its definition could not be loaded: " + strings.Join(failures, "; ")
+	}
+	var diags []Diagnostic
+	for _, file := range gen.Files {
+		for _, m := range allMessages(file.Messages) {
+			for _, num := range unresolvedOptionNumbers(m, exts) {
+				diags = append(diags, errDiag("ANZ009", m, fmt.Sprintf("message %q carries angzarr option %d, but %s", m.Desc.FullName(), num, why)))
+			}
+		}
+	}
+	return diags
 }
 
 // resolves reports whether a fully-qualified type reference names a message in

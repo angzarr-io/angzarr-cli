@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -114,30 +115,38 @@ type extensions struct {
 }
 
 // resolveExtensions finds the angzarr option extensions in the request's own
-// files by extension number on MessageOptions. A request whose declarations
-// never import options.proto has nothing to generate — every lookup misses and
-// the run emits nothing.
+// files by extension number on MessageOptions. A request that never imports
+// options.proto finds none; messages that nevertheless carry option bytes at
+// those numbers are reported by unresolvedOptionDiags.
 //
 // The extension types are rebuilt against the process's own descriptor.proto
 // rather than taken from protogen's universe: protobuf matches an extension's
 // containing message by descriptor IDENTITY, and protogen rebuilds
 // google.protobuf.MessageOptions from the request, so extension types parented
 // there silently fail to attach when reparsing the (globally-typed) options
-// messages.
-func resolveExtensions(gen *protogen.Plugin) extensions {
-	var exts extensions
+// messages. Every request file is rebuilt in dependency order into one
+// registry, so an options file may import anything the request carries.
+// failures holds why a file defining angzarr extensions could not be rebuilt.
+func resolveExtensions(gen *protogen.Plugin) (exts extensions, failures []string) {
+	registry := &protoregistry.Files{}
+	if err := registry.RegisterFile(descriptorpb.File_google_protobuf_descriptor_proto); err != nil {
+		return exts, []string{fmt.Sprintf("register descriptor.proto: %v", err)}
+	}
 	for _, file := range gen.Files {
-		if !hasAngzarrExtensions(file) {
+		if file.Desc.Path() == descriptorpb.File_google_protobuf_descriptor_proto.Path() {
 			continue
 		}
-		registry := &protoregistry.Files{}
-		if err := registry.RegisterFile(descriptorpb.File_google_protobuf_descriptor_proto); err != nil {
-			continue
-		}
-		// The options file depends only on descriptor.proto; a file with
-		// further dependencies cannot be rebuilt here and is skipped.
 		rebuilt, err := protodesc.NewFile(protodesc.ToFileDescriptorProto(file.Desc), registry)
+		if err == nil {
+			err = registry.RegisterFile(rebuilt)
+		}
 		if err != nil {
+			if hasAngzarrExtensions(file) {
+				failures = append(failures, fmt.Sprintf("%s: %v", file.Desc.Path(), err))
+			}
+			continue
+		}
+		if !hasAngzarrExtensions(file) {
 			continue
 		}
 		extDescs := rebuilt.Extensions()
@@ -156,7 +165,44 @@ func resolveExtensions(gen *protogen.Plugin) extensions {
 			}
 		}
 	}
-	return exts
+	return exts, failures
+}
+
+// unresolvedOptionNumbers returns the angzarr option numbers a message's
+// options carry for which no extension was resolved.
+func unresolvedOptionNumbers(m *protogen.Message, exts extensions) []protoreflect.FieldNumber {
+	opts, _ := m.Desc.Options().(*descriptorpb.MessageOptions)
+	if opts == nil {
+		return nil
+	}
+	raw, err := proto.Marshal(opts)
+	if err != nil {
+		return nil
+	}
+	resolved := map[protoreflect.FieldNumber]bool{
+		numComponent: exts.component != nil,
+		numCommand:   exts.command != nil,
+		numEvent:     exts.event != nil,
+	}
+	seen := make(map[protoreflect.FieldNumber]bool)
+	var out []protoreflect.FieldNumber
+	for len(raw) > 0 {
+		num, typ, n := protowire.ConsumeTag(raw)
+		if n < 0 {
+			return out
+		}
+		raw = raw[n:]
+		if done, isAngzarr := resolved[num]; isAngzarr && !done && !seen[num] {
+			seen[num] = true
+			out = append(out, num)
+		}
+		n = protowire.ConsumeFieldValue(num, typ, raw)
+		if n < 0 {
+			return out
+		}
+		raw = raw[n:]
+	}
+	return out
 }
 
 func hasAngzarrExtensions(file *protogen.File) bool {
