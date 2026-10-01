@@ -18,8 +18,7 @@ func resetConfigState(t *testing.T) {
 	configErr = nil
 }
 
-// TestLoadConfig_ExplicitNonexistent_HardErrors is CLI finding #6's core
-// case: a user who typed --config <path> and got the path wrong deserves a
+// TestLoadConfig_ExplicitNonexistent_HardErrors: a user who typed --config <path> and got the path wrong deserves a
 // hard failure, not a silent fall-through as if no config were requested.
 func TestLoadConfig_ExplicitNonexistent_HardErrors(t *testing.T) {
 	var warn bytes.Buffer

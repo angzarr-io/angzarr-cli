@@ -19,13 +19,10 @@ var cfgFile string
 // before any subcommand's business logic runs.
 var configErr error
 
-// load-bearing: no subcommand reads a config value yet — codegen and lint
-// take all their input from flags/args and stdin/files. This plumbing
-// (viper, --config, ANGZARR_* env prefix) is retained per the CLI-review
-// L07 remediation rather than deleted, on the bet that a config-consuming
-// command (e.g. a default codegen output path) lands soon. Whoever adds
-// that command should read it via viper directly; don't re-derive the
-// explicit-vs-implicit failure semantics in loadConfig below.
+// No subcommand reads a config key yet: codegen, scaffold and lint take all
+// their input from flags, arguments and stdin. viper, --config and the
+// ANGZARR_* env prefix are the config surface for commands that do; read
+// values through viper and leave failure handling to loadConfig.
 var rootCmd = &cobra.Command{
 	Use:   "angzarr",
 	Short: "Angzarr framework tooling",
@@ -70,9 +67,7 @@ func initConfig() {
 //   - implicit (auto-discovered): not-found is silent-OK, since most
 //     invocations have no config file at all and that's not an error.
 //     But a file that IS found and fails to parse is a real problem the
-//     user should hear about even though we still proceed — this is the
-//     case the original code silently swallowed
-//     (`if err := viper.ReadInConfig(); err == nil { ... }` had no else).
+//     user should hear about even though the command still proceeds.
 func loadConfig(cfgFile string, warn io.Writer) error {
 	viper.Reset()
 	explicit := cfgFile != ""
