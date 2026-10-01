@@ -119,3 +119,52 @@ smoke protos out mode="codegen" strategy="all":
     cd "$out"
     buf generate "$protos" --template "$work/buf.gen.yaml"
     find "{{mode}}" -type f | sort
+
+# Compile the Go wiring and scaffold stubs generated from the vendored
+# example protos against a local angzarr-router Go binding: protoc-gen-go
+# types, codegen wiring and scaffold stubs land in one throwaway module whose
+# framework protos resolve to the binding's own gen package. `go build` and
+# `go vet` then prove the wiring matches the binding's API and every stub
+# satisfies its handler interface (build tag ffirouter selects the binding's
+# cgo surface; library packages link nothing).
+# Usage: just compile-go ../angzarr-router/rem-integration
+compile-go router protos=(TOP / "angzarr-project/proto"):
+    #!/usr/bin/env bash
+    set -euo pipefail
+    binding="$(realpath "{{router}}")/bindings/go"
+    protos="$(realpath "{{protos}}")"
+    test -f "$binding/go.mod" || { echo "no Go binding at $binding"; exit 1; }
+    work="$(mktemp -d)"
+    trap 'rm -r "$work"' EXIT
+    go build -o "$work/angzarr" "{{TOP}}"
+    cat > "$work/buf.gen.yaml" <<YAML
+    version: v2
+    managed:
+      enabled: true
+      override:
+        - file_option: go_package_prefix
+          value: smoke.local/gen
+        - file_option: go_package
+          path: io/angzarr/v1
+          value: github.com/angzarr-io/angzarr-router/bindings/go/gen/io/angzarr/v1;angzarrv1
+    plugins:
+      - local: protoc-gen-go
+        out: .
+        opt: paths=source_relative
+      - local: ["$work/angzarr", "codegen", "go"]
+        out: .
+        opt: paths=source_relative
+        strategy: all
+      - local: ["$work/angzarr", "scaffold", "go"]
+        out: .
+        opt: [paths=source_relative, out_dir=.]
+        strategy: all
+    YAML
+    mkdir "$work/mod"
+    cd "$work/mod"
+    printf 'module smoke.local/gen\n\ngo 1.25.0\n\nrequire github.com/angzarr-io/angzarr-router/bindings/go v0.0.0\n\nreplace github.com/angzarr-io/angzarr-router/bindings/go => %s\n' "$binding" > go.mod
+    buf generate "$protos" --template "$work/buf.gen.yaml" --path "$protos/io/angzarr/examples"
+    go mod tidy
+    go build -tags ffirouter ./...
+    go vet -tags ffirouter ./...
+    echo "compile-go OK: $(find . -name '*_angzarr.pb.go' | wc -l) wiring files, $(find . -name '*_angzarr_handler.go' | wc -l) stubs"
