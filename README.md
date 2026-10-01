@@ -80,8 +80,8 @@ scaffold and `lint` share it. Errors block generation, warnings do not:
 | ANZ011 | error | one component generates the same method twice (in any language's casing) |
 | ANZ012 | error | a generated type (stub, `<Name>Handler`, …) equals a proto type in the package |
 | ANZ013 | error | a command/event is generated without its component's anchor (split run) |
+| ANZ014 | error | a field the kind must leave empty is set (e.g. `input_domain` on an aggregate, `domain` on a saga, `undoes` on anything but an aggregate) |
 | ANZ015 | error | an `undoes` entry is not a fully-qualified command the aggregate handles |
-| ANZ014 | error | a domain field the kind must leave empty is set (e.g. `input_domain` on an aggregate, `domain` on a saga) |
 | ANZ100–103 | warning | incoherent wiring: unfolded emits, dangling domains, empty components |
 
 The option extensions are read dynamically (by extension number) from the
