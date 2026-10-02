@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -78,17 +79,36 @@ func (k ComponentKind) String() string {
 	}
 }
 
-// Component is the parsed (io.angzarr.v1.component) declaration.
-type Component struct {
-	Kind         ComponentKind
-	InputDomain  string
+// ComponentDecl is the parsed (io.angzarr.v1.component) declaration.
+type ComponentDecl struct {
+	Kind ComponentKind
+	// Domain is the event stream the component owns: the aggregate's domain
+	// or the process manager's workflow domain. Empty for sagas/projectors.
+	Domain string
+	// InputDomain is a subscription: the saga's source domain or a
+	// projector's input filter.
+	InputDomain string
+	// OutputDomain is the single-target shorthand for a command target.
 	OutputDomain string
+	// OutputDomains is every domain the component issues commands to:
+	// output_domain (when set) followed by the output_domains entries,
+	// deduplicated in declaration order.
+	OutputDomains []string
 	// Name is the generated handler/dispatch base name; empty means default
 	// to the anchor message name.
 	Name string
 	// Compensates is the fully-qualified command types whose rejection this
 	// component compensates, in declaration order (C-0042).
 	Compensates []string
+	// Undoes is the fully-qualified command types this aggregate undoes on a
+	// CASCADE COMPENSATE Compensate notification, in declaration order.
+	Undoes []string
+	// Facts is the fully-qualified event types this aggregate accepts as
+	// facts, in declaration order.
+	Facts []string
+	// EmitsFacts is the fully-qualified fact types this saga / process
+	// manager injects into its output domains.
+	EmitsFacts []string
 }
 
 // command is the parsed (io.angzarr.v1.command) declaration on a command msg.
@@ -114,30 +134,38 @@ type extensions struct {
 }
 
 // resolveExtensions finds the angzarr option extensions in the request's own
-// files by extension number on MessageOptions. A request whose declarations
-// never import options.proto has nothing to generate — every lookup misses and
-// the run emits nothing.
+// files by extension number on MessageOptions. A request that never imports
+// options.proto finds none; messages that nevertheless carry option bytes at
+// those numbers are reported by unresolvedOptionDiags.
 //
 // The extension types are rebuilt against the process's own descriptor.proto
 // rather than taken from protogen's universe: protobuf matches an extension's
 // containing message by descriptor IDENTITY, and protogen rebuilds
 // google.protobuf.MessageOptions from the request, so extension types parented
 // there silently fail to attach when reparsing the (globally-typed) options
-// messages.
-func resolveExtensions(gen *protogen.Plugin) extensions {
-	var exts extensions
+// messages. Every request file is rebuilt in dependency order into one
+// registry, so an options file may import anything the request carries.
+// failures holds why a file defining angzarr extensions could not be rebuilt.
+func resolveExtensions(gen *protogen.Plugin) (exts extensions, failures []string) {
+	registry := &protoregistry.Files{}
+	if err := registry.RegisterFile(descriptorpb.File_google_protobuf_descriptor_proto); err != nil {
+		return exts, []string{fmt.Sprintf("register descriptor.proto: %v", err)}
+	}
 	for _, file := range gen.Files {
-		if !hasAngzarrExtensions(file) {
+		if file.Desc.Path() == descriptorpb.File_google_protobuf_descriptor_proto.Path() {
 			continue
 		}
-		registry := &protoregistry.Files{}
-		if err := registry.RegisterFile(descriptorpb.File_google_protobuf_descriptor_proto); err != nil {
-			continue
-		}
-		// The options file depends only on descriptor.proto; a file with
-		// further dependencies cannot be rebuilt here and is skipped.
 		rebuilt, err := protodesc.NewFile(protodesc.ToFileDescriptorProto(file.Desc), registry)
+		if err == nil {
+			err = registry.RegisterFile(rebuilt)
+		}
 		if err != nil {
+			if hasAngzarrExtensions(file) {
+				failures = append(failures, fmt.Sprintf("%s: %v", file.Desc.Path(), err))
+			}
+			continue
+		}
+		if !hasAngzarrExtensions(file) {
 			continue
 		}
 		extDescs := rebuilt.Extensions()
@@ -156,7 +184,44 @@ func resolveExtensions(gen *protogen.Plugin) extensions {
 			}
 		}
 	}
-	return exts
+	return exts, failures
+}
+
+// unresolvedOptionNumbers returns the angzarr option numbers a message's
+// options carry for which no extension was resolved.
+func unresolvedOptionNumbers(m *protogen.Message, exts extensions) []protoreflect.FieldNumber {
+	opts, _ := m.Desc.Options().(*descriptorpb.MessageOptions)
+	if opts == nil {
+		return nil
+	}
+	raw, err := proto.Marshal(opts)
+	if err != nil {
+		return nil
+	}
+	resolved := map[protoreflect.FieldNumber]bool{
+		numComponent: exts.component != nil,
+		numCommand:   exts.command != nil,
+		numEvent:     exts.event != nil,
+	}
+	seen := make(map[protoreflect.FieldNumber]bool)
+	var out []protoreflect.FieldNumber
+	for len(raw) > 0 {
+		num, typ, n := protowire.ConsumeTag(raw)
+		if n < 0 {
+			return out
+		}
+		raw = raw[n:]
+		if done, isAngzarr := resolved[num]; isAngzarr && !done && !seen[num] {
+			seen[num] = true
+			out = append(out, num)
+		}
+		n = protowire.ConsumeFieldValue(num, typ, raw)
+		if n < 0 {
+			return out
+		}
+		raw = raw[n:]
+	}
+	return out
 }
 
 func hasAngzarrExtensions(file *protogen.File) bool {
@@ -262,7 +327,7 @@ func reflStrings(m protoreflect.Message, name string) []string {
 
 // componentOptions extracts the (io.angzarr.v1.component) declaration off a
 // message, or nil when absent / unspecified.
-func componentOptions(m *protogen.Message, exts extensions) *Component {
+func componentOptions(m *protogen.Message, exts extensions) *ComponentDecl {
 	if exts.component == nil {
 		return nil
 	}
@@ -272,11 +337,15 @@ func componentOptions(m *protogen.Message, exts extensions) *Component {
 		return nil
 	}
 	sub := opts.Get(fd).Message()
-	c := &Component{
+	c := &ComponentDecl{
+		Domain:       reflString(sub, "domain"),
 		InputDomain:  reflString(sub, "input_domain"),
 		OutputDomain: reflString(sub, "output_domain"),
 		Name:         reflString(sub, "name"),
 		Compensates:  reflStrings(sub, "compensates"),
+		Undoes:       reflStrings(sub, "undoes"),
+		Facts:        reflStrings(sub, "facts"),
+		EmitsFacts:   reflStrings(sub, "emits_facts"),
 	}
 	if kindFD := sub.Descriptor().Fields().ByName("kind"); kindFD != nil {
 		c.Kind = ComponentKind(sub.Get(kindFD).Enum())
@@ -284,6 +353,7 @@ func componentOptions(m *protogen.Message, exts extensions) *Component {
 	if c.Kind == KindUnspecified {
 		return nil
 	}
+	c.OutputDomains = dedupNonEmpty(append([]string{c.OutputDomain}, reflStrings(sub, "output_domains")...))
 	return c
 }
 
@@ -362,23 +432,61 @@ type Applier struct {
 
 // Rejection is one declared compensation.
 type Rejection struct {
-	Command    string // fully-qualified rejected command type
-	MethodName string // On<ShortCommand>Rejected
+	// Key is the declared compensates entry, "fq.Type" or "domain:fq.Type",
+	// registered verbatim as the binding's rejection key.
+	Key string
+	// Command is the fully-qualified rejected command type.
+	Command string
+	// Domain qualifies the entry to rejections of Command sent to this domain;
+	// empty matches any domain.
+	Domain string
+	// MethodName is On<ShortCommand>Rejected, or
+	// On<ShortCommand>From<Domain>Rejected for a domain-qualified entry.
+	MethodName string
 }
 
-// Service is one validated component declaration ready for emission.
-type Service struct {
+// Undo is one declared undo handler: the aggregate reverses a command it
+// executed when a Compensate for that command type arrives.
+type Undo struct {
+	Command    string // fully-qualified undone command type
+	MethodName string // On<ShortCommand>Undo
+}
+
+// Fact is one declared fact handler: the aggregate records a fact of this
+// type (an external reality it cannot refuse), optionally annotated.
+type Fact struct {
+	Message    *protogen.Message
+	MethodName string // On<Event>Fact
+}
+
+// Component is one validated component declaration ready for emission.
+type Component struct {
 	// Anchor is the message carrying (component): the state message for the
 	// stateful kinds, or an empty marker for the saga.
 	Anchor *protogen.Message
-	// GoName is the generated handler/dispatch base name.
-	GoName     string
-	Component  *Component
+	// BaseName is the generated handler/dispatch base name and the runtime
+	// component name.
+	BaseName string
+	// StubName is the type the scaffold stub declares: the declared
+	// (component).name, or <Anchor>Impl when no name is declared (the anchor's
+	// own name is taken by the proto-generated message in the same package).
+	StubName   string
+	Component  *ComponentDecl
 	Handlers   []Handler
 	Appliers   []Applier
 	Rejections []Rejection
+	Undos      []Undo
+	Facts      []Fact
 	// State is the anchor message for stateful kinds; nil for the saga.
 	State *protogen.Message
+	// ProjectorDomains is a KindProjector component's domain filter: the
+	// sorted, deduplicated union of its input_domain and its handlers'
+	// (event).domain values. A projector may fold several domains (e.g. a
+	// display combining player, table and hand events). Empty means no domain
+	// was declared anywhere and the projector consumes every domain. Computed
+	// once in analyze() and rendered identically by every emitter; unset for
+	// every other kind.
+	ProjectorDomains []string
 }
 
 // messageRegistry indexes every message in the compiled set by full name so
@@ -413,6 +521,69 @@ func applierName(m *protogen.Message) string {
 	return "Apply" + m.GoIdent.GoName
 }
 
+// quoteJoin renders a domain list as language string literals joined by
+// ", ", using the caller's per-language quoting function.
+func quoteJoin(domains []string, quote func(string) string) string {
+	quoted := make([]string, len(domains))
+	for i, d := range domains {
+		quoted[i] = quote(d)
+	}
+	return strings.Join(quoted, ", ")
+}
+
+// nestedNames is a message's name path within its file, outermost first
+// (Outer, Mid, Inner). Each emitter joins it with its language's separator.
+func nestedNames(md protoreflect.MessageDescriptor) []string {
+	parts := []string{string(md.Name())}
+	for {
+		parent, ok := md.Parent().(protoreflect.MessageDescriptor)
+		if !ok {
+			return parts
+		}
+		parts = append([]string{string(parent.Name())}, parts...)
+		md = parent
+	}
+}
+
+// quoteLiteral renders s as a double-quoted string literal valid in C++,
+// Python and TypeScript: backslash, double quote, newline, carriage return
+// and tab are escaped.
+func quoteLiteral(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '"':
+			b.WriteString(`\"`)
+		case '\\':
+			b.WriteString(`\\`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// dedupNonEmpty drops empty and repeated entries, keeping first-seen order.
+func dedupNonEmpty(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	var out []string
+	for _, v := range in {
+		if v != "" && !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // shortName returns the trailing segment of a fully-qualified type name.
 func shortName(fq string) string {
 	if i := strings.LastIndex(fq, "."); i >= 0 {
@@ -421,15 +592,24 @@ func shortName(fq string) string {
 	return fq
 }
 
-// fileServices is one generated file's components.
-type fileServices struct {
-	File     *protogen.File
-	Services []*Service
+// fileComponents is one generated file's components.
+type fileComponents struct {
+	File       *protogen.File
+	Components []*Component
+}
+
+// stubName resolves the scaffold stub's type name: the declared name, or the
+// anchor message's name suffixed with Impl.
+func stubName(m *protogen.Message, c *ComponentDecl) string {
+	if c.Name != "" {
+		return c.Name
+	}
+	return string(m.Desc.Name()) + "Impl"
 }
 
 // baseName resolves the component's generated base name: the declared name, or
 // the anchor message's own name.
-func baseName(m *protogen.Message, c *Component) string {
+func baseName(m *protogen.Message, c *ComponentDecl) string {
 	if c.Name != "" {
 		return c.Name
 	}

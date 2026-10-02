@@ -19,10 +19,12 @@ package codegen
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // Severity ranks a diagnostic: errors block code generation, warnings inform.
@@ -106,14 +108,14 @@ func diagError(diags []Diagnostic) error {
 // analyze builds the component model and collects all diagnostics in one pass.
 // The model it returns is only sound when HasErrors(diags) is false; codegen
 // gates emission on that, so an invalid model is never handed to an emitter.
-func analyze(gen *protogen.Plugin) ([]fileServices, []Diagnostic) {
-	exts := resolveExtensions(gen)
+func analyze(gen *protogen.Plugin) ([]fileComponents, []Diagnostic) {
+	exts, failures := resolveExtensions(gen)
 	registry := messageRegistry(gen)
-	var diags []Diagnostic
+	diags := unresolvedOptionDiags(gen, exts, failures)
 
-	// pass 1: one Service per component anchor; declaration order is captured
+	// pass 1: one Component per component anchor; declaration order is captured
 	// for deterministic cross-checks and diagnostics.
-	services := make(map[string]*Service)
+	services := make(map[string]*Component)
 	var order []string
 	for _, file := range gen.Files {
 		for _, m := range allMessages(file.Messages) {
@@ -121,12 +123,10 @@ func analyze(gen *protogen.Plugin) ([]fileServices, []Diagnostic) {
 			if component == nil {
 				continue
 			}
+			// Keyed by full name: protogen rejects duplicate full names
+			// before analysis, so each anchor is seen once.
 			fq := string(m.Desc.FullName())
-			if _, dup := services[fq]; dup {
-				diags = append(diags, errDiag("ANZ001", m, fmt.Sprintf("duplicate component declaration %q", fq)))
-				continue
-			}
-			s := &Service{Anchor: m, Component: component, GoName: baseName(m, component)}
+			s := &Component{Anchor: m, Component: component, BaseName: baseName(m, component), StubName: stubName(m, component)}
 			if component.Kind != KindSaga {
 				s.State = m
 			}
@@ -136,50 +136,81 @@ func analyze(gen *protogen.Plugin) ([]fileServices, []Diagnostic) {
 	}
 
 	// pass 2: attach commands and events to their owning component.
+	generated := make(map[string]bool)
+	for _, file := range gen.Files {
+		generated[file.Desc.Path()] = file.Generate
+	}
 	for _, file := range gen.Files {
 		for _, m := range allMessages(file.Messages) {
 			if cmd := commandOptions(m, exts); cmd != nil {
 				diags = append(diags, attachCommand(services, registry, m, cmd)...)
+				diags = append(diags, splitRunDiag(services, generated, file, m, cmd.Component)...)
 			}
 			for _, ev := range eventOptions(m, exts) {
 				diags = append(diags, attachEvent(services, m, ev)...)
+				diags = append(diags, splitRunDiag(services, generated, file, m, ev.Component)...)
 			}
+		}
+	}
+
+	// Projector domain filter, computed once for every emitter.
+	for _, fq := range order {
+		s := services[fq]
+		if s.Component.Kind == KindProjector {
+			s.ProjectorDomains = projectorDomains(s)
 		}
 	}
 
 	// compensation references + per-kind required-field contract.
 	for _, fq := range order {
 		s := services[fq]
-		for _, cmd := range s.Component.Compensates {
-			if !resolves(registry, cmd) {
-				diags = append(diags, errDiag("ANZ007", s.Anchor, fmt.Sprintf("(component).compensates %q is not a fully-qualified message name in the compiled set (short names never match dispatch)", cmd)))
-				continue
-			}
-			s.Rejections = append(s.Rejections, Rejection{Command: cmd, MethodName: "On" + shortName(cmd) + "Rejected"})
-		}
+		diags = append(diags, compensatesDiags(s, registry)...)
 		diags = append(diags, requiredFields(s)...)
+		diags = append(diags, undoDiags(s)...)
+		diags = append(diags, factDiags(s, registry)...)
 	}
 
+	diags = append(diags, emittedFactDiags(services, order, registry)...)
 	diags = append(diags, collisionDiags(services, order)...)
+	diags = append(diags, typeCollisionDiags(gen, services, order)...)
 	diags = append(diags, coherenceDiags(services, order)...)
 
 	// group by anchor file, preserving message declaration order within a file.
-	var result []fileServices
+	var result []fileComponents
 	for _, file := range gen.Files {
 		if !file.Generate {
 			continue
 		}
-		var fileSvcs []*Service
+		var fileSvcs []*Component
 		for _, m := range allMessages(file.Messages) {
 			if s, ok := services[string(m.Desc.FullName())]; ok {
 				fileSvcs = append(fileSvcs, s)
 			}
 		}
 		if len(fileSvcs) > 0 {
-			result = append(result, fileServices{File: file, Services: fileSvcs})
+			result = append(result, fileComponents{File: file, Components: fileSvcs})
 		}
 	}
 	return result, diags
+}
+
+// unresolvedOptionDiags reports every message carrying angzarr option bytes
+// (component 50100, command 50104, event 50105) that no resolved extension
+// decodes. Without it such a request would lint clean and generate nothing.
+func unresolvedOptionDiags(gen *protogen.Plugin, exts extensions, failures []string) []Diagnostic {
+	why := "no file in the request defines it (is io/angzarr/v1/options.proto imported and part of the request?)"
+	if len(failures) > 0 {
+		why = "its definition could not be loaded: " + strings.Join(failures, "; ")
+	}
+	var diags []Diagnostic
+	for _, file := range gen.Files {
+		for _, m := range allMessages(file.Messages) {
+			for _, num := range unresolvedOptionNumbers(m, exts) {
+				diags = append(diags, errDiag("ANZ009", m, fmt.Sprintf("message %q carries angzarr option %d, but %s", m.Desc.FullName(), num, why)))
+			}
+		}
+	}
+	return diags
 }
 
 // resolves reports whether a fully-qualified type reference names a message in
@@ -192,12 +223,32 @@ func resolves(registry map[string]*protogen.Message, name string) bool {
 	return ok
 }
 
+// strategyHint explains the one-invocation requirement: components reference
+// their commands and events by name, not import, so every file declaring
+// part of a component must be in the same plugin run.
+const strategyHint = "run the angzarr plugins over every declaring file in one invocation (buf: strategy: all on the plugin; protoc: one call with all files)"
+
+// splitRunDiag reports a command or event generated in this run whose
+// component anchor lives in a file that is not: neither this run nor the
+// anchor's own run (which cannot see this file) would wire the handler.
+func splitRunDiag(services map[string]*Component, generated map[string]bool, file *protogen.File, m *protogen.Message, component string) []Diagnostic {
+	owner, ok := services[component]
+	if !ok || !file.Generate {
+		return nil
+	}
+	anchorFile := owner.Anchor.Desc.ParentFile().Path()
+	if generated[anchorFile] {
+		return nil
+	}
+	return []Diagnostic{errDiag("ANZ013", m, fmt.Sprintf("%q is generated in this run but its component %q is declared in %s, which is not; the handler would be wired by neither run — %s", m.Desc.FullName(), component, anchorFile, strategyHint))}
+}
+
 // attachCommand wires a command message to its aggregate owner, collecting a
 // diagnostic for every unresolved reference.
-func attachCommand(services map[string]*Service, registry map[string]*protogen.Message, m *protogen.Message, cmd *command) []Diagnostic {
+func attachCommand(services map[string]*Component, registry map[string]*protogen.Message, m *protogen.Message, cmd *command) []Diagnostic {
 	owner, ok := services[cmd.Component]
 	if !ok {
-		return []Diagnostic{errDiag("ANZ002", m, fmt.Sprintf("(command).component %q is not a declared component", cmd.Component))}
+		return []Diagnostic{errDiag("ANZ002", m, fmt.Sprintf("(command).component %q is not a declared component in this request; if it is declared in another directory, %s", cmd.Component, strategyHint))}
 	}
 	if owner.Component.Kind != KindAggregate {
 		return []Diagnostic{errDiag("ANZ003", m, fmt.Sprintf("(command).component %q is a %v; commands are handled by aggregates", cmd.Component, owner.Component.Kind))}
@@ -223,10 +274,10 @@ func attachCommand(services map[string]*Service, registry map[string]*protogen.M
 // attachEvent classifies one event-consumer entry as an applier or a trigger
 // handler on its owning component, collecting diagnostics for unresolved or
 // underspecified entries.
-func attachEvent(services map[string]*Service, m *protogen.Message, ev eventConsumer) []Diagnostic {
+func attachEvent(services map[string]*Component, m *protogen.Message, ev eventConsumer) []Diagnostic {
 	owner, ok := services[ev.Component]
 	if !ok {
-		return []Diagnostic{errDiag("ANZ005", m, fmt.Sprintf("(event).component %q is not a declared component", ev.Component))}
+		return []Diagnostic{errDiag("ANZ005", m, fmt.Sprintf("(event).component %q is not a declared component in this request; if it is declared in another directory, %s", ev.Component, strategyHint))}
 	}
 	switch owner.Component.Kind {
 	case KindAggregate:
@@ -248,56 +299,347 @@ func attachEvent(services map[string]*Service, m *protogen.Message, ev eventCons
 	return nil
 }
 
-// requiredFields enforces the per-kind required-field contract: an omitted
-// domain would wire a component that silently receives or targets nothing.
-func requiredFields(s *Service) []Diagnostic {
+// requiredFields enforces the per-kind domain-role contract of
+// options.proto. domain is the stream a component owns, input_domain a
+// subscription, output_domain(s) command targets:
+//
+//	kind             domain     input_domain  output_domain(s)
+//	AGGREGATE        required   empty         empty
+//	PROCESS_MANAGER  required   empty         targets
+//	SAGA             forbidden  required      targets (>= 1)
+//	PROJECTOR        forbidden  optional      empty
+//
+// A missing required field is ANZ008; a field the kind must leave empty is
+// ANZ014.
+func requiredFields(s *Component) []Diagnostic {
 	c := s.Component
+	var diags []Diagnostic
+	missing := func(msg string) { diags = append(diags, errDiag("ANZ008", s.Anchor, msg)) }
+	forbid := func(field, value, why string) {
+		if value != "" {
+			diags = append(diags, errDiag("ANZ014", s.Anchor, fmt.Sprintf("%v must not set %s (%q): %s", c.Kind, field, value, why)))
+		}
+	}
+	outputs := strings.Join(c.OutputDomains, ", ")
 	switch c.Kind {
 	case KindAggregate:
-		if c.InputDomain == "" {
-			return []Diagnostic{errDiag("ANZ008", s.Anchor, "aggregate requires input_domain (its own domain)")}
+		if c.Domain == "" {
+			missing("aggregate requires domain (the stream it owns)")
 		}
-	case KindSaga:
-		if c.InputDomain == "" || c.OutputDomain == "" {
-			return []Diagnostic{errDiag("ANZ008", s.Anchor, "saga requires input_domain and output_domain")}
-		}
+		forbid("input_domain", c.InputDomain, "an aggregate subscribes to nothing; its own stream is domain")
+		forbid("output_domain(s)", outputs, "an aggregate issues no commands")
 	case KindProcessManager:
-		if c.OutputDomain == "" {
-			return []Diagnostic{errDiag("ANZ008", s.Anchor, "process manager requires output_domain (its pm_domain and command-target domain)")}
+		if c.Domain == "" {
+			missing("process manager requires domain (its own workflow stream)")
 		}
+		forbid("input_domain", c.InputDomain, "trigger domains come from each (event).domain")
+	case KindSaga:
+		if c.InputDomain == "" || len(c.OutputDomains) == 0 {
+			missing("saga requires input_domain and at least one output domain (output_domain / output_domains)")
+		}
+		forbid("domain", c.Domain, "a saga owns no stream")
 	case KindProjector:
-		if c.InputDomain == "" {
-			return []Diagnostic{errDiag("ANZ008", s.Anchor, "projector requires input_domain (its subscribed domains)")}
-		}
+		forbid("domain", c.Domain, "a projector owns no stream")
+		forbid("output_domain(s)", outputs, "a projector issues no commands")
 	default:
-		return []Diagnostic{errDiag("ANZ008", s.Anchor, fmt.Sprintf("unsupported component kind %v", c.Kind))}
+		missing(fmt.Sprintf("unsupported component kind %v", c.Kind))
 	}
-	return nil
+	return diags
+}
+
+// compensatesDiags validates (component).compensates and records one
+// rejection handler per valid entry. Entries are "fq.Type" (a rejection of
+// that type sent to any domain) or "domain:fq.Type" (sent to that domain);
+// domains contain no ':'. Only aggregates and process managers receive
+// rejections (ANZ014 otherwise). A malformed entry or unresolvable type is
+// ANZ007; a type listed unqualified more than once, by the same domain more
+// than once, or both unqualified and qualified is ANZ016, since two entries
+// would then match one rejection.
+func compensatesDiags(s *Component, registry map[string]*protogen.Message) []Diagnostic {
+	c := s.Component
+	if len(c.Compensates) == 0 {
+		return nil
+	}
+	if c.Kind != KindAggregate && c.Kind != KindProcessManager {
+		return []Diagnostic{errDiag("ANZ014", s.Anchor, fmt.Sprintf("%v must not set compensates (%s): only aggregates and process managers receive rejections", c.Kind, strings.Join(c.Compensates, ", ")))}
+	}
+	var diags []Diagnostic
+	unqualified := make(map[string]bool)
+	byDomain := make(map[string]map[string]bool) // type -> domains
+	for _, entry := range c.Compensates {
+		domain, typ, qualified := strings.Cut(entry, ":")
+		if !qualified {
+			domain, typ = "", entry
+		}
+		if qualified && (domain == "" || strings.Contains(typ, ":")) {
+			diags = append(diags, errDiag("ANZ007", s.Anchor, fmt.Sprintf("(component).compensates %q is malformed: use \"fq.Type\" or \"domain:fq.Type\" (domains contain no ':')", entry)))
+			continue
+		}
+		if !resolves(registry, typ) {
+			diags = append(diags, errDiag("ANZ007", s.Anchor, fmt.Sprintf("(component).compensates %q: %q is not a fully-qualified message name in the compiled set (short names never match dispatch)", entry, typ)))
+			continue
+		}
+		conflict := ""
+		switch {
+		case !qualified && unqualified[typ]:
+			conflict = "it is listed unqualified more than once"
+		case !qualified && len(byDomain[typ]) > 0, qualified && unqualified[typ]:
+			conflict = "it is listed both unqualified and domain-qualified"
+		case qualified && byDomain[typ][domain]:
+			conflict = fmt.Sprintf("it is qualified by %q more than once", domain)
+		}
+		if conflict != "" {
+			diags = append(diags, errDiag("ANZ016", s.Anchor, fmt.Sprintf("(component).compensates %q: %s; a type appears once unqualified or once per domain, never both", entry, conflict)))
+		}
+		if qualified {
+			if byDomain[typ] == nil {
+				byDomain[typ] = make(map[string]bool)
+			}
+			byDomain[typ][domain] = true
+		} else {
+			unqualified[typ] = true
+		}
+		method := "On" + shortName(typ) + "Rejected"
+		if qualified {
+			method = "On" + shortName(typ) + "From" + snakeToPascal(domain) + "Rejected"
+		}
+		s.Rejections = append(s.Rejections, Rejection{Key: entry, Command: typ, Domain: domain, MethodName: method})
+	}
+	return diags
+}
+
+// factDiags validates (component).facts and emits_facts on one component and
+// records one fact handler per valid facts entry. facts is aggregate-only and
+// emits_facts saga/process-manager-only (ANZ014 otherwise); every entry must
+// be a fully-qualified message in the request (ANZ017).
+func factDiags(s *Component, registry map[string]*protogen.Message) []Diagnostic {
+	c := s.Component
+	var diags []Diagnostic
+	if len(c.Facts) > 0 && c.Kind != KindAggregate {
+		diags = append(diags, errDiag("ANZ014", s.Anchor, fmt.Sprintf("%v must not set facts (%s): facts is allowed only on aggregates", c.Kind, strings.Join(c.Facts, ", "))))
+	} else {
+		for _, f := range c.Facts {
+			m, ok := registry[f]
+			if !ok {
+				diags = append(diags, errDiag("ANZ017", s.Anchor, fmt.Sprintf("(component).facts %q is not a fully-qualified message name in the compiled set", f)))
+				continue
+			}
+			s.Facts = append(s.Facts, Fact{Message: m, MethodName: "On" + m.GoIdent.GoName + "Fact"})
+		}
+	}
+	if len(c.EmitsFacts) > 0 && c.Kind != KindSaga && c.Kind != KindProcessManager {
+		diags = append(diags, errDiag("ANZ014", s.Anchor, fmt.Sprintf("%v must not set emits_facts (%s): only sagas and process managers inject facts", c.Kind, strings.Join(c.EmitsFacts, ", "))))
+		return diags
+	}
+	for _, f := range c.EmitsFacts {
+		if _, ok := registry[f]; !ok {
+			diags = append(diags, errDiag("ANZ017", s.Anchor, fmt.Sprintf("(component).emits_facts %q is not a fully-qualified message name in the compiled set", f)))
+		}
+	}
+	return diags
+}
+
+// emittedFactDiags reports each emits_facts type that no aggregate owning
+// one of the emitter's output domains declares in facts (ANZ018): the router
+// would refuse the injected fact (NO_FACT_HANDLER). Unresolvable entries are
+// left to ANZ017.
+func emittedFactDiags(services map[string]*Component, order []string, registry map[string]*protogen.Message) []Diagnostic {
+	accepts := make(map[string]map[string]bool) // domain -> fact types
+	for _, fq := range order {
+		s := services[fq]
+		if s.Component.Kind != KindAggregate || s.Component.Domain == "" {
+			continue
+		}
+		if accepts[s.Component.Domain] == nil {
+			accepts[s.Component.Domain] = make(map[string]bool)
+		}
+		for _, f := range s.Component.Facts {
+			accepts[s.Component.Domain][f] = true
+		}
+	}
+	var diags []Diagnostic
+	for _, fq := range order {
+		s := services[fq]
+		c := s.Component
+		if c.Kind != KindSaga && c.Kind != KindProcessManager {
+			continue
+		}
+		for _, f := range c.EmitsFacts {
+			if !resolves(registry, f) {
+				continue // ANZ017 already reported
+			}
+			declared := false
+			for _, d := range c.OutputDomains {
+				if accepts[d][f] {
+					declared = true
+					break
+				}
+			}
+			if !declared {
+				diags = append(diags, errDiag("ANZ018", s.Anchor, fmt.Sprintf("%v %q emits fact %q, but no aggregate owning its output domain %s declares it in facts; the router would refuse it (NO_FACT_HANDLER)", c.Kind, fq, f, quoteList(c.OutputDomains))))
+			}
+		}
+	}
+	return diags
+}
+
+// quoteList renders strings as a comma-separated list of Go-quoted values.
+func quoteList(items []string) string {
+	q := make([]string, len(items))
+	for i, it := range items {
+		q[i] = fmt.Sprintf("%q", it)
+	}
+	return strings.Join(q, ", ")
+}
+
+// undoDiags validates (component).undoes and records one undo handler per
+// valid entry. Only aggregates execute commands, so only they may undo one
+// (ANZ014 otherwise); each entry must name a command the aggregate handles
+// (ANZ015).
+func undoDiags(s *Component) []Diagnostic {
+	c := s.Component
+	if len(c.Undoes) == 0 {
+		return nil
+	}
+	if c.Kind != KindAggregate {
+		return []Diagnostic{errDiag("ANZ014", s.Anchor, fmt.Sprintf("%v must not set undoes (%s): only aggregates execute commands", c.Kind, strings.Join(c.Undoes, ", ")))}
+	}
+	handled := make(map[string]bool, len(s.Handlers))
+	for _, h := range s.Handlers {
+		handled[fqName(h.Message)] = true
+	}
+	var diags []Diagnostic
+	for _, cmd := range c.Undoes {
+		if !handled[cmd] {
+			diags = append(diags, errDiag("ANZ015", s.Anchor, fmt.Sprintf("(component).undoes %q is not a fully-qualified command this aggregate handles", cmd)))
+			continue
+		}
+		s.Undos = append(s.Undos, Undo{Command: cmd, MethodName: "On" + shortName(cmd) + "Undo"})
+	}
+	return diags
+}
+
+// projectorDomains computes a projector's domain filter: the sorted,
+// deduplicated union of its declared input_domain and every handler's
+// (event).domain. Every emitter renders this one list.
+func projectorDomains(s *Component) []string {
+	seen := make(map[string]bool)
+	var domains []string
+	add := func(d string) {
+		if d != "" && !seen[d] {
+			seen[d] = true
+			domains = append(domains, d)
+		}
+	}
+	add(s.Component.InputDomain)
+	for _, h := range s.Handlers {
+		add(h.SourceDomain)
+	}
+	sort.Strings(domains)
+	return domains
 }
 
 // collisionDiags catches generated-identifier clashes that would produce
 // uncompilable source: two components emitting the same base name, or one
-// component generating the same handler/applier method twice (events sharing a
-// short name across packages).
-func collisionDiags(services map[string]*Service, order []string) []Diagnostic {
+// component generating the same method twice. Handlers, appliers, rejections,
+// undo handlers and the projector's fixed Finish all land on the same
+// generated interface, so the duplicate check runs over their union as one
+// namespace.
+func collisionDiags(services map[string]*Component, order []string) []Diagnostic {
 	var diags []Diagnostic
 
-	first := make(map[string]string) // GoName -> first anchor FQ
+	first := make(map[string]string) // BaseName -> first anchor FQ
 	for _, fq := range order {
 		s := services[fq]
-		if owner, dup := first[s.GoName]; dup {
-			diags = append(diags, errDiag("ANZ010", s.Anchor, fmt.Sprintf("generated name %q collides with component %q; set a distinct (component).name", s.GoName, owner)))
+		if owner, dup := first[s.BaseName]; dup {
+			diags = append(diags, errDiag("ANZ010", s.Anchor, fmt.Sprintf("generated name %q collides with component %q; set a distinct (component).name", s.BaseName, owner)))
 			continue
 		}
-		first[s.GoName] = fq
+		first[s.BaseName] = fq
 	}
 
 	for _, fq := range order {
 		s := services[fq]
-		diags = append(diags, dupMethods(s, fq, "handler", handlerNames(s.Handlers))...)
-		diags = append(diags, dupMethods(s, fq, "applier", applierNames(s.Appliers))...)
+		names := make([]string, 0, len(s.Handlers)+len(s.Appliers)+len(s.Rejections)+1)
+		names = append(names, handlerNames(s.Handlers)...)
+		names = append(names, applierNames(s.Appliers)...)
+		names = append(names, rejectionNames(s.Rejections)...)
+		for _, u := range s.Undos {
+			names = append(names, u.MethodName)
+		}
+		for _, f := range s.Facts {
+			names = append(names, f.MethodName)
+		}
+		if s.Component.Kind == KindProjector {
+			names = append(names, projectorFinishMethod)
+		}
+		diags = append(diags, dupMethods(s, fq, names)...)
 	}
 	return diags
+}
+
+// typeCollisionDiags catches generated top-level identifiers that coincide with
+// a proto-generated type in the anchor's package. The wiring and the scaffold
+// stub are emitted beside the proto types (same Go package, Java package, C#
+// and C++ namespace), so such a name is a redeclaration in those languages.
+func typeCollisionDiags(gen *protogen.Plugin, services map[string]*Component, order []string) []Diagnostic {
+	types := make(map[protoreflect.FullName]map[string]bool) // package -> type names
+	for _, f := range gen.Files {
+		pkg := f.Desc.Package()
+		if types[pkg] == nil {
+			types[pkg] = make(map[string]bool)
+		}
+		for _, e := range f.Enums {
+			types[pkg][e.GoIdent.GoName] = true
+		}
+		for _, m := range allMessages(f.Messages) {
+			types[pkg][m.GoIdent.GoName] = true
+			for _, e := range m.Enums {
+				types[pkg][e.GoIdent.GoName] = true
+			}
+		}
+	}
+	var diags []Diagnostic
+	for _, fq := range order {
+		s := services[fq]
+		pkgTypes := types[s.Anchor.Desc.ParentFile().Package()]
+		for _, id := range generatedTypeNames(s) {
+			if pkgTypes[id] {
+				diags = append(diags, errDiag("ANZ012", s.Anchor, fmt.Sprintf("component %q generates %q, which collides with the proto type %q in package %q; set a (component).name distinct from every message and enum in the package", fq, id, id, s.Anchor.Desc.ParentFile().Package())))
+			}
+		}
+	}
+	return diags
+}
+
+// generatedTypeNames lists the top-level identifiers emitted for a component
+// across the target languages: the scaffold stub type, the handler interface,
+// the Java/C# wiring class, and the Go/C++ dispatch constructor and register
+// functions.
+func generatedTypeNames(s *Component) []string {
+	return []string{
+		s.StubName,
+		s.BaseName + "Handler",
+		s.BaseName + "Angzarr",
+		"New" + s.BaseName + "Dispatch",
+		"Register" + s.BaseName,
+	}
+}
+
+// projectorFinishMethod is the fixed method every projector interface carries
+// alongside its handlers.
+const projectorFinishMethod = "Finish"
+
+// methodRenderings are the per-language spellings of a generated method name.
+// Two distinct names collide when any rendering coincides: "HTTPGet" and
+// "HttpGet" are separate Go methods but the same Python http_get.
+var methodRenderings = []struct {
+	langs  string
+	render func(string) string
+}{
+	{"every language", func(n string) string { return n }},
+	{"java/typescript", lowerFirst},
+	{"python", snake},
 }
 
 func handlerNames(hs []Handler) []string {
@@ -316,14 +658,28 @@ func applierNames(as []Applier) []string {
 	return out
 }
 
-func dupMethods(s *Service, fq, kind string, names []string) []Diagnostic {
+func rejectionNames(rs []Rejection) []string {
+	out := make([]string, len(rs))
+	for i, r := range rs {
+		out[i] = r.MethodName
+	}
+	return out
+}
+
+// dupMethods reports each pair of method names that render identically in
+// some target language, once per pair, naming the first rendering that
+// collides.
+func dupMethods(s *Component, fq string, names []string) []Diagnostic {
 	var diags []Diagnostic
-	seen := make(map[string]bool, len(names))
-	for _, n := range names {
-		if seen[n] {
-			diags = append(diags, errDiag("ANZ011", s.Anchor, fmt.Sprintf("component %q generates duplicate %s method %q (events sharing a name across packages)", fq, kind, n)))
+	for j := 1; j < len(names); j++ {
+		for i := 0; i < j; i++ {
+			for _, r := range methodRenderings {
+				if rendered := r.render(names[i]); rendered == r.render(names[j]) {
+					diags = append(diags, errDiag("ANZ011", s.Anchor, fmt.Sprintf("component %q generates duplicate method %q in %s (from %q and %q; handler, applier, rejection and projector Finish names share one generated namespace)", fq, rendered, r.langs, names[i], names[j])))
+					break
+				}
+			}
 		}
-		seen[n] = true
 	}
 	return diags
 }
@@ -332,13 +688,13 @@ func dupMethods(s *Service, fq, kind string, names []string) []Diagnostic {
 // events with no applier, output/source domains with no counterpart aggregate,
 // and components that handle nothing. These are warnings, not errors: the
 // counterpart may legitimately live in a proto set not part of this compile.
-func coherenceDiags(services map[string]*Service, order []string) []Diagnostic {
+func coherenceDiags(services map[string]*Component, order []string) []Diagnostic {
 	var diags []Diagnostic
 
 	aggDomains := make(map[string]bool)
 	for _, fq := range order {
-		if s := services[fq]; s.Component.Kind == KindAggregate && s.Component.InputDomain != "" {
-			aggDomains[s.Component.InputDomain] = true
+		if s := services[fq]; s.Component.Kind == KindAggregate && s.Component.Domain != "" {
+			aggDomains[s.Component.Domain] = true
 		}
 	}
 
@@ -365,8 +721,12 @@ func coherenceDiags(services map[string]*Service, order []string) []Diagnostic {
 			}
 		}
 
-		if (c.Kind == KindSaga || c.Kind == KindProcessManager) && c.OutputDomain != "" && !aggDomains[c.OutputDomain] {
-			diags = append(diags, warnDiag("ANZ101", s.Anchor, fmt.Sprintf("%v %q targets output_domain %q, but no aggregate declares it as input_domain; emitted commands reach no handler", c.Kind, fq, c.OutputDomain)))
+		if c.Kind == KindSaga || c.Kind == KindProcessManager {
+			for _, target := range c.OutputDomains {
+				if !aggDomains[target] {
+					diags = append(diags, warnDiag("ANZ101", s.Anchor, fmt.Sprintf("%v %q targets output domain %q, but no aggregate owns it (domain); emitted commands reach no handler", c.Kind, fq, target)))
+				}
+			}
 		}
 
 		for _, h := range s.Handlers {
