@@ -436,3 +436,20 @@ func TestRender_MissingKeyIsAnError(t *testing.T) {
 		t.Fatalf("a missing model key must fail rendering, got %v", err)
 	}
 }
+
+func TestRender_MissingKeyInPathsAndIncludesIsAnError(t *testing.T) {
+	for name, tc := range map[string]struct{ manifest, tmpl string }{
+		"output path":     {strings.Replace(minimalManifest, "'{{ .component.name }}.out'", "'{{ .component.no_such_key }}.out'", 1), "x"},
+		"included define": {minimalManifest, `{{ define "d" }}{{ .no_such_key }}{{ end }}{{ include "d" .component }}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ts, err := codegen.LoadTemplateSet(writeSet(t, tc.manifest, map[string]string{"a.tmpl": tc.tmpl}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ts.Render(oneComponentModel(), codegen.ModeCodegen, nil, nil); err == nil || !strings.Contains(err.Error(), "no_such_key") {
+				t.Fatalf("a missing model key must fail rendering, got %v", err)
+			}
+		})
+	}
+}

@@ -310,6 +310,10 @@ func (ts *TemplateSet) bind(imports []any, protoFiles map[string]any) (*template
 	if err != nil {
 		return nil, err
 	}
+	// A clone does not carry the set's options before Go 1.25: set
+	// missingkey=error again so a missing model key fails rendering on every
+	// supported Go version.
+	t.Option("missingkey=error")
 	byPath := map[string]any{}
 	for _, imp := range imports {
 		m := imp.(map[string]any)
