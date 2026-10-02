@@ -33,13 +33,29 @@ Each language subcommand speaks the protoc plugin contract on
 stdin/stdout. Components reference their commands and events by name, so
 every file declaring part of a component must be in the same plugin run:
 configure buf with strategy: all on the angzarr plugins (a split run fails
-with ANZ013).`,
+with ANZ013).
+
+The plugin option templates=<repo>@<rev> (or a local directory) renders a
+client repository's template set over the component model instead of a
+built-in emitter; param.<name>=<value> overrides a template parameter. The
+model subcommand emits that model as JSON (docs/templates.md).`,
 }
 
 func init() {
 	for _, lang := range codegen.Languages() {
 		codegenCmd.AddCommand(languageCommand(lang))
 	}
+	codegenCmd.AddCommand(&cobra.Command{
+		Use:   "model",
+		Short: "protoc plugin emitting the language-neutral component model as " + codegen.ModelFileName,
+		Long: `Emit the validated component model of the request as one JSON document
+(` + codegen.ModelFileName + `), the data every language's templates render. The
+document carries schema_version; docs/templates.md describes the schema.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runModel(cmd.InOrStdin(), cmd.OutOrStdout())
+		},
+	})
 	codegenCmd.AddCommand(&cobra.Command{
 		Use:   "languages",
 		Short: "List target languages with registered emitters",
@@ -70,6 +86,18 @@ func languageCommand(lang string) *cobra.Command {
 //
 // protogen.Options.Run is not used: it inspects os.Args itself and
 // rejects the subcommand arguments cobra routes on.
+// runModel speaks the protoc plugin protocol, emitting the component model.
+func runModel(in io.Reader, out io.Writer) error {
+	gen, _, err := readPlugin(in, paramKeys{modelOnly: true})
+	if err != nil {
+		return err
+	}
+	if err := codegen.GenerateModel(gen, codegen.ModelFileName); err != nil {
+		gen.Error(err)
+	}
+	return writeResponse(out, gen)
+}
+
 func runPlugin(in io.Reader, out io.Writer, lang string) error {
 	gen, params, err := readPlugin(in, paramKeys{})
 	if err != nil {

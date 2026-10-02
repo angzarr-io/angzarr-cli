@@ -39,7 +39,6 @@ func componentFile(file *protogen.File, stem, suffix string) string {
 // Emitter implementation and registering it here.
 var emitters = map[string]Emitter{
 	goEmitter{}.Lang():     goEmitter{},
-	pyEmitter{}.Lang():     pyEmitter{},
 	javaEmitter{}.Lang():   javaEmitter{},
 	csharpEmitter{}.Lang(): csharpEmitter{},
 	cppEmitter{}.Lang():    cppEmitter{},
@@ -48,6 +47,22 @@ var emitters = map[string]Emitter{
 
 // Languages lists the registered target languages.
 func Languages() []string {
+	langs := make([]string, 0, len(emitters)+len(templateLanguages))
+	for lang := range emitters {
+		langs = append(langs, lang)
+	}
+	for lang := range templateLanguages {
+		if _, dup := emitters[lang]; !dup {
+			langs = append(langs, lang)
+		}
+	}
+	sort.Strings(langs)
+	return langs
+}
+
+// BuiltinLanguages lists the languages the CLI generates with a built-in
+// emitter (no template set needed).
+func BuiltinLanguages() []string {
 	langs := make([]string, 0, len(emitters))
 	for lang := range emitters {
 		langs = append(langs, lang)
@@ -56,21 +71,74 @@ func Languages() []string {
 	return langs
 }
 
-// Options carries language-specific codegen settings parsed from the plugin
-// parameter. PyFrameworkPackage, when set, is the package a python consumer
-// imports the angzarr framework protos from (see pyEmitter.frameworkPkg).
+// Options carries codegen settings parsed from the plugin parameter.
+// Templates, when set, is a template source (ParseTemplateSource): the
+// language is rendered from that template set instead of a built-in emitter,
+// with Params overriding the set's declared parameters.
 type Options struct {
-	PyFrameworkPackage string
+	Templates string
+	Params    map[string]string
 }
 
-// withOptions returns the emitter configured for opts. Only the python emitter
-// has options today; others are returned unchanged.
-func withOptions(emitter Emitter, opts Options) Emitter {
-	if pe, ok := emitter.(pyEmitter); ok {
-		pe.frameworkPkg = opts.PyFrameworkPackage
-		return pe
+// templateLanguages are the languages generated only from a client repo's
+// template set (templates= is required).
+var templateLanguages = map[string]bool{
+	"python": true,
+}
+
+// renderFromTemplates resolves opts.Templates and renders its outputs of one
+// mode, refusing a set written for another language.
+func renderFromTemplates(gen *protogen.Plugin, lang, mode string, opts Options, skip func(string) bool) error {
+	src, err := ParseTemplateSource(opts.Templates)
+	if err != nil {
+		return err
 	}
-	return emitter
+	cache, err := TemplateCacheDir()
+	if err != nil && src.Local == "" {
+		return err
+	}
+	dir, err := src.Resolve(cache)
+	if err != nil {
+		return err
+	}
+	ts, err := LoadTemplateSet(dir)
+	if err != nil {
+		return err
+	}
+	if ts.Manifest.Language != lang {
+		return fmt.Errorf("templates=%s is a %s template set, not %s", opts.Templates, ts.Manifest.Language, lang)
+	}
+	gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
+	return RenderTemplates(gen, ts, mode, opts.Params, skip)
+}
+
+// lookupEmitter finds the built-in emitter for lang, explaining when the
+// language is template-only.
+func lookupEmitter(lang string) (Emitter, error) {
+	if emitter, ok := emitters[lang]; ok {
+		return emitter, nil
+	}
+	if templateLanguages[lang] {
+		return nil, fmt.Errorf("%s is generated from the client repository's templates: pass the plugin option "+
+			"templates=github.com/angzarr-io/angzarr-client-%s@<commit|tag> (or templates=<local path>)", lang, lang)
+	}
+	return nil, fmt.Errorf("no emitter for language %q (have %v)", lang, Languages())
+}
+
+// GenerateModel writes the language-neutral component model of the request
+// as one JSON file at name.
+func GenerateModel(gen *protogen.Plugin, name string) error {
+	gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
+	model, diags := AnalyzeModel(gen)
+	if HasErrors(diags) {
+		return diagError(diags)
+	}
+	raw, err := ModelJSON(model)
+	if err != nil {
+		return err
+	}
+	_, err = gen.NewGeneratedFile(name, "").Write(raw)
+	return err
 }
 
 // Generate validates every component declaration in the request and emits
@@ -80,11 +148,13 @@ func withOptions(emitter Emitter, opts Options) Emitter {
 // so the model is built over the whole request and then grouped by the file
 // each anchor lives in.
 func Generate(gen *protogen.Plugin, lang string, opts Options) error {
-	emitter, ok := emitters[lang]
-	if !ok {
-		return fmt.Errorf("no emitter for language %q (have %v)", lang, Languages())
+	if opts.Templates != "" {
+		return renderFromTemplates(gen, lang, ModeCodegen, opts, nil)
 	}
-	emitter = withOptions(emitter, opts)
+	emitter, err := lookupEmitter(lang)
+	if err != nil {
+		return err
+	}
 	gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
 	model, diags := analyze(gen)
@@ -110,11 +180,13 @@ func Generate(gen *protogen.Plugin, lang string, opts Options) error {
 // exists receives the response-relative file path; a nil predicate emits every
 // stub (overwriting), which callers should avoid in normal use.
 func GenerateScaffold(gen *protogen.Plugin, lang string, exists func(path string) bool, opts Options) error {
-	emitter, ok := emitters[lang]
-	if !ok {
-		return fmt.Errorf("no emitter for language %q (have %v)", lang, Languages())
+	if opts.Templates != "" {
+		return renderFromTemplates(gen, lang, ModeScaffold, opts, exists)
 	}
-	emitter = withOptions(emitter, opts)
+	emitter, err := lookupEmitter(lang)
+	if err != nil {
+		return err
+	}
 	gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
 	model, diags := analyze(gen)

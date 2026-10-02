@@ -35,7 +35,7 @@ func TestQuoteLiteral_EscapesForCFamilyAndScriptLanguages(t *testing.T) {
 		"l1\nl2":  `"l1\nl2"`,
 		"t\tr\r":  `"t\tr\r"`,
 	} {
-		for name, q := range map[string]func(string) string{"cpp": cppQuote, "python": pyQuote, "typescript": tsQuote} {
+		for name, q := range map[string]func(string) string{"cpp": cppQuote, "typescript": tsQuote} {
 			if got := q(in); got != want {
 				t.Errorf("%s quote(%q) = %s, want %s", name, in, got, want)
 			}

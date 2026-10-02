@@ -102,7 +102,9 @@ fmt-fix:
 
 # Run one plugin (codegen or scaffold) for every registered language over a
 # proto tree, writing <out>/<mode>/<lang>/. A smoke test of the emitters
-# against real protos; nothing is compiled.
+# against real protos; nothing is compiled. Python renders the template set
+# named by ANGZARR_PYTHON_TEMPLATES (a client-python checkout or
+# github.com/angzarr-io/angzarr-client-python@<rev>) and is skipped without it.
 # strategy is buf's plugin strategy (all, or directory to reproduce split runs).
 # Usage: just smoke ../angzarr-project/proto /tmp/smoke codegen
 smoke protos out mode="codegen" strategy="all":
@@ -126,6 +128,11 @@ smoke protos out mode="codegen" strategy="all":
         for lang in $("$work/angzarr" codegen languages); do
             dir="{{mode}}/$lang"
             opt="paths=source_relative"
+            if [ "$lang" = python ]; then
+                # Rendered from angzarr-client-python's templates.
+                if [ -z "${ANGZARR_PYTHON_TEMPLATES:-}" ]; then continue; fi
+                opt="$opt,templates=$ANGZARR_PYTHON_TEMPLATES"
+            fi
             if [ "{{mode}}" = scaffold ]; then opt="$opt,out_dir=$dir"; fi
             echo "  - local: [\"$work/angzarr\", \"{{mode}}\", \"$lang\"]"
             echo "    out: $dir"

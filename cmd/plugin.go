@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -25,6 +26,9 @@ type pluginParams struct {
 // paramKeys lists the parameters a plugin accepts; any other key is an error.
 type paramKeys struct {
 	outDir bool
+	// modelOnly refuses the rendering parameters (templates=, param.*): the
+	// model plugin emits the language-neutral model and renders nothing.
+	modelOnly bool
 }
 
 // readPlugin reads a CodeGeneratorRequest and builds the protogen.Plugin,
@@ -48,10 +52,17 @@ func pluginFromRequest(raw []byte, keys paramKeys) (*protogen.Plugin, *pluginPar
 	pgo := protogen.Options{
 		ParamFunc: func(name, value string) error {
 			switch {
-			case name == "py_framework_package":
-				// The package a python consumer imports the angzarr framework
-				// protos from (e.g. angzarr_router_ffi.gen).
-				params.opts.PyFrameworkPackage = value
+			case name == "templates" && !keys.modelOnly:
+				// A client repo's template set: github.com/org/repo@rev
+				// (fetched and cached) or a local directory.
+				params.opts.Templates = value
+			case strings.HasPrefix(name, "param.") && !keys.modelOnly:
+				// A template parameter override (param.<name>=<value>);
+				// the template set declares the names it accepts.
+				if params.opts.Params == nil {
+					params.opts.Params = map[string]string{}
+				}
+				params.opts.Params[strings.TrimPrefix(name, "param.")] = value
 			case name == "out_dir" && keys.outDir:
 				params.outDir = value
 				params.outDirSet = true
