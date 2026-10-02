@@ -6,6 +6,12 @@ import? 'angzarr-project/submodule.just'
 
 TOP := `git rev-parse --show-toplevel`
 
+# angzarr-router revision compile-go-pinned builds the generated Go against
+# (rem/review-2026-09, router ABI 3).
+ROUTER_REPO := "https://github.com/angzarr-io/angzarr-router.git"
+ROUTER_REV := "32540ce"
+PROTOC_GEN_GO_VERSION := "v1.36.11"
+
 default: test
 
 build:
@@ -19,10 +25,15 @@ lint:
 
 # Mutation-test a package with gremlins (covered lines only). One worker and
 # a wide timeout keep each mutant's `go test` run from tripping gremlins'
-# coverage-derived deadline.
+# coverage-derived deadline. Every mutant is a fresh build, so the run uses a
+# throwaway GOCACHE removed at the end instead of growing the host cache.
 # Usage: just mutants ./codegen
 mutants pkg="./...":
-    cd {{TOP}} && gremlins unleash --workers 1 --timeout-coefficient 20 {{pkg}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export GOCACHE="$(mktemp -d)"
+    trap 'chmod -R u+w "$GOCACHE"; rm -r "$GOCACHE"' EXIT
+    cd "{{TOP}}" && gremlins unleash --workers 1 --timeout-coefficient 20 {{pkg}}
 
 # Lint component declarations before they are generated: resolution errors
 # block, coherence warnings are reported. Codegen gates on the same analysis
@@ -101,7 +112,8 @@ smoke protos out mode="codegen" strategy="all":
     mkdir -p "{{out}}"
     out="$(realpath "{{out}}")"
     work="$(mktemp -d)"
-    trap 'rm -f "$work/angzarr" "$work/buf.gen.yaml"; rmdir "$work"' EXIT
+    trap 'chmod -R u+w "$work"; rm -r "$work"' EXIT
+    export GOCACHE="$work/gocache"
     go build -o "$work/angzarr" "{{TOP}}"
     {
         echo "version: v2"
@@ -140,7 +152,8 @@ compile-go router protos=(TOP / "angzarr-project/proto"):
     protos="$(realpath "{{protos}}")"
     test -f "$binding/go.mod" || { echo "no Go binding at $binding"; exit 1; }
     work="$(mktemp -d)"
-    trap 'rm -r "$work"' EXIT
+    trap 'chmod -R u+w "$work"; rm -r "$work"' EXIT
+    export GOCACHE="$work/gocache"
     go build -o "$work/angzarr" "{{TOP}}"
     cat > "$work/buf.gen.yaml" <<YAML
     version: v2
@@ -173,3 +186,52 @@ compile-go router protos=(TOP / "angzarr-project/proto"):
     go build -tags ffirouter ./...
     go vet -tags ffirouter ./...
     echo "compile-go OK: $(find . -name '*_angzarr.pb.go' | wc -l) wiring files, $(find . -name '*_angzarr_handler.go' | wc -l) stubs"
+
+# compile-go against angzarr-router at ROUTER_REV, cloned into a throwaway
+# directory. The binding's generated proto package is not committed, so its
+# protoc-gen-go output is generated first with the binding's own managed
+# go_package layout (bindings/go/buf.gen.yaml minus its test wiring). Used by
+# CI.
+compile-go-pinned:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    work="$(mktemp -d)"
+    trap 'chmod -R u+w "$work"; rm -r "$work"' EXIT
+    export GOCACHE="$work/gocache"
+    git clone --quiet --filter=blob:none "{{ROUTER_REPO}}" "$work/router"
+    git -C "$work/router" checkout --quiet "{{ROUTER_REV}}"
+    git -C "$work/router" submodule update --quiet --init angzarr-project
+    cat > "$work/binding.gen.yaml" <<YAML
+    version: v2
+    managed:
+      enabled: true
+      disable:
+        - file_option: go_package
+          path: google
+      override:
+        - file_option: go_package_prefix
+          value: github.com/angzarr-io/angzarr-router/bindings/go/gen
+    plugins:
+      - local: protoc-gen-go
+        out: bindings/go/gen
+        opt: paths=source_relative
+    YAML
+    (cd "$work/router" && buf generate --template "$work/binding.gen.yaml" \
+        --exclude-path angzarr-project/proto/google --exclude-path proto/google \
+        --exclude-path angzarr-project/proto/io/angzarr/examples)
+    just --justfile "{{TOP}}/justfile" compile-go "$work/router"
+
+# Install the protoc plugins the codegen recipes drive (protoc-gen-go).
+tools:
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@{{PROTOC_GEN_GO_VERSION}}
+
+# smoke codegen and scaffold for every language over the vendored protos into
+# a throwaway directory. Used by CI.
+smoke-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="$(mktemp -d)"
+    trap 'rm -r "$out"' EXIT
+    just --justfile "{{TOP}}/justfile" smoke "{{TOP}}/angzarr-project/proto" "$out" codegen > /dev/null
+    just --justfile "{{TOP}}/justfile" smoke "{{TOP}}/angzarr-project/proto" "$out" scaffold > /dev/null
+    echo "smoke-check OK: $(find "$out" -type f | wc -l) files"
