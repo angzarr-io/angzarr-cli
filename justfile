@@ -41,13 +41,16 @@ archlint:
 # a wide timeout keep each mutant's `go test` run from tripping gremlins'
 # coverage-derived deadline. Every mutant is a fresh build, so the run uses a
 # throwaway GOCACHE removed at the end instead of growing the host cache.
+# The emitter packages are exercised end to end by the codegen tests, so
+# coverage is gathered across every package (--coverpkg) and each mutant runs
+# the whole suite (--integration).
 # Usage: just mutants ./codegen
 mutants pkg="./...":
     #!/usr/bin/env bash
     set -euo pipefail
     export GOCACHE="$(mktemp -d)"
     trap 'chmod -R u+w "$GOCACHE"; rm -r "$GOCACHE"' EXIT
-    cd "{{TOP}}" && gremlins unleash --workers 1 --timeout-coefficient 20 {{pkg}}
+    cd "{{TOP}}" && gremlins unleash --workers 1 --timeout-coefficient 20 --coverpkg ./... --integration {{pkg}}
 
 # Lint component declarations before they are generated: resolution errors
 # block, coherence warnings are reported. Codegen gates on the same analysis
