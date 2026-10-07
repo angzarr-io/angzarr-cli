@@ -33,9 +33,10 @@ no rpcs. The annotations *are* the declaration:
 - `repeated (io.angzarr.v1.event)` on an **event** message — **one entry per
   consuming component** (an event folded into its aggregate *and* triggering a
   saga carries two entries).
-- Compensation is declared on the **compensator** via
-  `(component).compensates` — a list of fully-qualified command types whose
-  rejection this component reacts to.
+- Compensation is declared on the **compensator** — an aggregate or process
+  manager whose event caused the command — via `(component).compensates`:
+  entries `"fq.Type"` or `"domain:fq.Type"` naming rejected commands it
+  reacts to. Sagas and projectors never receive rejections.
 
 A minimal aggregate:
 
@@ -66,7 +67,7 @@ message OrderPlaced {
 message OrderState {
   option (io.angzarr.v1.component) = {
     kind: COMPONENT_KIND_AGGREGATE
-    input_domain: "orders"
+    domain: "orders"         // the stream this aggregate owns
     name: "OrderAggregate"   // generated base name; defaults to the message name
   };
   string sku = 1;
@@ -81,10 +82,14 @@ message OrderState {
 | field | meaning |
 |---|---|
 | `kind` | `COMPONENT_KIND_{AGGREGATE,SAGA,PROCESS_MANAGER,PROJECTOR}` |
-| `input_domain` | domain whose events this consumes (aggregate's own domain; saga/projector filter) |
-| `output_domain` | domain it issues commands to (saga); the PM's own domain |
+| `domain` | the stream the component **owns** (aggregate's domain, PM's workflow domain); forbidden for sagas/projectors |
+| `input_domain` | a domain it **subscribes** to (saga source, projector filter); empty for aggregates/PMs |
+| `output_domain` / `output_domains` | domains it **sends commands** to (sagas, PMs) |
 | `name` | generated handler/dispatch base name; **defaults to the anchor message name** |
-| `compensates` | repeated FQ command types whose rejection this component compensates |
+| `compensates` | aggregates and process managers: rejected commands this component compensates — `"fq.Type"` (sent to any domain, `On<Command>Rejected`) or `"domain:fq.Type"` (sent to that domain only, `On<Command>From<Domain>Rejected`); a type appears once unqualified or once per domain, never both |
+| `facts` | aggregates only: repeated FQ event types it records as facts — one `On<Event>Fact(fact, state)` handler each, returning a `FactRecord`: the fact to record (as received, or annotated) plus optional flagging events; returning nothing (or, in Go, a record with no fact) records the fact as received. It cannot refuse. An undeclared fact is refused by the router (NO_FACT_HANDLER) |
+| `emits_facts` | sagas and process managers: repeated FQ fact types they inject; each must appear in `facts` of an aggregate owning one of their output domains (`ANZ018`) |
+| `undoes` | aggregates only: repeated FQ command types it handles and can undo when a CASCADE COMPENSATE `Compensate` arrives (`On<Command>Undo`) |
 
 `CommandOptions` (on a command message): `component` (anchor FQ), `emits`
 (repeated FQ event types — see [typed emit](#typed-emit-vs-the-escape-hatch)).
@@ -94,11 +99,21 @@ consuming anchor FQ), `domain` (source-domain filter for a saga / projector /
 PM trigger), `applies` (PM-only: `true` folds the PM's own state, `false` is a
 cross-domain trigger reaction).
 
-Required fields by kind: aggregate → `input_domain`; saga → `input_domain` +
-`output_domain`; process manager → `output_domain` (+ every trigger event entry
-needs `domain`); projector → `input_domain`. Generation **fails** (it does not
-emit silently-broken wiring) on a missing required field or an unresolvable /
-short type reference.
+Domain roles by kind (a missing required field is `ANZ008`, a field the kind
+must leave empty is `ANZ014`):
+
+| kind | `domain` | `input_domain` | `output_domain(s)` |
+|---|---|---|---|
+| aggregate | required | empty | empty |
+| process manager | required | empty (triggers use `(event).domain`, required) | command targets |
+| saga | forbidden | required | at least one |
+| projector | forbidden | optional | empty |
+
+A projector's domain filter is the union of `input_domain` and every handler's
+`(event).domain`; with none declared it consumes every domain. Generation **fails** (it does not emit
+silently-broken wiring) on a missing required field or an unresolvable /
+short type reference. `angzarr lint` runs the same checks standalone; the
+README lists the diagnostic codes.
 
 ---
 
@@ -125,23 +140,32 @@ plugins:
   - local: ["angzarr", "codegen", "go"]
     out: gen
     opt: paths=source_relative
+    strategy: all
   # handler stub — generated ONCE into your source tree, then yours
   - local: ["angzarr", "scaffold", "go"]
     out: .
-    opt: paths=source_relative
+    opt: [paths=source_relative, out_dir=.]
+    strategy: all
 ```
 
-Then `buf generate`. (`angzarr codegen languages` lists the supported targets —
-currently `go` and `python`.)
+Then `buf generate`. `angzarr codegen languages` lists the supported targets:
+`cpp`, `csharp`, `go`, `java`, `python`, `typescript`.
 
-- The **wiring** plugin emits `<proto>_angzarr.pb.go` (Go) /
-  `<proto>_angzarr.py` (Python). Treat it like any generated code: gitignore it,
-  regenerate on demand, never edit.
-- The **scaffold** plugin emits `<proto>_angzarr_handler.go` / `..._handler.py`
-  **only when the file does not already exist** — so it bootstraps your impl
-  once and then leaves it alone. Run it with `out: .` /
-  `paths=source_relative` so its existence check resolves against your source
-  tree. The scaffold is optional; you can also hand-write the impl.
+- **`strategy: all`** on both angzarr plugins is required. A component's
+  commands and events point at it by name, not by import, so all of its files
+  must reach the plugin together; buf's default per-directory invocation
+  splits them, and such a run fails with `ANZ013`.
+- The **wiring** plugin emits one file per component, named after the
+  component (`<Name>` = `(component).name`, else the anchor message name):
+  `snake(Name)_angzarr.pb.go` (Go), `.py` (Python), `.h` (C++), `.ts`
+  (TypeScript), `<Name>Angzarr.java` / `<Name>Angzarr.cs`. Treat it like any
+  generated code: gitignore it, regenerate on demand, never edit.
+- The **scaffold** plugin emits `snake(Name)_angzarr_handler.*`
+  (`<Stub>.java` / `<Stub>.cs`) **only when the file does not already exist**
+  — it bootstraps your impl once and then leaves it alone. protoc does not tell
+  a plugin where its output lands, so set `out_dir` to the same directory as
+  `out:` (relative to where buf runs); scaffold refuses to run without it.
+  The scaffold is optional; you can also hand-write the impl.
 
 ### Shared framework protos: generate them fully native (Python)
 
@@ -194,7 +218,7 @@ dispatch constructor, and a one-call registration:
 // compile error, never a silent no-op.
 type OrderAggregateHandler interface {
     PlaceOrder(cmd *PlaceOrder, state *OrderState, cctx ffirouter.CommandContext) ([]*OrderPlaced, error)
-    ApplyOrderPlaced(state *OrderState, event *OrderPlaced)
+    ApplyOrderPlaced(state *OrderState, event *OrderPlaced, ctx ffirouter.PageContext)
 }
 
 func NewOrderAggregateDispatch(h OrderAggregateHandler) *ffirouter.AggregateDispatch[*OrderState] { … }
@@ -220,7 +244,7 @@ func (OrderAggregate) PlaceOrder(cmd *PlaceOrder, state *OrderState, cctx ffirou
     panic("TODO: implement OrderAggregate.PlaceOrder")
 }
 
-func (OrderAggregate) ApplyOrderPlaced(state *OrderState, event *OrderPlaced) {
+func (OrderAggregate) ApplyOrderPlaced(state *OrderState, event *OrderPlaced, ctx ffirouter.PageContext) {
     // TODO: implement OrderAggregate.ApplyOrderPlaced
 }
 ```
@@ -249,7 +273,7 @@ func (OrderAggregate) PlaceOrder(cmd *PlaceOrder, state *OrderState, cctx ffirou
 }
 
 // applier: fold the event into rebuilt state (no return)
-func (OrderAggregate) ApplyOrderPlaced(state *OrderState, event *OrderPlaced) {
+func (OrderAggregate) ApplyOrderPlaced(state *OrderState, event *OrderPlaced, ctx ffirouter.PageContext) {
     state.Sku = event.Sku
     state.Quantity = event.Quantity
 }
@@ -264,12 +288,13 @@ class OrderAggregate:
             raise reject("QUANTITY_NOT_POSITIVE", "quantity must be positive")
         return [order_pb2.OrderPlaced(sku=cmd.sku, quantity=cmd.quantity)]
 
-    def apply_order_placed(self, state, event):
+    def apply_order_placed(self, state, event, ctx):
         state.sku = event.sku
         state.quantity = event.quantity
 ```
 
-`state` is your own state message, reconstructed by the framework from prior
+Appliers receive a `PageContext` too: the folded event's book cover and page
+sequence. `state` is your own state message, reconstructed by the framework from prior
 events (and snapshots) before the command runs — host state never crosses the
 wire. `cctx` carries the historical-state evidence (`NextSequence`,
 `HadPriorEvents`). To reject a command, return/raise a coded error
@@ -278,13 +303,24 @@ wire. `cctx` carries the historical-state evidence (`NextSequence`,
 
 The other kinds follow the same shape, with kind-appropriate signatures:
 
-- **saga** — `Increased(event, dests) ([]*CommandBook, []*EventBook, error)`:
-  translate a source event into commands (stamp them from `dests`) and/or
-  injected facts.
+- **saga** — `Increased(event, dests, source) ([]*CommandBook, []*EventBook, error)`:
+  translate a source event into commands and/or injected facts. `dests` are
+  the saga's declared output domains; emitted commands are deferred (the
+  router stamps their provenance, never a sequence). `source` (`PageContext`)
+  is the triggering event's book cover and page sequence.
 - **process manager** — a trigger handler
-  `Increased(event, state, dests) (*ProcessManagerHandleResponse, error)` plus
-  appliers folding its own state.
-- **projector** — `Increased(projection, event) error` folds, and a generated
+  `Increased(event, state, dests, triggerCover) (*ProcessManagerHandleResponse, error)`
+  plus appliers folding its own state; a compensator
+  `On<Command>Rejected(n, rejection, state) (*ProcessManagerHandleResponse, error)`
+  returns a full response (process events, deferred commands, facts,
+  escalation).
+- **aggregate undo** — for each `undoes` entry,
+  `On<Command>Undo(n, compensate, state, cctx) (*BusinessResponse, error)`
+  reverses a command the aggregate executed when a CASCADE COMPENSATE
+  `Compensate` arrives; a `Compensate` with no undo handler is answered
+  UNIMPLEMENTED and dead-lettered.
+- **projector** — `Increased(projection, event, ctx) error` folds, where `ctx`
+  (`PageContext`) is the event's book cover and page sequence, and a generated
   `Finish(projection, events) (*Projection, error)` packs the result.
 
 ---
@@ -338,7 +374,8 @@ error you clean up. You are never asked to merge into generated code.
 | command handler | the command message name | `PlaceOrder` |
 | event handler (saga / projector / PM trigger) | the event message name | `OrderPlaced` |
 | applier (aggregate / PM own-state fold) | `Apply` + event name | `ApplyOrderPlaced` |
-| compensator | `On` + short command + `Rejected` | `OnReserveRejected` |
+| compensator | `On` + short command + `Rejected` (`From` + domain for a `domain:` entry) | `OnReserveRejected` |
+| undo handler | `On` + short command + `Undo` | `OnReserveUndo` |
 
 The `Apply` prefix keeps an applier distinct from a handler for the *same*
 event — a process manager can both fold an event into its state and react to it.
@@ -368,11 +405,12 @@ one handler per type — model extra reactions as extra components.)
 ## Gotchas
 
 - **Name your component distinctly from its state message.** The generated
-  interface is `<name>Handler` and the scaffold struct is `<name>`. If `name`
-  defaults to the state message name (e.g. anchor `OrderState`, no `name`), the
-  scaffold struct `OrderState` collides with the generated `OrderState` type.
-  Set `name` to the component (e.g. `OrderAggregate`) — distinct from the state
-  message.
+  interface is `<Name>Handler` and the scaffold type is `<Name>`. Without a
+  `name`, `<Name>` is the anchor message's name and the scaffold type becomes
+  `<Anchor>Impl` (the anchor's own name is taken by the proto-generated
+  message in the same package). A `name` — or any generated type such as
+  `<Name>Handler` — equal to a message or enum in the package is rejected
+  (`ANZ012`).
 - **Fully-qualified type references only.** `component`, `emits`, and
   `compensates` must name fully-qualified message types present in the compiled
   set; short names never match dispatch, and generation fails on them rather

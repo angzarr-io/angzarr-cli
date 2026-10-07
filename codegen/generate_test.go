@@ -102,6 +102,11 @@ func optionsFDP(pkg string) *descriptorpb.FileDescriptorProto {
 					field("output_domain", 3, str_),
 					field("name", 4, str_),
 					repeatedField("compensates", 5, str_),
+					repeatedField("output_domains", 6, str_),
+					field("domain", 7, str_),
+					repeatedField("undoes", 8, str_),
+					repeatedField("facts", 9, str_),
+					repeatedField("emits_facts", 10, str_),
 				},
 			},
 			{
@@ -209,6 +214,53 @@ func (o optionTypes) componentDecl(kind int32, inputDomain, outputDomain, name s
 	}
 	opts := &descriptorpb.MessageOptions{}
 	opts.ProtoReflect().Set(o.component.TypeDescriptor(), protoreflect.ValueOfMessage(sub))
+	return opts
+}
+
+// ownedDecl stamps a component that owns a stream (aggregate / process
+// manager): domain is its own domain, outputDomain its command target.
+func (o optionTypes) ownedDecl(kind int32, domain, outputDomain, name string, compensates ...string) *descriptorpb.MessageOptions {
+	opts := o.componentDecl(kind, "", outputDomain, name, compensates...)
+	return o.withField(opts, "domain", domain)
+}
+
+// withField sets a string field on a componentDecl (no-op for "").
+func (o optionTypes) withField(opts *descriptorpb.MessageOptions, field, value string) *descriptorpb.MessageOptions {
+	if value == "" {
+		return opts
+	}
+	sub := opts.ProtoReflect().Get(o.component.TypeDescriptor()).Message()
+	sub.Set(sub.Descriptor().Fields().ByName(protoreflect.Name(field)), protoreflect.ValueOfString(value))
+	return opts
+}
+
+// withUndoes appends undoes entries to a componentDecl.
+func (o optionTypes) withUndoes(opts *descriptorpb.MessageOptions, commands ...string) *descriptorpb.MessageOptions {
+	sub := opts.ProtoReflect().Get(o.component.TypeDescriptor()).Message()
+	list := sub.Mutable(sub.Descriptor().Fields().ByName("undoes")).List()
+	for _, c := range commands {
+		list.Append(protoreflect.ValueOfString(c))
+	}
+	return opts
+}
+
+// withList appends entries to a repeated string field of a componentDecl.
+func (o optionTypes) withList(opts *descriptorpb.MessageOptions, field string, values ...string) *descriptorpb.MessageOptions {
+	sub := opts.ProtoReflect().Get(o.component.TypeDescriptor()).Message()
+	list := sub.Mutable(sub.Descriptor().Fields().ByName(protoreflect.Name(field))).List()
+	for _, v := range values {
+		list.Append(protoreflect.ValueOfString(v))
+	}
+	return opts
+}
+
+// withOutputDomains appends output_domains entries to a componentDecl.
+func (o optionTypes) withOutputDomains(opts *descriptorpb.MessageOptions, domains ...string) *descriptorpb.MessageOptions {
+	sub := opts.ProtoReflect().Get(o.component.TypeDescriptor()).Message()
+	list := sub.Mutable(sub.Descriptor().Fields().ByName("output_domains")).List()
+	for _, d := range domains {
+		list.Append(protoreflect.ValueOfString(d))
+	}
 	return opts
 }
 
@@ -321,9 +373,20 @@ func scaffold(t *testing.T, lang, optionsPkg string, exists func(string) bool, m
 // (typed-emit of OrderCreated) and an OrderCreated applier, anchored on State.
 func orderAggregate(o optionTypes) []declMsg {
 	return []declMsg{
-		{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		{"CreateOrder", o.commandDecl(fq("State"), fq("OrderCreated"))},
 		{"OrderCreated", o.eventDecl(eventEntry{component: fq("State")})},
+	}
+}
+
+// projectorMultiDomain declares a projector whose handlers source events from
+// two domains ("table", "hand" — declaration order deliberately not sorted)
+// while input_domain names only "table".
+func projectorMultiDomain(o optionTypes) []declMsg {
+	return []declMsg{
+		{"Projection", o.componentDecl(4, "table", "", "MultiDomainProjector")},
+		{"TableCreated", o.eventDecl(eventEntry{component: fq("Projection"), domain: "table"})},
+		{"HandStarted", o.eventDecl(eventEntry{component: fq("Projection"), domain: "hand"})},
 	}
 }
 
@@ -349,7 +412,7 @@ func TestGenerate_ValidAggregate_EmitsStrictSeam(t *testing.T) {
 				"func NewOrderAggregateDispatch(",
 				"rebuilder.WithSnapshot(", // snapshot loader for stateful kinds
 				`OnCommand("validation.test.CreateOrder"`,
-				`Apply("validation.test.OrderCreated"`,
+				`ApplyWithContext("validation.test.OrderCreated"`,
 				"func RegisterOrderAggregate(",
 			} {
 				if !strings.Contains(content, want) {
@@ -364,7 +427,7 @@ func TestGenerate_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	// A command with no declared emits returns the raw EventBook.
 	resp, err := generate(t, "go", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -393,8 +456,8 @@ func TestGenerate_ValidSaga_EmitsMethodRegister(t *testing.T) {
 		"type OrderSagaHandler interface",
 		"func NewOrderSagaDispatch(",
 		"r.RegisterSaga(NewOrderSagaDispatch(h))", // saga registers via a method
-		`OnEvent("validation.test.OrderPlaced"`,
-		"sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
+		`OnEventWithContext("validation.test.OrderPlaced"`,
+		"source _go.PageContext", // saga handler receives the source page context (cover + sequence)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("generated file missing %q", want)
@@ -408,7 +471,7 @@ func TestGenerate_PMSameEventApplierAndTrigger_NoMethodCollision(t *testing.T) {
 	// renamed (Apply<Event>) to avoid a duplicate interface method.
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "go", ioPkg,
-		declMsg{"PMState", o.componentDecl(3, "", "fulfillment", "")},
+		declMsg{"PMState", o.ownedDecl(3, "workflow", "fulfillment", "")},
 		declMsg{"Trig", o.eventDecl(
 			eventEntry{component: fq("PMState"), applies: true},
 			eventEntry{component: fq("PMState"), domain: "orders"},
@@ -449,7 +512,7 @@ func TestGeneratePython_EmitsProtocolSeam(t *testing.T) {
 		"import angzarr_router_ffi as _az",
 		"class OrderAggregateHandler(Protocol):",
 		"def create_order(self, cmd: _validation_test.CreateOrder, state: _validation_test.State, cctx: _az.CommandContext) -> list[_validation_test.OrderCreated]: ...",
-		"def apply_order_created(self, state: _validation_test.State, event: _validation_test.OrderCreated) -> None: ...",
+		"def apply_order_created(self, state: _validation_test.State, event: _validation_test.OrderCreated, ctx: _az.PageContext) -> None: ...",
 		"def new_order_aggregate_dispatch(handler: OrderAggregateHandler) -> _az.AggregateDispatch:",
 		`dispatch.on_command("validation.test.CreateOrder"`,
 		"book.pages.add().event.CopyFrom(_az.pack(ev))", // typed-emit
@@ -475,7 +538,7 @@ func TestGeneratePython_SagaUsesMethodRegister(t *testing.T) {
 	content := resp.File[0].GetContent()
 	for _, want := range []string{
 		`_az.SagaDispatch("OrderSaga", "orders", targets=["fulfillment"])`,
-		`dispatch.on_event("validation.test.OrderPlaced"`,
+		`dispatch.on_event_with_context("validation.test.OrderPlaced"`,
 		"router.register_saga(new_order_saga_dispatch(handler))",
 	} {
 		if !strings.Contains(content, want) {
@@ -487,7 +550,7 @@ func TestGeneratePython_SagaUsesMethodRegister(t *testing.T) {
 func TestGeneratePython_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "python", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -575,35 +638,32 @@ func TestGenerate_Validations_FailGeneration(t *testing.T) {
 		name string
 		msgs []declMsg
 	}{
-		{"aggregate without input domain", []declMsg{
-			{"State", o.componentDecl(1, "", "", "")},
+		{"aggregate without domain", []declMsg{
+			{"State", o.ownedDecl(1, "", "", "")},
 			{"CreateOrder", o.commandDecl(fq("State"))},
 		}},
 		{"saga without output domain", []declMsg{
 			{"OrderSaga", o.componentDecl(2, "orders", "", "")},
 		}},
-		{"process manager without output domain", []declMsg{
-			{"PMState", o.componentDecl(3, "", "", "")},
+		{"process manager without domain", []declMsg{
+			{"PMState", o.componentDecl(3, "", "fulfillment", "")},
 		}},
 		{"process manager trigger without domain", []declMsg{
-			{"PMState", o.componentDecl(3, "", "fulfillment", "")},
+			{"PMState", o.ownedDecl(3, "workflow", "fulfillment", "")},
 			{"Trig", o.eventDecl(eventEntry{component: fq("PMState")})},
-		}},
-		{"projector without domains", []declMsg{
-			{"ProjState", o.componentDecl(4, "", "", "")},
 		}},
 		{"command to unknown component", []declMsg{
 			{"CreateOrder", o.commandDecl(fq("Nope"))},
 		}},
 		{"command emits unresolvable", []declMsg{
-			{"State", o.componentDecl(1, "orders", "", "")},
+			{"State", o.ownedDecl(1, "orders", "", "")},
 			{"CreateOrder", o.commandDecl(fq("State"), fq("Nope"))},
 		}},
 		{"event to unknown component", []declMsg{
 			{"OrderCreated", o.eventDecl(eventEntry{component: fq("Nope")})},
 		}},
 		{"compensates unresolvable", []declMsg{
-			{"State", o.componentDecl(1, "orders", "", "", fq("Nope"))},
+			{"State", o.ownedDecl(1, "orders", "", "", fq("Nope"))},
 		}},
 		{"command handled by non-aggregate", []declMsg{
 			{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
@@ -644,12 +704,12 @@ func TestGenerateJava_EmitsNestedSeam(t *testing.T) {
 		"java.util.List<validation.test.ValidationTest.OrderCreated> createOrder(",
 		"validation.test.ValidationTest.CreateOrder cmd",
 		"validation.test.ValidationTest.State.Builder state, io.angzarr.router.CommandContext cctx) throws Exception;",
-		"void applyOrderCreated(validation.test.ValidationTest.State.Builder state, validation.test.ValidationTest.OrderCreated event);",
+		"void applyOrderCreated(validation.test.ValidationTest.State.Builder state, validation.test.ValidationTest.OrderCreated event, io.angzarr.router.PageContext ctx);",
 		"public static io.angzarr.router.AggregateDispatch newOrderAggregateDispatch(OrderAggregateHandler h) {",
 		"new io.angzarr.router.Rebuilder(validation.test.ValidationTest.State::newBuilder)",
 		"rebuilder.withSnapshot(",
 		`.onCommand("validation.test.CreateOrder"`,
-		`rebuilder.apply("validation.test.OrderCreated"`,
+		`rebuilder.applyWithContext("validation.test.OrderCreated"`,
 		"io.angzarr.EventPage.newBuilder().setEvent(io.angzarr.router.Pack.pack(ev))",
 		"public static void registerOrderAggregate(io.angzarr.router.Router r, OrderAggregateHandler h) {",
 		"r.registerAggregate(newOrderAggregateDispatch(h));",
@@ -673,9 +733,9 @@ func TestGenerateJava_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 	for _, want := range []string{
 		"public interface OrderSagaHandler {",
 		`new io.angzarr.router.SagaDispatch("OrderSaga", "orders", java.util.List.of("fulfillment"))`,
-		`.onEvent("validation.test.OrderPlaced"`,
+		`.onEventWithContext("validation.test.OrderPlaced"`,
 		"r.registerSaga(newOrderSagaDispatch(h));",
-		"io.angzarr.Cover sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
+		"io.angzarr.router.PageContext source", // saga handler receives the source page context (cover + sequence)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("java saga wiring missing %q\n---\n%s", want, content)
@@ -686,7 +746,7 @@ func TestGenerateJava_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 func TestGenerateJava_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "java", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -726,13 +786,13 @@ func TestGenerateCSharp_EmitsNestedSeam(t *testing.T) {
 		"System.Collections.Generic.IReadOnlyList<Validation.Test.OrderCreated> CreateOrder(",
 		"Validation.Test.CreateOrder cmd, Validation.Test.State state, Angzarr.Router.CommandContext cctx)",
 		// applier: state is the mutable message itself (no Builder); ev param
-		"void ApplyOrderCreated(Validation.Test.State state, Validation.Test.OrderCreated ev)",
+		"void ApplyOrderCreated(Validation.Test.State state, Validation.Test.OrderCreated ev, Angzarr.Router.PageContext page)",
 		// dispatch surfaces are generic in the state message → cast-free wiring
 		"public static Angzarr.Router.AggregateDispatch<Validation.Test.State> NewOrderAggregateDispatch(OrderAggregateHandler h)",
 		"var rebuilder = new Angzarr.Router.Rebuilder<Validation.Test.State>(() => new Validation.Test.State());",
 		"rebuilder.WithSnapshot((state, payload) => Google.Protobuf.MessageExtensions.MergeFrom(state, payload.Value));",
 		`.OnCommand("validation.test.CreateOrder"`,
-		`rebuilder.Apply("validation.test.OrderCreated"`,
+		`rebuilder.ApplyWithContext("validation.test.OrderCreated"`,
 		"var events = h.CreateOrder(cmd, state, cctx);",
 		"book.Pages.Add(new Angzarr.EventPage { Event = Angzarr.Router.Pack.Wrap(ev) });",
 		"public static void RegisterOrderAggregate(Angzarr.Router.Router r, OrderAggregateHandler h)",
@@ -762,9 +822,9 @@ func TestGenerateCSharp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 	for _, want := range []string{
 		"public interface OrderSagaHandler",
 		`new Angzarr.Router.SagaDispatch("OrderSaga", "orders", "fulfillment")`,
-		`.OnEvent("validation.test.OrderPlaced"`,
+		`.OnEventWithContext("validation.test.OrderPlaced"`,
 		"r.RegisterSaga(NewOrderSagaDispatch(h));",
-		"Angzarr.Cover sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
+		"Angzarr.Router.PageContext source", // saga handler receives the source page context (cover + sequence)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("csharp saga wiring missing %q\n---\n%s", want, content)
@@ -775,7 +835,7 @@ func TestGenerateCSharp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 func TestGenerateCSharp_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "csharp", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -812,12 +872,12 @@ func TestGenerateCpp_EmitsNestedSeam(t *testing.T) {
 		"virtual ~OrderAggregateHandler() = default;",
 		// command handler: typed-emit return, const-ref command, ref state
 		"virtual std::vector<validation::test::OrderCreated> CreateOrder(const validation::test::CreateOrder& cmd, validation::test::State& state, const angzarr::router::CommandContext& cctx) = 0;",
-		"virtual void ApplyOrderCreated(validation::test::State& state, const validation::test::OrderCreated& ev) = 0;",
+		"virtual void ApplyOrderCreated(validation::test::State& state, const validation::test::OrderCreated& ev, const angzarr::router::PageContext& ctx) = 0;",
 		"inline angzarr::router::AggregateDispatch<validation::test::State> NewOrderAggregateDispatch(OrderAggregateHandler& h) {",
 		"angzarr::router::Rebuilder<validation::test::State> rebuilder;",
 		"rebuilder.WithSnapshot(",
 		`dispatch.OnCommand("validation.test.CreateOrder"`,
-		`rebuilder.Apply("validation.test.OrderCreated"`,
+		`rebuilder.ApplyWithContext("validation.test.OrderCreated"`,
 		"*book.add_pages()->mutable_event() = angzarr::router::Pack::Wrap(ev);",
 		"inline void RegisterOrderAggregate(angzarr::router::Router& r, OrderAggregateHandler& h) {",
 		"r.RegisterAggregate(NewOrderAggregateDispatch(h));",
@@ -841,9 +901,9 @@ func TestGenerateCpp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 	for _, want := range []string{
 		"class OrderSagaHandler {",
 		`angzarr::router::SagaDispatch dispatch("OrderSaga", "orders", {"fulfillment"});`,
-		`dispatch.OnEvent("validation.test.OrderPlaced"`,
+		`dispatch.OnEventWithContext("validation.test.OrderPlaced"`,
 		"r.RegisterSaga(NewOrderSagaDispatch(h));",
-		"io::angzarr::v1::Cover& sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
+		"angzarr::router::PageContext& source", // saga handler receives the source page context (cover + sequence)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("cpp saga wiring missing %q\n---\n%s", want, content)
@@ -854,7 +914,7 @@ func TestGenerateCpp_SagaUsesMethodRegisterAndTargets(t *testing.T) {
 func TestGenerateCpp_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "cpp", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -890,12 +950,12 @@ func TestGenerateTypeScript_EmitsStrictSeam(t *testing.T) {
 		"export interface OrderAggregateHandler {",
 		// command handler: lowerCamel method, typed-emit array return
 		"createOrder(cmd: CreateOrder, state: State, cctx: CommandContext): OrderCreated[];",
-		"applyOrderCreated(state: State, ev: OrderCreated): void;",
+		"applyOrderCreated(state: State, ev: OrderCreated, ctx: PageContext): void;",
 		"export function newOrderAggregateDispatch(h: OrderAggregateHandler): AggregateDispatch<State> {",
-		"const rebuilder = new Rebuilder<State>(() => create(StateSchema));",
+		"const rebuilder = new Rebuilder<State>(() => create(StateSchema), StateSchema);",
 		"rebuilder.withSnapshot((state, payload) => Pack.merge(StateSchema, state, payload));",
 		`dispatch.onCommand("validation.test.CreateOrder"`,
-		`rebuilder.apply("validation.test.OrderCreated"`,
+		`rebuilder.applyWithContext("validation.test.OrderCreated"`,
 		"return Pack.eventBook(events.map((ev) => Pack.wrap(OrderCreatedSchema, ev)));",
 		"export function registerOrderAggregate(r: Router, h: OrderAggregateHandler): void {",
 		"r.registerAggregate(newOrderAggregateDispatch(h));",
@@ -919,9 +979,9 @@ func TestGenerateTypeScript_SagaUsesFunctionRegisterAndTargets(t *testing.T) {
 	for _, want := range []string{
 		"export interface OrderSagaHandler {",
 		`const dispatch = new SagaDispatch("OrderSaga", "orders", ["fulfillment"]);`,
-		`dispatch.onEvent("validation.test.OrderPlaced"`,
+		`dispatch.onEventWithContext("validation.test.OrderPlaced"`,
 		"r.registerSaga(newOrderSagaDispatch(h));",
-		"sourceCover", // saga handler receives the source book's cover (FFI SagaEventAux)
+		"source: PageContext", // saga handler receives the source page context (cover + sequence)
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("typescript saga wiring missing %q\n---\n%s", want, content)
@@ -932,7 +992,7 @@ func TestGenerateTypeScript_SagaUsesFunctionRegisterAndTargets(t *testing.T) {
 func TestGenerateTypeScript_RawEventBookEscapeHatch(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	resp, err := generate(t, "typescript", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 	)
 	if err != nil {
@@ -971,11 +1031,39 @@ func TestGenerateTypeScriptScaffold_EmitsOwnedStub(t *testing.T) {
 	}
 }
 
+func TestGenerateCppScaffold_EmitsOwnedStub(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	resp, err := scaffold(t, "cpp", ioPkg, nil, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("GenerateScaffold: %v", err)
+	}
+	if len(resp.File) != 1 {
+		t.Fatalf("scaffolded %d files, want 1", len(resp.File))
+	}
+	f := resp.File[0]
+	if !strings.HasSuffix(f.GetName(), "_angzarr_handler.h") {
+		t.Errorf("scaffold file name = %q, want *_angzarr_handler.h suffix", f.GetName())
+	}
+	content := f.GetContent()
+	for _, want := range []string{
+		// CreateOrder is a typed-emit command handler (non-void), so its stub
+		// throws std::runtime_error — the include below must actually be
+		// present or the scaffold fails to compile.
+		"#include <stdexcept>",
+		"class OrderAggregate : public OrderAggregateHandler {",
+		`throw std::runtime_error("TODO: implement OrderAggregate::CreateOrder");`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("cpp scaffold missing %q\n---\n%s", want, content)
+		}
+	}
+}
+
 func TestGenerate_FilePerComponent_OneFileEach(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	// Two components declared in one proto file → two generated wiring files.
 	resp, err := generate(t, "go", ioPkg,
-		declMsg{"State", o.componentDecl(1, "orders", "", "OrderAggregate")},
+		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
 		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
 		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
 		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
@@ -1030,3 +1118,222 @@ func TestLanguages_ListsGoAndPython(t *testing.T) {
 // ensure proto import is used (the option-message round-trips rely on it via
 // the generator; this keeps the import live for any future direct assertion).
 var _ = proto.Marshal
+
+// projectorInputDomainOnly declares a projector whose handlers carry no
+// (event).domain: the declared input_domain is then the whole filter.
+func projectorInputDomainOnly(o optionTypes) []declMsg {
+	return []declMsg{
+		{"Projection", o.componentDecl(4, "hand", "", "HandProjector")},
+		{"HandStarted", o.eventDecl(eventEntry{component: fq("Projection")})},
+	}
+}
+
+// projectorInputPlusHandlerDomains declares input_domain "player" alongside
+// handler domains "table" and "hand": the filter is the sorted union of all.
+func projectorInputPlusHandlerDomains(o optionTypes) []declMsg {
+	return []declMsg{
+		{"Projection", o.componentDecl(4, "player", "", "DisplayProjector")},
+		{"TableCreated", o.eventDecl(eventEntry{component: fq("Projection"), domain: "table"})},
+		{"HandStarted", o.eventDecl(eventEntry{component: fq("Projection"), domain: "hand"})},
+	}
+}
+
+// projectorFilterCalls is each emitter's rendering of a projector domain
+// filter over the given quoted-and-joined domain list.
+var projectorFilterCalls = map[string]func(joined string) string{
+	"go":         func(j string) string { return "dispatch.ForDomains(" + j + ")" },
+	"python":     func(j string) string { return "dispatch.for_domains(" + j + ")" },
+	"java":       func(j string) string { return ".forDomains(" + j + ")" },
+	"csharp":     func(j string) string { return ".ForDomains(" + j + ")" },
+	"cpp":        func(j string) string { return "dispatch.ForDomains({" + j + "});" },
+	"typescript": func(j string) string { return "dispatch.forDomains(" + j + ");" },
+}
+
+func TestGenerate_Projector_DomainFilterIncludesInputDomain(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	cases := []struct {
+		name string
+		msgs []declMsg
+		want string
+	}{
+		{"input_domain only", projectorInputDomainOnly(o), `"hand"`},
+		{"handler domains span two", projectorMultiDomain(o), `"hand", "table"`},
+		{"input_domain plus handler domains", projectorInputPlusHandlerDomains(o), `"hand", "player", "table"`},
+	}
+	for _, lang := range codegen.Languages() {
+		for _, tc := range cases {
+			t.Run(lang+"/"+tc.name, func(t *testing.T) {
+				resp, err := generate(t, lang, ioPkg, tc.msgs...)
+				if err != nil {
+					t.Fatalf("Generate: %v", err)
+				}
+				want := projectorFilterCalls[lang](tc.want)
+				if content := resp.File[0].GetContent(); !strings.Contains(content, want) {
+					t.Errorf("%s projector wiring missing %q; got:\n%s", lang, want, content)
+				}
+			})
+		}
+	}
+}
+
+// unnamedSaga is a saga declared on a marker message with no (component).name:
+// the generated base name is the marker's own name.
+func unnamedSaga(o optionTypes) []declMsg {
+	return []declMsg{
+		{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
+		{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	}
+}
+
+func TestGenerateScaffold_UnnamedComponentStubDoesNotShadowAnchor(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	cases := map[string]struct {
+		path      string
+		want      []string
+		forbidden string
+	}{
+		"go": {"order_saga_angzarr_handler.go",
+			[]string{"type OrderSagaImpl struct{}", "var _ OrderSagaHandler = OrderSagaImpl{}", "func (OrderSagaImpl) OrderPlaced("},
+			"type OrderSaga struct"},
+		"python": {"order_saga_angzarr_handler.py", []string{"class OrderSagaImpl:"}, "class OrderSaga:"},
+		"java": {"OrderSagaImpl.java",
+			[]string{"public final class OrderSagaImpl implements OrderSagaAngzarr.OrderSagaHandler {"},
+			"class OrderSaga "},
+		"csharp": {"OrderSagaImpl.cs",
+			[]string{"public sealed class OrderSagaImpl : OrderSagaAngzarr.OrderSagaHandler"},
+			"class OrderSaga "},
+		"cpp": {"order_saga_angzarr_handler.h",
+			[]string{"class OrderSagaImpl : public OrderSagaHandler {"},
+			"class OrderSaga "},
+		"typescript": {"order_saga_angzarr_handler.ts",
+			[]string{"export class OrderSagaImpl implements OrderSagaHandler {"},
+			"class OrderSaga "},
+	}
+	for _, lang := range codegen.Languages() {
+		tc, ok := cases[lang]
+		if !ok {
+			t.Fatalf("no stub-name expectation for language %q", lang)
+		}
+		t.Run(lang, func(t *testing.T) {
+			resp, err := scaffold(t, lang, ioPkg, func(string) bool { return false }, unnamedSaga(o)...)
+			if err != nil {
+				t.Fatalf("GenerateScaffold: %v", err)
+			}
+			if len(resp.File) != 1 {
+				t.Fatalf("scaffolded %d files, want 1", len(resp.File))
+			}
+			if got := resp.File[0].GetName(); !strings.HasSuffix(got, tc.path) {
+				t.Errorf("stub path = %q, want suffix %q", got, tc.path)
+			}
+			content := resp.File[0].GetContent()
+			for _, w := range tc.want {
+				if !strings.Contains(content, w) {
+					t.Errorf("stub missing %q:\n%s", w, content)
+				}
+			}
+			if strings.Contains(content, tc.forbidden) {
+				t.Errorf("stub declares %q, which shadows the anchor message:\n%s", tc.forbidden, content)
+			}
+		})
+	}
+}
+
+func TestGenerateCppScaffold_IncludesTheWiringWhereItIsWritten(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	wiring, err := generate(t, "cpp", ioPkg, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	stub, err := scaffold(t, "cpp", ioPkg, func(string) bool { return false }, orderAggregate(o)...)
+	if err != nil {
+		t.Fatalf("GenerateScaffold: %v", err)
+	}
+	want := `#include "` + wiring.File[0].GetName() + `"`
+	if content := stub.File[0].GetContent(); !strings.Contains(content, want) {
+		t.Errorf("scaffold should %s (the wiring's output path); got:\n%s", want, content)
+	}
+}
+
+func TestGenerate_SagaTargetsAllOutputDomains(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	msgs := []declMsg{
+		{"OrderSaga", o.withOutputDomains(o.componentDecl(2, "orders", "fulfillment", ""), "billing", "fulfillment")},
+		{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	}
+	want := map[string]string{
+		"go":         `NewSagaDispatch("OrderSaga", "orders", "fulfillment", "billing")`,
+		"python":     `SagaDispatch("OrderSaga", "orders", targets=["fulfillment", "billing"])`,
+		"java":       `"OrderSaga", "orders", java.util.List.of("fulfillment", "billing"))`,
+		"csharp":     `("OrderSaga", "orders", "fulfillment", "billing")`,
+		"cpp":        `dispatch("OrderSaga", "orders", {"fulfillment", "billing"});`,
+		"typescript": `("OrderSaga", "orders", ["fulfillment", "billing"]);`,
+	}
+	for _, lang := range codegen.Languages() {
+		t.Run(lang, func(t *testing.T) {
+			resp, err := generate(t, lang, ioPkg, msgs...)
+			if err != nil {
+				t.Fatalf("Generate: %v", err)
+			}
+			if c := resp.File[0].GetContent(); !strings.Contains(c, want[lang]) {
+				t.Errorf("%s saga wiring missing %s:\n%s", lang, want[lang], c)
+			}
+		})
+	}
+}
+
+func TestLint_SagaWithOnlyOutputDomains_IsValid(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	diags := lint(t,
+		declMsg{"OrderSaga", o.withOutputDomains(o.componentDecl(2, "orders", "", ""), "billing")},
+		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
+	)
+	if hasCode(diags, "ANZ008") {
+		t.Fatalf("output_domains alone satisfies the saga target requirement, got %v", diags)
+	}
+	warned := false
+	for _, d := range diags {
+		if d.Code == "ANZ101" && strings.Contains(d.Message, `"billing"`) {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Errorf("ANZ101 should cover output_domains entries, got %v", diags)
+	}
+}
+
+func TestGenerate_OwnedDomainRegistersAggregateAndProcessManager(t *testing.T) {
+	o := buildOptionTypes(t, ioPkg)
+	agg := []declMsg{
+		{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
+		{"CreateOrder", o.commandDecl(fq("State"))},
+	}
+	pm := []declMsg{
+		{"PMState", o.ownedDecl(3, "workflow", "fulfillment", "Flow")},
+		{"Trig", o.eventDecl(eventEntry{component: fq("PMState"), domain: "orders"})},
+	}
+	want := map[string][2]string{
+		"go":         {`NewAggregateDispatch("OrderAggregate", "orders", rebuilder)`, `NewProcessManagerDispatch("Flow", "workflow", rebuilder, "fulfillment")`},
+		"python":     {`AggregateDispatch("OrderAggregate", "orders", rebuilder)`, `ProcessManagerDispatch("Flow", "workflow", rebuilder, targets=["fulfillment"])`},
+		"java":       {`("OrderAggregate", "orders", rebuilder)`, `("Flow", "workflow", java.util.List.of("fulfillment"), rebuilder)`},
+		"csharp":     {`("OrderAggregate", "orders", rebuilder)`, `("Flow", "workflow", new[] { "fulfillment" }, rebuilder)`},
+		"cpp":        {`dispatch("OrderAggregate", "orders", std::move(rebuilder));`, `dispatch("Flow", "workflow", {"fulfillment"}, std::move(rebuilder));`},
+		"typescript": {`("OrderAggregate", "orders", rebuilder);`, `("Flow", "workflow", rebuilder, ["fulfillment"]);`},
+	}
+	for _, lang := range codegen.Languages() {
+		t.Run(lang, func(t *testing.T) {
+			for i, msgs := range [][]declMsg{agg, pm} {
+				resp, err := generate(t, lang, ioPkg, msgs...)
+				if err != nil {
+					t.Fatalf("Generate: %v", err)
+				}
+				c := resp.File[0].GetContent()
+				if !strings.Contains(c, want[lang][i]) {
+					t.Errorf("%s wiring missing %s:\n%s", lang, want[lang][i], c)
+				}
+				if i == 1 && strings.Contains(c, `"fulfillment", rebuilder`) {
+					t.Errorf("%s PM registered under its command target instead of its own domain", lang)
+				}
+			}
+		})
+	}
+}

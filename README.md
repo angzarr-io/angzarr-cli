@@ -4,47 +4,108 @@
 CQRS/Event Sourcing framework. Capabilities grow as subcommands; codegen
 is the first.
 
-## codegen
+## Commands
 
-Generates per-language dispatch wiring from proto component declarations:
-services carrying `(angzarr.v1.component)` options, with rpcs carrying
-`(angzarr.v1.rejected/applies/reacts)`. For each declared component it
-emits a strict handler interface (a missing handler is a compile error,
-never a silent no-op) and a dispatch-table constructor over that
-language's angzarr client engine.
+| command | what it does |
+|---|---|
+| `angzarr codegen <lang>` | protoc/buf plugin: per-component dispatch wiring, regenerated every run |
+| `angzarr scaffold <lang>` | protoc/buf plugin: a developer-owned handler stub, written once |
+| `angzarr codegen languages` | list the target languages: `cpp`, `csharp`, `go`, `java`, `python`, `typescript` |
+| `angzarr lint [image\|-]` | validate the declarations in a buf image / FileDescriptorSet (`--request` for a CodeGeneratorRequest) |
+| `angzarr version` / `--version` | print the build version (`just build` stamps `git describe`) |
 
-Each language subcommand speaks the protoc plugin contract —
-`CodeGeneratorRequest` on stdin, `CodeGeneratorResponse` on stdout — so
-buf invokes it directly:
+## Declarations
+
+Components are declared by **annotating messages** with the options from
+`io/angzarr/v1/options.proto` (angzarr-project) — there are no services and no
+rpcs:
+
+- `(io.angzarr.v1.component)` on the anchor message (the state message of an
+  aggregate / process manager / projector, or an empty marker for a saga):
+  `kind`, `domain` (the stream it owns: aggregates and process managers),
+  `input_domain` (a subscription: saga source, projector filter),
+  `output_domain` / `output_domains` (command targets), `name`, `compensates`
+  (aggregates and process managers: rejections of commands it caused, as
+  `"fq.Type"` for any target domain or `"domain:fq.Type"` for one), `undoes` (aggregates only:
+  commands it executed and can undo on a CASCADE COMPENSATE `Compensate`),
+  `facts` (aggregates only: event types it records as facts, one
+  `On<Event>Fact` handler each) and `emits_facts` (sagas and process
+  managers: fact types they inject into their output domains).
+- `(io.angzarr.v1.command)` on a command: `component` (anchor, fully
+  qualified) and `emits`.
+- repeated `(io.angzarr.v1.event)` on an event, one entry per consumer:
+  `component`, `domain`, `applies`.
+
+For each component, codegen emits a strict `<Name>Handler` interface (a missing
+handler is a compile error, never a silent no-op), a `New<Name>Dispatch`
+constructor and a `Register<Name>` helper over the language's
+**angzarr-router** binding. `<Name>` is `(component).name`, or the anchor
+message's name when unset.
 
 ```yaml
 # buf.gen.yaml
+version: v2
 plugins:
   - local: ["angzarr", "codegen", "go"]
-    out: proto
+    out: gen
     opt: paths=source_relative
+    strategy: all            # required: see below
+  - local: ["angzarr", "scaffold", "go"]
+    out: .
+    opt: [paths=source_relative, out_dir=.]
+    strategy: all
 ```
 
-```bash
-angzarr codegen languages   # list registered emitters
-```
+- **`strategy: all` is required.** Components reference their commands and
+  events by name, not by import, so every file declaring part of a component
+  must reach the plugin in one invocation. buf's default per-directory strategy
+  splits them; such a run fails with `ANZ013`.
+- **Scaffold needs `out_dir`** set to the same directory as `out:` (relative to
+  where buf runs). Existing stubs are looked up there and never overwritten;
+  without `out_dir` scaffold refuses to run.
+- Every request file needs a `go_package` (or buf managed mode), whatever the
+  target language: output paths follow protogen's rules, so use
+  `paths=source_relative`.
+- `py_framework_package=<pkg>` (python) imports the framework protos from an
+  installed package instead of relative modules.
 
-Declaration validation is language-independent and runs before any
-emitter: missing required component fields (state, domains) and
-unresolvable or non-fully-qualified type names fail generation
-identically for every target language.
+Validation is language independent and runs before any emitter; codegen,
+scaffold and `lint` share it. Errors block generation, warnings do not:
 
-The angzarr option extensions are read dynamically from the request's own
-descriptor set — this module ships no compiled proto bindings, so client
-libraries can link it in-process (e.g. to drive validation suites)
-without duplicate-registration conflicts.
+| code | severity | meaning |
+|---|---|---|
+| ANZ002 / ANZ005 | error | `(command)` / `(event)` names an unknown component |
+| ANZ003 | error | a command targets a non-aggregate |
+| ANZ004 / ANZ007 | error | `emits` / `compensates` is not a fully-qualified message in the request (or a malformed `domain:fq.Type`) |
+| ANZ006 | error | a process-manager trigger has no `(event).domain` |
+| ANZ008 | error | a required component field is missing (`domain` for aggregates/PMs; saga source and targets) |
+| ANZ009 | error | a message carries angzarr option bytes that no `options.proto` in the request defines |
+| ANZ010 | error | two components share a generated name |
+| ANZ011 | error | one component generates the same method twice (in any language's casing) |
+| ANZ012 | error | a generated type (stub, `<Name>Handler`, …) equals a proto type in the package |
+| ANZ013 | error | a command/event is generated without its component's anchor (split run) |
+| ANZ014 | error | a field the kind must leave empty is set (e.g. `input_domain` on an aggregate, `domain` on a saga, `undoes` on anything but an aggregate) |
+| ANZ015 | error | an `undoes` entry is not a fully-qualified command the aggregate handles |
+| ANZ016 | error | a `compensates` type is listed twice unqualified, twice for one domain, or both unqualified and qualified |
+| ANZ017 | error | a `facts` / `emits_facts` entry is not a fully-qualified message in the request |
+| ANZ018 | error | an `emits_facts` type is not declared in `facts` by an aggregate owning one of the emitter's output domains |
+| ANZ100–103 | warning | incoherent wiring: unfolded emits, dangling domains, empty components |
+
+The option extensions are read dynamically (by extension number) from the
+request's own descriptors; this module ships no compiled angzarr protos.
 
 ## Adding a language
 
-Implement `codegen.Emitter` (`Lang`, `Suffix`, `EmitFile`) and register it
-in the emitter table; the subcommand appears automatically. Generated
-code must be a thin table population over that language's engine —
-dispatch logic lives in the engine, never in generated code.
+Implement `codegen.Emitter` (`Lang`, `WiringPath`, `EmitComponent`,
+`ScaffoldPath`, `EmitScaffoldComponent`; see `codegen/generate.go`) in its own
+package under `codegen/emit/<lang>` and register it in
+`codegen/emit/builtin`; the `codegen` and `scaffold` subcommands appear
+automatically. Generated code must be a thin table
+population over that language's router binding — dispatch logic lives in the
+binding, never in generated code.
+
+`just smoke <proto-root> <out> [codegen|scaffold] [all|directory]` runs every
+emitter over a proto tree; `just lint-proto [proto-root]` lints one.
 
 ## FFI bindings (what the generated wiring targets)
 

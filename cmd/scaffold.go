@@ -4,13 +4,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-
-	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/pluginpb"
+	"path/filepath"
 
 	"github.com/angzarr-io/angzarr-cli/codegen"
+	"github.com/spf13/cobra"
 )
 
 // scaffoldCmd hosts one subcommand per target language. Like codegen, each
@@ -19,14 +16,15 @@ import (
 //
 //	plugins:
 //	  - local: ["angzarr", "scaffold", "go"]
-//	    out: .
-//	    opt: paths=source_relative
+//	    out: src
+//	    opt: [paths=source_relative, out_dir=src]
+//	    strategy: all
 //
 // A stub is emitted only when its file does not yet exist; once a developer
-// owns it, regeneration leaves it untouched. The existence check is relative
-// to the working directory buf runs the plugin in (the module root), so the
-// stub must be configured with out: . and paths=source_relative — the response
-// path then matches the on-disk path.
+// owns it, regeneration leaves it untouched. protoc never tells a plugin where
+// its output lands, so out_dir must repeat the out: directory: existing stubs
+// are looked up at out_dir/<response path>, relative to the directory buf runs
+// in. Scaffold refuses to run without it rather than risk overwriting a stub.
 var scaffoldCmd = &cobra.Command{
 	Use:   "scaffold",
 	Short: "Generate developer-owned handler stubs (once) from proto component declarations",
@@ -59,45 +57,31 @@ func scaffoldLanguageCommand(lang string) *cobra.Command {
 }
 
 // runScaffold speaks the protoc plugin protocol, emitting only the stubs whose
-// files are absent on disk. Generation failures travel inside the response;
-// only protocol-level failures (unreadable request) exit nonzero.
+// files are absent under out_dir. Generation failures travel inside the
+// response; only protocol-level failures (unreadable request, unknown
+// parameter) exit nonzero.
 func runScaffold(in io.Reader, out io.Writer, lang string) error {
-	raw, err := io.ReadAll(in)
-	if err != nil {
-		return fmt.Errorf("read CodeGeneratorRequest: %w", err)
-	}
-	req := &pluginpb.CodeGeneratorRequest{}
-	if err := proto.Unmarshal(raw, req); err != nil {
-		return fmt.Errorf("parse CodeGeneratorRequest: %w", err)
-	}
-	var opts codegen.Options
-	pgo := protogen.Options{
-		ParamFunc: func(name, value string) error {
-			if name == "py_framework_package" {
-				opts.PyFrameworkPackage = value
-				return nil
-			}
-			return fmt.Errorf("unknown parameter %q", name)
-		},
-	}
-	gen, err := pgo.New(req)
+	gen, params, err := readPlugin(in, paramKeys{outDir: true})
 	if err != nil {
 		return err
 	}
-	if err := codegen.GenerateScaffold(gen, lang, fileExists, opts); err != nil {
+	if !params.outDirSet {
+		gen.Error(fmt.Errorf("scaffold requires the plugin parameter out_dir=<the plugin's out: directory>, " +
+			"so existing stubs are found where buf writes them and never overwritten (e.g. opt: [paths=source_relative, out_dir=.] with out: .)"))
+		return writeResponse(out, gen)
+	}
+	if err := codegen.GenerateScaffold(gen, lang, existsUnder(params.outDir), params.opts); err != nil {
 		gen.Error(err)
 	}
-	resp, err := proto.Marshal(gen.Response())
-	if err != nil {
-		return fmt.Errorf("marshal CodeGeneratorResponse: %w", err)
-	}
-	_, err = out.Write(resp)
-	return err
+	return writeResponse(out, gen)
 }
 
-// fileExists reports whether a response-relative path already exists on disk,
-// resolved against the working directory buf runs the plugin in.
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+// existsUnder reports whether a response-relative path already exists on disk
+// beneath dir (resolved against the working directory buf runs the plugin in,
+// the same base buf resolves out: against).
+func existsUnder(dir string) func(string) bool {
+	return func(path string) bool {
+		_, err := os.Stat(filepath.Join(dir, filepath.FromSlash(path)))
+		return err == nil
+	}
 }

@@ -93,11 +93,8 @@ func runLint(in io.Reader, out, errOut io.Writer, asRequest bool) error {
 // every file in it is marked for linting.
 func pluginFromDescriptors(raw []byte, asRequest bool) (*protogen.Plugin, error) {
 	if asRequest {
-		req := &pluginpb.CodeGeneratorRequest{}
-		if err := proto.Unmarshal(raw, req); err != nil {
-			return nil, fmt.Errorf("parse CodeGeneratorRequest: %w", err)
-		}
-		return protogen.Options{}.New(req)
+		gen, _, err := pluginFromRequest(raw, paramKeys{outDir: true})
+		return gen, err
 	}
 	set := &descriptorpb.FileDescriptorSet{}
 	if err := proto.Unmarshal(raw, set); err != nil {

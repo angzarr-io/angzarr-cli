@@ -1,0 +1,55 @@
+# Thin CI: tool setup, then just recipes. All logic lives in the justfile.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: extractions/setup-just@v2
+
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+
+      - name: Install protoc plugins
+        run: just tools
+
+      - name: Submodules clean
+        run: just check-submodules-clean
+
+      - name: Format
+        run: just fmt
+
+      - name: Vet
+        run: just lint
+
+      - name: Architecture
+        run: just archlint
+
+      - name: Unit tests and codegen features
+        run: just test
+
+      - name: Lint protos
+        run: just lint-proto
+
+      - name: Generate check
+        run: just generate-check
+
+      - name: Smoke (all languages, codegen + scaffold)
+        run: just smoke-check
+
+      - name: Compile generated Go against angzarr-router
+        run: just compile-go-pinned
