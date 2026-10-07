@@ -52,3 +52,18 @@ func TestNestedNames_OutermostFirst(t *testing.T) {
 		}
 	}
 }
+
+func TestSnake_SplitsWordsAndAcronymRuns(t *testing.T) {
+	for in, want := range map[string]string{
+		"OrderCreated": "order_created",
+		"HTTPGet":      "http_get",
+		"ApplyIOEvent": "apply_io_event",
+		"OrderID":      "order_id",
+		"Finish":       "finish",
+		"":             "",
+	} {
+		if got := Snake(in); got != want {
+			t.Errorf("Snake(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
