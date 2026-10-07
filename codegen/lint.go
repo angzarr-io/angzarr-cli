@@ -401,7 +401,7 @@ func compensatesDiags(s *Component, registry map[string]*protogen.Message) []Dia
 		}
 		method := "On" + shortName(typ) + "Rejected"
 		if qualified {
-			method = "On" + shortName(typ) + "From" + snakeToPascal(domain) + "Rejected"
+			method = "On" + shortName(typ) + "From" + SnakeToPascal(domain) + "Rejected"
 		}
 		s.Rejections = append(s.Rejections, Rejection{Key: entry, Command: typ, Domain: domain, MethodName: method})
 	}
@@ -506,7 +506,7 @@ func undoDiags(s *Component) []Diagnostic {
 	}
 	handled := make(map[string]bool, len(s.Handlers))
 	for _, h := range s.Handlers {
-		handled[fqName(h.Message)] = true
+		handled[FQName(h.Message)] = true
 	}
 	var diags []Diagnostic
 	for _, cmd := range c.Undoes {
@@ -571,7 +571,7 @@ func collisionDiags(services map[string]*Component, order []string) []Diagnostic
 			names = append(names, f.MethodName)
 		}
 		if s.Component.Kind == KindProjector {
-			names = append(names, projectorFinishMethod)
+			names = append(names, ProjectorFinishMethod)
 		}
 		diags = append(diags, dupMethods(s, fq, names)...)
 	}
@@ -626,9 +626,9 @@ func generatedTypeNames(s *Component) []string {
 	}
 }
 
-// projectorFinishMethod is the fixed method every projector interface carries
+// ProjectorFinishMethod is the fixed method every projector interface carries
 // alongside its handlers.
-const projectorFinishMethod = "Finish"
+const ProjectorFinishMethod = "Finish"
 
 // methodRenderings are the per-language spellings of a generated method name.
 // Two distinct names collide when any rendering coincides: "HTTPGet" and
@@ -638,8 +638,8 @@ var methodRenderings = []struct {
 	render func(string) string
 }{
 	{"every language", func(n string) string { return n }},
-	{"java/typescript", lowerFirst},
-	{"python", snake},
+	{"java/typescript", LowerFirst},
+	{"python", Snake},
 }
 
 func handlerNames(hs []Handler) []string {

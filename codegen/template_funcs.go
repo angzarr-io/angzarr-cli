@@ -16,13 +16,13 @@ import (
 func baseFuncs() template.FuncMap {
 	return template.FuncMap{
 		// Case conversion.
-		"snake":  snake,
+		"snake":  Snake,
 		"camel":  camel,
 		"pascal": pascal,
 		"upper":  strings.ToUpper,
 		"lower":  strings.ToLower,
 		// Strings.
-		"quote":      quoteLiteral,
+		"quote":      QuoteLiteral,
 		"join":       join,
 		"split":      func(sep, s string) []any { return strs(strings.Split(s, sep)) },
 		"replace":    func(old, new, s string) string { return strings.ReplaceAll(s, old, new) },
@@ -67,24 +67,6 @@ func baseFuncs() template.FuncMap {
 		"include": func(string, any) (string, error) { return "", fmt.Errorf("include is unavailable outside a render") },
 		"typeRef": func(any) (string, error) { return "", fmt.Errorf("typeRef is unavailable outside a render") },
 	}
-}
-
-// snake converts a CamelCase identifier to snake_case. An upper-case letter
-// starts a new word after a lower-case letter, or ends an acronym run when a
-// lower-case letter follows it (HTTPGet → http_get).
-func snake(name string) string {
-	var b strings.Builder
-	for i, r := range name {
-		if unicode.IsUpper(r) {
-			if i > 0 && (!unicode.IsUpper(rune(name[i-1])) || (i+1 < len(name) && unicode.IsLower(rune(name[i+1])))) {
-				b.WriteByte('_')
-			}
-			b.WriteRune(unicode.ToLower(r))
-		} else {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
 }
 
 // pascal upper-cases the first letter and the letter after each underscore,

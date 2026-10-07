@@ -228,7 +228,7 @@ func messageRef(m *protogen.Message) MessageRef {
 	return MessageRef{
 		FullName:    string(m.Desc.FullName()),
 		Name:        string(m.Desc.Name()),
-		NestedNames: nestedNames(m.Desc),
+		NestedNames: NestedNames(m.Desc),
 		Package:     string(m.Desc.ParentFile().Package()),
 		File:        m.Desc.ParentFile().Path(),
 	}
@@ -283,7 +283,7 @@ func modelComponent(c *Component) ModelComponent {
 		mc.State = &s
 	}
 	if c.Component.Kind == KindProjector {
-		mc.FinishMethod = projectorFinishMethod
+		mc.FinishMethod = ProjectorFinishMethod
 	}
 	for _, h := range c.Handlers {
 		mh := ModelHandler{Message: ref(h.Message), Method: h.MethodName, SourceDomain: h.SourceDomain, Emits: []MessageRef{}, TypedEmit: h.TypedEmit()}

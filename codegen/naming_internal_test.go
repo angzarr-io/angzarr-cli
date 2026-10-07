@@ -3,9 +3,7 @@ package codegen
 import (
 	"testing"
 
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protodesc"
-	"google.golang.org/protobuf/types/descriptorpb"
+	"github.com/angzarr-io/angzarr-cli/codegen/internal/codegentest"
 )
 
 func TestSnakeToPascal_MatchesProtocOuterClassRule(t *testing.T) {
@@ -21,8 +19,8 @@ func TestSnakeToPascal_MatchesProtocOuterClassRule(t *testing.T) {
 		"__x":         "X",
 		"table_hand9": "TableHand9",
 	} {
-		if got := snakeToPascal(in); got != want {
-			t.Errorf("snakeToPascal(%q) = %q, want %q", in, got, want)
+		if got := SnakeToPascal(in); got != want {
+			t.Errorf("SnakeToPascal(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -35,39 +33,22 @@ func TestQuoteLiteral_EscapesForCFamilyAndScriptLanguages(t *testing.T) {
 		"l1\nl2":  `"l1\nl2"`,
 		"t\tr\r":  `"t\tr\r"`,
 	} {
-		for name, q := range map[string]func(string) string{"cpp": cppQuote, "typescript": tsQuote} {
-			if got := q(in); got != want {
-				t.Errorf("%s quote(%q) = %s, want %s", name, in, got, want)
-			}
+		if got := QuoteLiteral(in); got != want {
+			t.Errorf("QuoteLiteral(%q) = %s, want %s", in, got, want)
 		}
 	}
 }
 
-func TestNestedTypeNames_PerLanguage(t *testing.T) {
-	fdp := &descriptorpb.FileDescriptorProto{
-		Name:    proto.String("n.proto"),
-		Package: proto.String("n"),
-		Syntax:  proto.String("proto3"),
-		MessageType: []*descriptorpb.DescriptorProto{{
-			Name:       proto.String("Outer"),
-			NestedType: []*descriptorpb.DescriptorProto{{Name: proto.String("Mid"), NestedType: []*descriptorpb.DescriptorProto{{Name: proto.String("Inner")}}}},
-		}},
+func TestNestedNames_OutermostFirst(t *testing.T) {
+	inner := codegentest.NestedFixture(t)
+	got := NestedNames(inner)
+	want := []string{"Outer", "Mid", "Inner"}
+	if len(got) != len(want) {
+		t.Fatalf("NestedNames = %v, want %v", got, want)
 	}
-	fd, err := protodesc.NewFile(fdp, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	inner := fd.Messages().Get(0).Messages().Get(0).Messages().Get(0)
-	for name, c := range map[string]struct {
-		got, want string
-	}{
-		"java":   {messageNestedName(inner), "Outer.Mid.Inner"},
-		"csharp": {csNestedName(inner), "Outer.Types.Mid.Types.Inner"},
-		"cpp":    {cppNestedName(inner), "Outer::Mid::Inner"},
-		"ts":     {tsNestedName(inner), "Outer_Mid_Inner"},
-	} {
-		if c.got != c.want {
-			t.Errorf("%s nested name = %q, want %q", name, c.got, c.want)
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("NestedNames = %v, want %v", got, want)
 		}
 	}
 }

@@ -28,21 +28,29 @@ type Emitter interface {
 	EmitScaffoldComponent(g *protogen.GeneratedFile, file *protogen.File, s *Component) error
 }
 
-// componentFile builds a per-component output path: the proto file's directory
+// ComponentFile builds a per-component output path: the proto file's directory
 // (so generated wiring sits beside the messages, source_relative) joined with a
 // component-derived stem + suffix.
-func componentFile(file *protogen.File, stem, suffix string) string {
+func ComponentFile(file *protogen.File, stem, suffix string) string {
 	return path.Join(path.Dir(file.GeneratedFilenamePrefix), stem+suffix)
 }
 
-// emitters is the language registry. Adding a language = adding an
-// Emitter implementation and registering it here.
-var emitters = map[string]Emitter{
-	goEmitter{}.Lang():     goEmitter{},
-	javaEmitter{}.Lang():   javaEmitter{},
-	csharpEmitter{}.Lang(): csharpEmitter{},
-	cppEmitter{}.Lang():    cppEmitter{},
-	tsEmitter{}.Lang():     tsEmitter{},
+// emitters is the language registry, filled by Register. The core never
+// names a language: emitter packages are registered by the wiring layer
+// (codegen/emit/builtin), so model, lint and orchestration stay
+// language-neutral.
+var emitters = map[string]Emitter{}
+
+// Register adds emitters to the language registry, keyed by Lang. A second
+// emitter for the same language panics: registration happens once, at
+// program start.
+func Register(es ...Emitter) {
+	for _, e := range es {
+		if _, dup := emitters[e.Lang()]; dup {
+			panic(fmt.Sprintf("codegen: emitter for %q registered twice", e.Lang()))
+		}
+		emitters[e.Lang()] = e
+	}
 }
 
 // Languages lists the registered target languages.
@@ -81,9 +89,16 @@ type Options struct {
 }
 
 // templateLanguages are the languages generated only from a client repo's
-// template set (templates= is required).
-var templateLanguages = map[string]bool{
-	"python": true,
+// template set (templates= is required), filled by RegisterTemplateLanguages.
+var templateLanguages = map[string]bool{}
+
+// RegisterTemplateLanguages declares languages generated only from a client
+// repository's template set: they are listed as codegen targets, and a run
+// without templates= explains where their templates live.
+func RegisterTemplateLanguages(langs ...string) {
+	for _, lang := range langs {
+		templateLanguages[lang] = true
+	}
 }
 
 // renderFromTemplates resolves opts.Templates and renders its outputs of one

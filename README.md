@@ -105,10 +105,12 @@ A language is generated from templates in its client repository
 model schema, the manifest, the render data and the helper functions are
 specified in [docs/templates.md](docs/templates.md).
 
-Python is generated this way (angzarr-client-python's `codegen/`). The
-remaining built-in emitters (Go, Java, C#, C++, TypeScript) implement `codegen.Emitter` (`Lang`, `WiringPath`, `EmitComponent`,
-`ScaffoldPath`, `EmitScaffoldComponent`; see `codegen/generate.go`) and
-are registered in the `emitters` table; the `codegen` and `scaffold`
+Python is generated this way (angzarr-client-python's `codegen/`), declared
+template-only in `codegen/emit/builtin`. The remaining built-in emitters (Go,
+Java, C#, C++, TypeScript) each implement `codegen.Emitter` (`Lang`,
+`WiringPath`, `EmitComponent`, `ScaffoldPath`, `EmitScaffoldComponent`; see
+`codegen/generate.go`) in their own package under `codegen/emit/<lang>`,
+registered in `codegen/emit/builtin`; the `codegen` and `scaffold`
 subcommands appear automatically. Generated code must be a thin table
 population over that language's router binding — dispatch logic lives in the
 binding, never in generated code.

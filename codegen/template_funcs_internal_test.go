@@ -17,8 +17,8 @@ func TestCaseHelpers(t *testing.T) {
 		{"Finish", "finish", "Finish", "finish"},
 		{"", "", "", ""},
 	} {
-		if got := snake(tc.in); got != tc.snake {
-			t.Errorf("snake(%q) = %q, want %q", tc.in, got, tc.snake)
+		if got := Snake(tc.in); got != tc.snake {
+			t.Errorf("Snake(%q) = %q, want %q", tc.in, got, tc.snake)
 		}
 		if got := pascal(tc.in); got != tc.pascal {
 			t.Errorf("pascal(%q) = %q, want %q", tc.in, got, tc.pascal)

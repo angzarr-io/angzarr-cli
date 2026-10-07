@@ -623,7 +623,7 @@ func TestGenerateJava_EmitsNestedSeam(t *testing.T) {
 		"package validation.test;",
 		"public final class OrderAggregateAngzarr {",
 		"public interface OrderAggregateHandler {",
-		// command handler: method = lowerFirst(message name), typed-emit return
+		// command handler: method = LowerFirst(message name), typed-emit return
 		"java.util.List<validation.test.ValidationTest.OrderCreated> createOrder(",
 		"validation.test.ValidationTest.CreateOrder cmd",
 		"validation.test.ValidationTest.State.Builder state, io.angzarr.router.CommandContext cctx) throws Exception;",

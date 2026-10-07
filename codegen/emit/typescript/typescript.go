@@ -1,4 +1,4 @@
-package codegen
+package typescript
 
 // TypeScript emitter — the structural mirror of the C#/C++ emitters over the
 // shared intermediate model, targeting the protobuf-es (@bufbuild/protobuf v2)
@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/angzarr-io/angzarr-cli/codegen"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -68,16 +69,17 @@ const (
 	tsPmResponse   = "ProcessManagerHandleResponse"
 )
 
-type tsEmitter struct{}
+// Emitter is the TypeScript codegen.Emitter.
+type Emitter struct{}
 
-func (tsEmitter) Lang() string { return "typescript" }
+func (Emitter) Lang() string { return "typescript" }
 
-func (tsEmitter) WiringPath(file *protogen.File, s *Component) string {
-	return componentFile(file, snake(s.BaseName), "_angzarr.ts")
+func (Emitter) WiringPath(file *protogen.File, s *codegen.Component) string {
+	return codegen.ComponentFile(file, codegen.Snake(s.BaseName), "_angzarr.ts")
 }
 
-func (tsEmitter) ScaffoldPath(file *protogen.File, s *Component) string {
-	return componentFile(file, snake(s.BaseName), "_angzarr_handler.ts")
+func (Emitter) ScaffoldPath(file *protogen.File, s *codegen.Component) string {
+	return codegen.ComponentFile(file, codegen.Snake(s.BaseName), "_angzarr_handler.ts")
 }
 
 // tsRefs tracks the imports one generated file needs: the runtime identifiers
@@ -152,7 +154,7 @@ func (r *tsRefs) emitImports(g *protogen.GeneratedFile) {
 	g.P()
 }
 
-func (e tsEmitter) EmitComponent(g *protogen.GeneratedFile, file *protogen.File, s *Component) error {
+func (e Emitter) EmitComponent(g *protogen.GeneratedFile, file *protogen.File, s *codegen.Component) error {
 	refs := newTSRefs(file)
 	// Resolve every reference first so the import block is complete before it is
 	// written; the body is buffered into closures that run after imports.
@@ -160,13 +162,13 @@ func (e tsEmitter) EmitComponent(g *protogen.GeneratedFile, file *protogen.File,
 	var body []func()
 	body = append(body, func() { emitTSInterface(g, s, sigs) })
 	switch s.Component.Kind {
-	case KindAggregate:
+	case codegen.KindAggregate:
 		body = append(body, e.aggregateDispatch(g, refs, s))
-	case KindSaga:
+	case codegen.KindSaga:
 		body = append(body, e.sagaDispatch(g, refs, s))
-	case KindProjector:
+	case codegen.KindProjector:
 		body = append(body, e.projectorDispatch(g, refs, s))
-	case KindProcessManager:
+	case codegen.KindProcessManager:
 		body = append(body, e.pmDispatch(g, refs, s))
 	default:
 		return fmt.Errorf("unsupported component kind %v", s.Component.Kind)
@@ -192,21 +194,21 @@ type tsSig struct {
 	returns string
 }
 
-func (e tsEmitter) sigs(refs *tsRefs, s *Component) []tsSig {
+func (e Emitter) sigs(refs *tsRefs, s *codegen.Component) []tsSig {
 	switch s.Component.Kind {
-	case KindAggregate:
+	case codegen.KindAggregate:
 		return e.aggregateSigs(refs, s)
-	case KindSaga:
+	case codegen.KindSaga:
 		return e.sagaSigs(refs, s)
-	case KindProjector:
+	case codegen.KindProjector:
 		return e.projectorSigs(refs, s)
-	case KindProcessManager:
+	case codegen.KindProcessManager:
 		return e.pmSigs(refs, s)
 	}
 	return nil
 }
 
-func emitTSInterface(g *protogen.GeneratedFile, s *Component, sigs []tsSig) {
+func emitTSInterface(g *protogen.GeneratedFile, s *codegen.Component, sigs []tsSig) {
 	g.P("// The strict business seam for the ", s.BaseName, " ", strings.ToLower(s.Component.Kind.String()), ".")
 	g.P("// Every declared command/event must be implemented.")
 	g.P("export interface ", s.BaseName, "Handler {")
@@ -217,7 +219,7 @@ func emitTSInterface(g *protogen.GeneratedFile, s *Component, sigs []tsSig) {
 	g.P()
 }
 
-func (e tsEmitter) aggregateSigs(refs *tsRefs, s *Component) []tsSig {
+func (e Emitter) aggregateSigs(refs *tsRefs, s *codegen.Component) []tsSig {
 	state := refs.ref(s.State)
 	var out []tsSig
 	for _, h := range s.Handlers {
@@ -226,35 +228,35 @@ func (e tsEmitter) aggregateSigs(refs *tsRefs, s *Component) []tsSig {
 			returns = refs.ref(h.Emits[0]) + "[]"
 		}
 		out = append(out, tsSig{
-			name:    lowerFirst(h.MethodName),
+			name:    codegen.LowerFirst(h.MethodName),
 			params:  "cmd: " + refs.ref(h.Message) + ", state: " + state + ", cctx: " + refs.use(tsCctx),
 			returns: returns,
 		})
 	}
 	for _, a := range s.Appliers {
 		out = append(out, tsSig{
-			name:    lowerFirst(a.MethodName),
+			name:    codegen.LowerFirst(a.MethodName),
 			params:  "state: " + state + ", ev: " + refs.ref(a.Message) + ", ctx: " + refs.use(tsPageContext),
 			returns: "void",
 		})
 	}
 	for _, r := range s.Rejections {
 		out = append(out, tsSig{
-			name:    lowerFirst(r.MethodName),
+			name:    codegen.LowerFirst(r.MethodName),
 			params:  "n: " + refs.use(tsNotification) + ", rejection: " + refs.use(tsRejNotif) + ", state: " + state + ", cctx: " + refs.use(tsCctx),
 			returns: refs.use(tsBusinessResp),
 		})
 	}
 	for _, f := range s.Facts {
 		out = append(out, tsSig{
-			name:    lowerFirst(f.MethodName),
+			name:    codegen.LowerFirst(f.MethodName),
 			params:  "fact: " + refs.ref(f.Message) + ", state: " + state,
 			returns: refs.use(tsFactRecord) + " | undefined",
 		})
 	}
 	for _, u := range s.Undos {
 		out = append(out, tsSig{
-			name:    lowerFirst(u.MethodName),
+			name:    codegen.LowerFirst(u.MethodName),
 			params:  "n: " + refs.use(tsNotification) + ", compensate: " + refs.use(tsCompensate) + ", state: " + state + ", cctx: " + refs.use(tsCctx),
 			returns: refs.use(tsBusinessResp),
 		})
@@ -262,11 +264,11 @@ func (e tsEmitter) aggregateSigs(refs *tsRefs, s *Component) []tsSig {
 	return out
 }
 
-func (e tsEmitter) sagaSigs(refs *tsRefs, s *Component) []tsSig {
+func (e Emitter) sagaSigs(refs *tsRefs, s *codegen.Component) []tsSig {
 	var out []tsSig
 	for _, h := range s.Handlers {
 		out = append(out, tsSig{
-			name:    lowerFirst(h.MethodName),
+			name:    codegen.LowerFirst(h.MethodName),
 			params:  "ev: " + refs.ref(h.Message) + ", dests: " + refs.use(tsDestinations) + ", source: " + refs.use(tsPageContext),
 			returns: refs.use(tsSagaEmission),
 		})
@@ -274,44 +276,44 @@ func (e tsEmitter) sagaSigs(refs *tsRefs, s *Component) []tsSig {
 	return out
 }
 
-func (e tsEmitter) projectorSigs(refs *tsRefs, s *Component) []tsSig {
+func (e Emitter) projectorSigs(refs *tsRefs, s *codegen.Component) []tsSig {
 	state := refs.ref(s.State)
 	var out []tsSig
 	for _, h := range s.Handlers {
 		out = append(out, tsSig{
-			name:    lowerFirst(h.MethodName),
+			name:    codegen.LowerFirst(h.MethodName),
 			params:  "projection: " + state + ", ev: " + refs.ref(h.Message) + ", ctx: " + refs.use(tsPageContext),
 			returns: "void",
 		})
 	}
 	out = append(out, tsSig{
-		name:    lowerFirst(projectorFinishMethod),
+		name:    codegen.LowerFirst(codegen.ProjectorFinishMethod),
 		params:  "projection: " + state + ", events: " + refs.use(tsEventBook),
 		returns: refs.use(tsProjection),
 	})
 	return out
 }
 
-func (e tsEmitter) pmSigs(refs *tsRefs, s *Component) []tsSig {
+func (e Emitter) pmSigs(refs *tsRefs, s *codegen.Component) []tsSig {
 	state := refs.ref(s.State)
 	var out []tsSig
 	for _, h := range s.Handlers {
 		out = append(out, tsSig{
-			name:    lowerFirst(h.MethodName),
+			name:    codegen.LowerFirst(h.MethodName),
 			params:  "ev: " + refs.ref(h.Message) + ", state: " + state + ", dests: " + refs.use(tsDestinations) + ", triggerCover?: " + refs.use(tsCover),
 			returns: refs.use(tsPmResponse),
 		})
 	}
 	for _, a := range s.Appliers {
 		out = append(out, tsSig{
-			name:    lowerFirst(a.MethodName),
+			name:    codegen.LowerFirst(a.MethodName),
 			params:  "state: " + state + ", ev: " + refs.ref(a.Message) + ", ctx: " + refs.use(tsPageContext),
 			returns: "void",
 		})
 	}
 	for _, r := range s.Rejections {
 		out = append(out, tsSig{
-			name:    lowerFirst(r.MethodName),
+			name:    codegen.LowerFirst(r.MethodName),
 			params:  "n: " + refs.use(tsNotification) + ", rejection: " + refs.use(tsRejNotif) + ", state: " + state,
 			returns: refs.use(tsPmResponse),
 		})
@@ -321,7 +323,7 @@ func (e tsEmitter) pmSigs(refs *tsRefs, s *Component) []tsSig {
 
 // --- dispatch builders -------------------------------------------------------
 
-func (e tsEmitter) aggregateDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Component) func() {
+func (e Emitter) aggregateDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *codegen.Component) func() {
 	refs.needCreate = true
 	state := refs.ref(s.State)
 	disp := refs.use(tsAggDispatch) + "<" + state + ">"
@@ -336,29 +338,29 @@ func (e tsEmitter) aggregateDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 		emitTSAppliers(g, refs, s)
 		g.P("  const dispatch = new ", tsAggDispatch, "<", state, ">(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.Domain), ", rebuilder);")
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onCommand(", tsQuote(fqName(h.Message)), ", (cmdAny, state, cctx) => {")
+			g.P("  dispatch.onCommand(", tsQuote(codegen.FQName(h.Message)), ", (cmdAny, state, cctx) => {")
 			g.P("    const cmd = ", tsParseAny, "(", refs.schema(h.Message), ", cmdAny);")
 			if h.TypedEmit() {
-				g.P("    const events = h.", lowerFirst(h.MethodName), "(cmd, state, cctx);")
+				g.P("    const events = h.", codegen.LowerFirst(h.MethodName), "(cmd, state, cctx);")
 				g.P("    return ", tsPack, ".eventBook(events.map((ev) => ", tsPack, ".wrap(", refs.schema(h.Emits[0]), ", ev)));")
 			} else {
-				g.P("    return h.", lowerFirst(h.MethodName), "(cmd, state, cctx);")
+				g.P("    return h.", codegen.LowerFirst(h.MethodName), "(cmd, state, cctx);")
 			}
 			g.P("  });")
 		}
 		for _, r := range s.Rejections {
 			g.P("  dispatch.onRejected(", tsQuote(r.Key), ", (n, rejection, state, cctx) =>")
-			g.P("    h.", lowerFirst(r.MethodName), "(n, rejection, state, cctx),")
+			g.P("    h.", codegen.LowerFirst(r.MethodName), "(n, rejection, state, cctx),")
 			g.P("  );")
 		}
 		for _, f := range s.Facts {
-			g.P("  dispatch.onFact(", tsQuote(fqName(f.Message)), ", (factAny, state) =>")
-			g.P("    h.", lowerFirst(f.MethodName), "(", tsParseAny, "(", refs.schema(f.Message), ", factAny), state) ?? ", tsFactRecord, ".asReceived(factAny),")
+			g.P("  dispatch.onFact(", tsQuote(codegen.FQName(f.Message)), ", (factAny, state) =>")
+			g.P("    h.", codegen.LowerFirst(f.MethodName), "(", tsParseAny, "(", refs.schema(f.Message), ", factAny), state) ?? ", tsFactRecord, ".asReceived(factAny),")
 			g.P("  );")
 		}
 		for _, u := range s.Undos {
 			g.P("  dispatch.onUndo(", tsQuote(u.Command), ", (n, compensate, state, cctx) =>")
-			g.P("    h.", lowerFirst(u.MethodName), "(n, compensate, state, cctx),")
+			g.P("    h.", codegen.LowerFirst(u.MethodName), "(n, compensate, state, cctx),")
 			g.P("  );")
 		}
 		g.P("  return dispatch;")
@@ -367,17 +369,17 @@ func (e tsEmitter) aggregateDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 	}
 }
 
-func (e tsEmitter) sagaDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Component) func() {
+func (e Emitter) sagaDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *codegen.Component) func() {
 	disp := refs.use(tsSagaDispatch)
 	refs.use(tsParseAny)
 	return func() {
 		g.P("// Populates the saga dispatch table from the proto declaration.")
 		g.P("export function new", s.BaseName, "Dispatch(h: ", s.BaseName, "Handler): ", disp, " {")
-		g.P("  const dispatch = new ", tsSagaDispatch, "(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.InputDomain), ", [", quoteJoin(s.Component.OutputDomains, tsQuote), "]);")
+		g.P("  const dispatch = new ", tsSagaDispatch, "(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.InputDomain), ", [", codegen.QuoteJoin(s.Component.OutputDomains, tsQuote), "]);")
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onEventWithContext(", tsQuote(fqName(h.Message)), ", (eventAny, dests, source) => {")
+			g.P("  dispatch.onEventWithContext(", tsQuote(codegen.FQName(h.Message)), ", (eventAny, dests, source) => {")
 			g.P("    const ev = ", tsParseAny, "(", refs.schema(h.Message), ", eventAny);")
-			g.P("    return h.", lowerFirst(h.MethodName), "(ev, dests, source);")
+			g.P("    return h.", codegen.LowerFirst(h.MethodName), "(ev, dests, source);")
 			g.P("  });")
 		}
 		g.P("  return dispatch;")
@@ -386,7 +388,7 @@ func (e tsEmitter) sagaDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Comp
 	}
 }
 
-func (e tsEmitter) projectorDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Component) func() {
+func (e Emitter) projectorDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *codegen.Component) func() {
 	refs.needCreate = true
 	state := refs.ref(s.State)
 	disp := refs.use(tsProjDispatch) + "<" + state + ">"
@@ -398,11 +400,11 @@ func (e tsEmitter) projectorDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 		// Domain filter (Component.ProjectorDomains); omitted when empty so the
 		// runtime default, consume every domain, applies.
 		if len(s.ProjectorDomains) > 0 {
-			g.P("  dispatch.forDomains(", quoteJoin(s.ProjectorDomains, tsQuote), ");")
+			g.P("  dispatch.forDomains(", codegen.QuoteJoin(s.ProjectorDomains, tsQuote), ");")
 		}
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onEvent(", tsQuote(fqName(h.Message)), ", (projection, eventAny, ctx) => {")
-			g.P("    h.", lowerFirst(h.MethodName), "(projection, ", tsParseAny, "(", refs.schema(h.Message), ", eventAny), ctx);")
+			g.P("  dispatch.onEvent(", tsQuote(codegen.FQName(h.Message)), ", (projection, eventAny, ctx) => {")
+			g.P("    h.", codegen.LowerFirst(h.MethodName), "(projection, ", tsParseAny, "(", refs.schema(h.Message), ", eventAny), ctx);")
 			g.P("  });")
 		}
 		g.P("  dispatch.finish((projection, events) => h.finish(projection, events));")
@@ -412,7 +414,7 @@ func (e tsEmitter) projectorDispatch(g *protogen.GeneratedFile, refs *tsRefs, s 
 	}
 }
 
-func (e tsEmitter) pmDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Component) func() {
+func (e Emitter) pmDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *codegen.Component) func() {
 	refs.needCreate = true
 	state := refs.ref(s.State)
 	disp := refs.use(tsPmDispatch) + "<" + state + ">"
@@ -425,16 +427,16 @@ func (e tsEmitter) pmDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Compon
 		g.P("  const rebuilder = new ", tsRebuilder, "<", state, ">(() => create(", refs.schema(s.State), "), ", refs.schema(s.State), ");")
 		g.P("  rebuilder.withSnapshot((state, payload) => ", tsPack, ".merge(", refs.schema(s.State), ", state, payload));")
 		emitTSAppliers(g, refs, s)
-		g.P("  const dispatch = new ", tsPmDispatch, "<", state, ">(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.Domain), ", rebuilder, [", quoteJoin(s.Component.OutputDomains, tsQuote), "]);")
+		g.P("  const dispatch = new ", tsPmDispatch, "<", state, ">(", tsQuote(s.BaseName), ", ", tsQuote(s.Component.Domain), ", rebuilder, [", codegen.QuoteJoin(s.Component.OutputDomains, tsQuote), "]);")
 		for _, h := range s.Handlers {
-			g.P("  dispatch.onEvent(", tsQuote(h.SourceDomain), ", ", tsQuote(fqName(h.Message)), ", (eventAny, state, dests, triggerCover) => {")
+			g.P("  dispatch.onEvent(", tsQuote(h.SourceDomain), ", ", tsQuote(codegen.FQName(h.Message)), ", (eventAny, state, dests, triggerCover) => {")
 			g.P("    const ev = ", tsParseAny, "(", refs.schema(h.Message), ", eventAny);")
-			g.P("    return h.", lowerFirst(h.MethodName), "(ev, state, dests, triggerCover);")
+			g.P("    return h.", codegen.LowerFirst(h.MethodName), "(ev, state, dests, triggerCover);")
 			g.P("  });")
 		}
 		for _, r := range s.Rejections {
 			g.P("  dispatch.onRejected(", tsQuote(r.Key), ", (n, rejection, state) =>")
-			g.P("    h.", lowerFirst(r.MethodName), "(n, rejection, state),")
+			g.P("    h.", codegen.LowerFirst(r.MethodName), "(n, rejection, state),")
 			g.P("  );")
 		}
 		g.P("  return dispatch;")
@@ -445,21 +447,21 @@ func (e tsEmitter) pmDispatch(g *protogen.GeneratedFile, refs *tsRefs, s *Compon
 
 // emitTSAppliers registers each event applier on the rebuilder. Identical for
 // aggregates and process managers (both rebuild their own state).
-func emitTSAppliers(g *protogen.GeneratedFile, refs *tsRefs, s *Component) {
+func emitTSAppliers(g *protogen.GeneratedFile, refs *tsRefs, s *codegen.Component) {
 	for _, a := range s.Appliers {
-		g.P("  rebuilder.applyWithContext(", tsQuote(fqName(a.Message)), ", (state, payload, ctx) => {")
-		g.P("    h.", lowerFirst(a.MethodName), "(state, ", tsParseAny, "(", refs.schema(a.Message), ", payload), ctx);")
+		g.P("  rebuilder.applyWithContext(", tsQuote(codegen.FQName(a.Message)), ", (state, payload, ctx) => {")
+		g.P("    h.", codegen.LowerFirst(a.MethodName), "(state, ", tsParseAny, "(", refs.schema(a.Message), ", payload), ctx);")
 		g.P("  });")
 	}
 }
 
-func (e tsEmitter) register(g *protogen.GeneratedFile, refs *tsRefs, s *Component) func() {
+func (e Emitter) register(g *protogen.GeneratedFile, refs *tsRefs, s *codegen.Component) func() {
 	refs.use(tsRouter)
-	method := map[ComponentKind]string{
-		KindAggregate:      "registerAggregate",
-		KindSaga:           "registerSaga",
-		KindProjector:      "registerProjector",
-		KindProcessManager: "registerProcessManager",
+	method := map[codegen.ComponentKind]string{
+		codegen.KindAggregate:      "registerAggregate",
+		codegen.KindSaga:           "registerSaga",
+		codegen.KindProjector:      "registerProjector",
+		codegen.KindProcessManager: "registerProcessManager",
 	}[s.Component.Kind]
 	return func() {
 		g.P("// Registers a ", s.BaseName, "Handler with the router.")
@@ -472,14 +474,14 @@ func (e tsEmitter) register(g *protogen.GeneratedFile, refs *tsRefs, s *Componen
 
 // EmitScaffoldComponent writes the generate-once developer stub: one class
 // implementing the component's Handler interface, with TODO bodies.
-func (e tsEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *protogen.File, s *Component) error {
+func (e Emitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *protogen.File, s *codegen.Component) error {
 	refs := newTSRefs(file)
 	sigs := e.sigs(refs, s)
 	g.P("// Scaffolded ONCE by angzarr codegen typescript — this file is YOURS.")
 	g.P("// Regeneration will NOT overwrite it; keep the generated Handler")
 	g.P("// interface implemented as commands/events are added to the proto.")
 	g.P()
-	g.P(`import { type `, s.BaseName, `Handler } from "./`, snake(s.BaseName), `_angzarr";`)
+	g.P(`import { type `, s.BaseName, `Handler } from "./`, codegen.Snake(s.BaseName), `_angzarr";`)
 	refs.emitImports(g)
 	g.P("export class ", s.StubName, " implements ", s.BaseName, "Handler {")
 	for _, m := range sigs {
@@ -499,7 +501,7 @@ func (e tsEmitter) EmitScaffoldComponent(g *protogen.GeneratedFile, file *protog
 func tsName(m *protogen.Message) string { return tsNestedName(m.Desc) }
 
 func tsNestedName(md protoreflect.MessageDescriptor) string {
-	return strings.Join(nestedNames(md), "_")
+	return strings.Join(codegen.NestedNames(md), "_")
 }
 
 // tsImportPath is the ESM import specifier (extensionless, bundler resolution)
@@ -547,4 +549,4 @@ func splitClean(p string) []string {
 }
 
 // tsQuote renders a TypeScript string literal.
-func tsQuote(s string) string { return quoteLiteral(s) }
+func tsQuote(s string) string { return codegen.QuoteLiteral(s) }

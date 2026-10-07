@@ -521,56 +521,6 @@ func applierName(m *protogen.Message) string {
 	return "Apply" + m.GoIdent.GoName
 }
 
-// quoteJoin renders a domain list as language string literals joined by
-// ", ", using the caller's per-language quoting function.
-func quoteJoin(domains []string, quote func(string) string) string {
-	quoted := make([]string, len(domains))
-	for i, d := range domains {
-		quoted[i] = quote(d)
-	}
-	return strings.Join(quoted, ", ")
-}
-
-// nestedNames is a message's name path within its file, outermost first
-// (Outer, Mid, Inner). Each emitter joins it with its language's separator.
-func nestedNames(md protoreflect.MessageDescriptor) []string {
-	parts := []string{string(md.Name())}
-	for {
-		parent, ok := md.Parent().(protoreflect.MessageDescriptor)
-		if !ok {
-			return parts
-		}
-		parts = append([]string{string(parent.Name())}, parts...)
-		md = parent
-	}
-}
-
-// quoteLiteral renders s as a double-quoted string literal valid in C++,
-// Python and TypeScript: backslash, double quote, newline, carriage return
-// and tab are escaped.
-func quoteLiteral(s string) string {
-	var b strings.Builder
-	b.WriteByte('"')
-	for _, r := range s {
-		switch r {
-		case '"':
-			b.WriteString(`\"`)
-		case '\\':
-			b.WriteString(`\\`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\r':
-			b.WriteString(`\r`)
-		case '\t':
-			b.WriteString(`\t`)
-		default:
-			b.WriteRune(r)
-		}
-	}
-	b.WriteByte('"')
-	return b.String()
-}
-
 // dedupNonEmpty drops empty and repeated entries, keeping first-seen order.
 func dedupNonEmpty(in []string) []string {
 	seen := make(map[string]bool, len(in))
