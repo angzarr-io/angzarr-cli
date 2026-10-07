@@ -1,7 +1,7 @@
 # angzarr CLI — build, test, lint.
 
-# Reusable submodule-protection recipes (install-submodule-hooks,
-# check-submodules-clean). Source of truth: angzarr-project/submodule.just.
+# Shared hook recipes (install-submodule-hooks, check-submodules-clean,
+# scan-secrets). Source of truth: angzarr-project/submodule.just.
 import? 'angzarr-project/submodule.just'
 
 TOP := `git rev-parse --show-toplevel`
