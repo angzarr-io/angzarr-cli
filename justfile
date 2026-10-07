@@ -23,6 +23,20 @@ test:
 lint:
     go vet {{TOP}}/...
 
+# Pinned go-arch-lint image for archlint. Bumps are deliberate commits here.
+GO_ARCH_LINT_IMAGE := "fe3dback/go-arch-lint:release-v1.19.0@sha256:9f4fb1216095becb37d889cc471ee8d93f7b5e5d531bde83571415013eca3fa1"
+
+# Check package dependencies against the layer rules in .go-arch-lint.yml:
+# the codegen core imports no emitter, emitters import only the core, and
+# every package belongs to a declared component.
+archlint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    runtime="$(command -v docker || command -v podman || true)"
+    test -n "$runtime" || { echo "archlint: no container runtime (docker/podman) found" >&2; exit 1; }
+    "$runtime" run --rm --network none -v "{{TOP}}:/src:ro" "{{GO_ARCH_LINT_IMAGE}}" \
+        check --project-path /src --output-color=false
+
 # Mutation-test a package with gremlins (covered lines only). One worker and
 # a wide timeout keep each mutant's `go test` run from tripping gremlins'
 # coverage-derived deadline. Every mutant is a fresh build, so the run uses a

@@ -28,22 +28,29 @@ type Emitter interface {
 	EmitScaffoldComponent(g *protogen.GeneratedFile, file *protogen.File, s *Component) error
 }
 
-// componentFile builds a per-component output path: the proto file's directory
+// ComponentFile builds a per-component output path: the proto file's directory
 // (so generated wiring sits beside the messages, source_relative) joined with a
 // component-derived stem + suffix.
-func componentFile(file *protogen.File, stem, suffix string) string {
+func ComponentFile(file *protogen.File, stem, suffix string) string {
 	return path.Join(path.Dir(file.GeneratedFilenamePrefix), stem+suffix)
 }
 
-// emitters is the language registry. Adding a language = adding an
-// Emitter implementation and registering it here.
-var emitters = map[string]Emitter{
-	goEmitter{}.Lang():     goEmitter{},
-	pyEmitter{}.Lang():     pyEmitter{},
-	javaEmitter{}.Lang():   javaEmitter{},
-	csharpEmitter{}.Lang(): csharpEmitter{},
-	cppEmitter{}.Lang():    cppEmitter{},
-	tsEmitter{}.Lang():     tsEmitter{},
+// emitters is the language registry, filled by Register. The core never
+// names a language: emitter packages are registered by the wiring layer
+// (codegen/emit/builtin), so model, lint and orchestration stay
+// language-neutral.
+var emitters = map[string]Emitter{}
+
+// Register adds emitters to the language registry, keyed by Lang. A second
+// emitter for the same language panics: registration happens once, at
+// program start.
+func Register(es ...Emitter) {
+	for _, e := range es {
+		if _, dup := emitters[e.Lang()]; dup {
+			panic(fmt.Sprintf("codegen: emitter for %q registered twice", e.Lang()))
+		}
+		emitters[e.Lang()] = e
+	}
 }
 
 // Languages lists the registered target languages.
@@ -58,17 +65,23 @@ func Languages() []string {
 
 // Options carries language-specific codegen settings parsed from the plugin
 // parameter. PyFrameworkPackage, when set, is the package a python consumer
-// imports the angzarr framework protos from (see pyEmitter.frameworkPkg).
+// imports the angzarr framework protos from.
 type Options struct {
 	PyFrameworkPackage string
 }
 
-// withOptions returns the emitter configured for opts. Only the python emitter
-// has options today; others are returned unchanged.
+// Configurable is an Emitter whose output depends on Options.
+type Configurable interface {
+	Emitter
+	// Configure returns the emitter configured for opts.
+	Configure(opts Options) Emitter
+}
+
+// withOptions returns the emitter configured for opts; an emitter without
+// options is returned unchanged.
 func withOptions(emitter Emitter, opts Options) Emitter {
-	if pe, ok := emitter.(pyEmitter); ok {
-		pe.frameworkPkg = opts.PyFrameworkPackage
-		return pe
+	if c, ok := emitter.(Configurable); ok {
+		return c.Configure(opts)
 	}
 	return emitter
 }

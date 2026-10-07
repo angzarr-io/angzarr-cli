@@ -5,6 +5,9 @@ import (
 	"io"
 
 	"github.com/angzarr-io/angzarr-cli/codegen"
+	// Registers the built-in language emitters before this package's init
+	// builds one subcommand per registered language.
+	_ "github.com/angzarr-io/angzarr-cli/codegen/emit/builtin"
 	"github.com/spf13/cobra"
 )
 

@@ -97,9 +97,10 @@ request's own descriptors; this module ships no compiled angzarr protos.
 ## Adding a language
 
 Implement `codegen.Emitter` (`Lang`, `WiringPath`, `EmitComponent`,
-`ScaffoldPath`, `EmitScaffoldComponent`; see `codegen/generate.go`) and
-register it in the `emitters` table; the `codegen` and `scaffold`
-subcommands appear automatically. Generated code must be a thin table
+`ScaffoldPath`, `EmitScaffoldComponent`; see `codegen/generate.go`) in its own
+package under `codegen/emit/<lang>` and register it in
+`codegen/emit/builtin`; the `codegen` and `scaffold` subcommands appear
+automatically. Generated code must be a thin table
 population over that language's router binding — dispatch logic lives in the
 binding, never in generated code.
 

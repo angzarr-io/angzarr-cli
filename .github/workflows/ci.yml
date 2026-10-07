@@ -36,6 +36,9 @@ jobs:
       - name: Vet
         run: just lint
 
+      - name: Architecture
+        run: just archlint
+
       - name: Unit tests and codegen features
         run: just test
 
