@@ -93,7 +93,7 @@ func runLint(in io.Reader, out, errOut io.Writer, asRequest bool) error {
 // every file in it is marked for linting.
 func pluginFromDescriptors(raw []byte, asRequest bool) (*protogen.Plugin, error) {
 	if asRequest {
-		gen, _, err := pluginFromRequest(raw, paramKeys{outDir: true})
+		gen, _, err := pluginFromRequest(raw, paramKeys{outDir: true, analysisOnly: true})
 		return gen, err
 	}
 	set := &descriptorpb.FileDescriptorSet{}
@@ -104,9 +104,10 @@ func pluginFromDescriptors(raw []byte, asRequest bool) (*protogen.Plugin, error)
 	for _, f := range set.File {
 		req.FileToGenerate = append(req.FileToGenerate, f.GetName())
 	}
+	req.Parameter = proto.String(withPlaceholderImportPaths("", set.File))
 	gen, err := protogen.Options{}.New(req)
 	if err != nil {
-		return nil, fmt.Errorf("build descriptor set (every proto needs option go_package; build the image with buf managed mode, or pass --request): %w", err)
+		return nil, fmt.Errorf("build descriptor set: %w", err)
 	}
 	return gen, nil
 }

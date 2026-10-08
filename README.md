@@ -10,7 +10,8 @@ is the first.
 |---|---|
 | `angzarr codegen <lang>` | protoc/buf plugin: per-component dispatch wiring, regenerated every run |
 | `angzarr scaffold <lang>` | protoc/buf plugin: a developer-owned handler stub, written once |
-| `angzarr codegen languages` | list the target languages: `cpp`, `csharp`, `go`, `java`, `python`, `typescript` |
+| `angzarr codegen model` | protoc/buf plugin: the validated component model as versioned JSON (`angzarr.model.json`) |
+| `angzarr codegen languages` | list the target languages: `cpp`, `csharp`, `go`, `java`, `python`, `typescript` (python renders angzarr-client-python's templates: `templates=` is required) |
 | `angzarr lint [image\|-]` | validate the declarations in a buf image / FileDescriptorSet (`--request` for a CodeGeneratorRequest) |
 | `angzarr version` / `--version` | print the build version (`just build` stamps `git describe`) |
 
@@ -63,11 +64,14 @@ plugins:
 - **Scaffold needs `out_dir`** set to the same directory as `out:` (relative to
   where buf runs). Existing stubs are looked up there and never overwritten;
   without `out_dir` scaffold refuses to run.
-- Every request file needs a `go_package` (or buf managed mode), whatever the
-  target language: output paths follow protogen's rules, so use
-  `paths=source_relative`.
-- `py_framework_package=<pkg>` (python) imports the framework protos from an
-  installed package instead of relative modules.
+- The built-in emitters need every request file's Go import path (a
+  `go_package`, or buf managed mode) and place output by protogen's rules, so
+  use `paths=source_relative`. Template-rendered languages, the model plugin
+  and `lint` need no `go_package`.
+- `templates=<repo>@<full commit SHA>` (or a local directory) renders the language from a
+  client repository's template set instead of a built-in emitter;
+  `param.<name>=<value>` overrides a parameter the set declares. See
+  [docs/templates.md](docs/templates.md).
 
 Validation is language independent and runs before any emitter; codegen,
 scaffold and `lint` share it. Errors block generation, warnings do not:
@@ -96,11 +100,19 @@ request's own descriptors; this module ships no compiled angzarr protos.
 
 ## Adding a language
 
-Implement `codegen.Emitter` (`Lang`, `WiringPath`, `EmitComponent`,
-`ScaffoldPath`, `EmitScaffoldComponent`; see `codegen/generate.go`) in its own
-package under `codegen/emit/<lang>` and register it in
-`codegen/emit/builtin`; the `codegen` and `scaffold` subcommands appear
-automatically. Generated code must be a thin table
+A language is generated from templates in its client repository
+(`angzarr-client-<lang>/codegen/`): a `manifest.yaml` naming the outputs plus Go
+`text/template` files rendered over the language-neutral component model. The
+model schema, the manifest, the render data and the helper functions are
+specified in [docs/templates.md](docs/templates.md).
+
+Python is generated this way (angzarr-client-python's `codegen/`), declared
+template-only in `codegen/emit/builtin`. The remaining built-in emitters (Go,
+Java, C#, C++, TypeScript) each implement `codegen.Emitter` (`Lang`,
+`WiringPath`, `EmitComponent`, `ScaffoldPath`, `EmitScaffoldComponent`; see
+`codegen/generate.go`) in their own package under `codegen/emit/<lang>`,
+registered in `codegen/emit/builtin`; the `codegen` and `scaffold`
+subcommands appear automatically. Generated code must be a thin table
 population over that language's router binding — dispatch logic lives in the
 binding, never in generated code.
 

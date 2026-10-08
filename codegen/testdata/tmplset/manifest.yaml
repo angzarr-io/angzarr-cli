@@ -1,0 +1,21 @@
+# A minimal template set exercising the template contract in tests.
+schema_version: 1
+language: testlang
+params:
+  greeting: hello
+imports:
+  alias_prefix: "m_"
+  reserved_aliases: [m_reserved]
+types:
+  message: '{{ .import.alias }}::{{ join "::" .message.nested_names }}'
+outputs:
+  - mode: codegen
+    path: '{{ .file.dir }}/{{ snake .component.name }}.wire'
+    template: wire.tmpl
+  - mode: codegen
+    kinds: [AGGREGATE]
+    path: '{{ .file.dir }}/{{ snake .component.name }}.aggonly'
+    template: aggonly.tmpl
+  - mode: scaffold
+    path: '{{ .file.dir }}/{{ snake .component.name }}.stub'
+    template: stub.tmpl

@@ -6,13 +6,16 @@
 #   cmd       cobra commands: flag/parameter parsing, protoc plugin I/O
 #   registry  codegen/emit/builtin: registers the built-in emitters
 #   emit-*    one language emitter per package (codegen/emit/<lang>)
-#   core      codegen: options, component model, lint, orchestration
+#   core      codegen: options, component model, model JSON, lint,
+#             orchestration, template-set fetch and render
 #
 # The core is language-neutral: it never imports an emitter (emitters reach
 # it through codegen.Register, called from the registry). Each emitter
 # depends on the core only, never on another emitter, so languages can be
-# deleted one at a time. Third-party libraries are allowed per layer: cobra
-# and viper only in cmd, protobuf below main.
+# deleted one at a time (python is rendered from its client repository's
+# templates and has no emitter). Third-party libraries are allowed per layer:
+# cobra and viper only in cmd, yaml (template manifests) only in the core,
+# protobuf below main.
 version: 3
 
 allow:
@@ -33,6 +36,7 @@ vendors:
   protobuf: { in: google.golang.org/protobuf/** }
   cobra: { in: github.com/spf13/cobra }
   viper: { in: github.com/spf13/viper }
+  yaml: { in: go.yaml.in/yaml/v3 }
 
 components:
   main: { in: . }
@@ -42,7 +46,6 @@ components:
   emit-csharp: { in: codegen/emit/csharp }
   emit-go: { in: codegen/emit/golang }
   emit-java: { in: codegen/emit/java }
-  emit-python: { in: codegen/emit/python }
   emit-typescript: { in: codegen/emit/typescript }
   core: { in: codegen }
   testfixtures: { in: codegen/internal/codegentest }
@@ -62,14 +65,12 @@ deps:
       - emit-csharp
       - emit-go
       - emit-java
-      - emit-python
       - emit-typescript
 
   emit-cpp: { mayDependOn: [core], canUse: [protobuf] }
   emit-csharp: { mayDependOn: [core], canUse: [protobuf] }
   emit-go: { mayDependOn: [core], canUse: [protobuf] }
   emit-java: { mayDependOn: [core], canUse: [protobuf] }
-  emit-python: { mayDependOn: [core], canUse: [protobuf] }
   emit-typescript: { mayDependOn: [core], canUse: [protobuf] }
 
   # deepScan counts an implementation passed into a component's function as
@@ -79,7 +80,7 @@ deps:
   # — so the core is held to import rules only.
   core:
     deepScan: false
-    canUse: [protobuf]
+    canUse: [protobuf, yaml]
 
   testfixtures:
     canUse: [protobuf]

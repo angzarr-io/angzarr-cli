@@ -1,0 +1,3 @@
+# Template sets `just golden` renders: <language> <repository> <full commit SHA>.
+# Bumps are deliberate commits, followed by `just golden-update`.
+python github.com/angzarr-io/angzarr-client-python 5147f50bdc9aee5607e33e1b35a9a303b410df19

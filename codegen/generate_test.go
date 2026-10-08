@@ -494,95 +494,18 @@ func TestGenerate_PMSameEventApplierAndTrigger_NoMethodCollision(t *testing.T) {
 	}
 }
 
-func TestGeneratePython_EmitsProtocolSeam(t *testing.T) {
+func TestGeneratePython_RequiresTheClientRepoTemplates(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
-	resp, err := generate(t, "python", ioPkg, orderAggregate(o)...)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	if len(resp.File) != 1 {
-		t.Fatalf("generated %d files, want 1", len(resp.File))
-	}
-	f := resp.File[0]
-	if !strings.HasSuffix(f.GetName(), "_angzarr.py") {
-		t.Errorf("wiring file name = %q, want *_angzarr.py", f.GetName())
-	}
-	content := f.GetContent()
-	for _, want := range []string{
-		"import angzarr_router_ffi as _az",
-		"class OrderAggregateHandler(Protocol):",
-		"def create_order(self, cmd: _validation_test.CreateOrder, state: _validation_test.State, cctx: _az.CommandContext) -> list[_validation_test.OrderCreated]: ...",
-		"def apply_order_created(self, state: _validation_test.State, event: _validation_test.OrderCreated, ctx: _az.PageContext) -> None: ...",
-		"def new_order_aggregate_dispatch(handler: OrderAggregateHandler) -> _az.AggregateDispatch:",
-		`dispatch.on_command("validation.test.CreateOrder"`,
-		"book.pages.add().event.CopyFrom(_az.pack(ev))", // typed-emit
-		`raise _az.any_decode_error(cmd_any.type_url, exc)`,
-		"def register_order_aggregate(router: _az.Router, handler: OrderAggregateHandler) -> None:",
-		"router.register_aggregate(new_order_aggregate_dispatch(handler))",
+	for name, run := range map[string]func() error{
+		"codegen": func() error { _, err := generate(t, "python", ioPkg, orderAggregate(o)...); return err },
+		"scaffold": func() error {
+			_, err := scaffold(t, "python", ioPkg, func(string) bool { return false }, orderAggregate(o)...)
+			return err
+		},
 	} {
-		if !strings.Contains(content, want) {
-			t.Errorf("python wiring missing %q", want)
-		}
-	}
-}
-
-func TestGeneratePython_SagaUsesMethodRegister(t *testing.T) {
-	o := buildOptionTypes(t, ioPkg)
-	resp, err := generate(t, "python", ioPkg,
-		declMsg{"OrderSaga", o.componentDecl(2, "orders", "fulfillment", "")},
-		declMsg{"OrderPlaced", o.eventDecl(eventEntry{component: fq("OrderSaga"), domain: "orders"})},
-	)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	content := resp.File[0].GetContent()
-	for _, want := range []string{
-		`_az.SagaDispatch("OrderSaga", "orders", targets=["fulfillment"])`,
-		`dispatch.on_event_with_context("validation.test.OrderPlaced"`,
-		"router.register_saga(new_order_saga_dispatch(handler))",
-	} {
-		if !strings.Contains(content, want) {
-			t.Errorf("python saga wiring missing %q", want)
-		}
-	}
-}
-
-func TestGeneratePython_RawEventBookEscapeHatch(t *testing.T) {
-	o := buildOptionTypes(t, ioPkg)
-	resp, err := generate(t, "python", ioPkg,
-		declMsg{"State", o.ownedDecl(1, "orders", "", "OrderAggregate")},
-		declMsg{"CreateOrder", o.commandDecl(fq("State"))},
-	)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	content := resp.File[0].GetContent()
-	if !strings.Contains(content, "-> Optional[_t.EventBook]") {
-		t.Errorf("escape-hatch handler should return Optional[EventBook]")
-	}
-	if strings.Contains(content, "_az.pack(") {
-		t.Errorf("escape-hatch handler must not pack typed events")
-	}
-}
-
-func TestGeneratePythonScaffold_EmitsOwnedStub(t *testing.T) {
-	o := buildOptionTypes(t, ioPkg)
-	resp, err := scaffold(t, "python", ioPkg, func(string) bool { return false }, orderAggregate(o)...)
-	if err != nil {
-		t.Fatalf("GenerateScaffold: %v", err)
-	}
-	if len(resp.File) != 1 || !strings.HasSuffix(resp.File[0].GetName(), "_angzarr_handler.py") {
-		t.Fatalf("want one *_angzarr_handler.py file, got %v", resp.File)
-	}
-	content := resp.File[0].GetContent()
-	for _, want := range []string{
-		"Regeneration will NOT overwrite this file",
-		"class OrderAggregate:",
-		"def create_order(self, cmd: _validation_test.CreateOrder",
-		`raise NotImplementedError("TODO: implement OrderAggregate.create_order")`,
-	} {
-		if !strings.Contains(content, want) {
-			t.Errorf("python scaffold missing %q", want)
+		err := run()
+		if err == nil || !strings.Contains(err.Error(), "templates=github.com/angzarr-io/angzarr-client-python@") {
+			t.Errorf("%s python without templates= must name the client repo option, got %v", name, err)
 		}
 	}
 }
@@ -700,7 +623,7 @@ func TestGenerateJava_EmitsNestedSeam(t *testing.T) {
 		"package validation.test;",
 		"public final class OrderAggregateAngzarr {",
 		"public interface OrderAggregateHandler {",
-		// command handler: method = lowerFirst(message name), typed-emit return
+		// command handler: method = LowerFirst(message name), typed-emit return
 		"java.util.List<validation.test.ValidationTest.OrderCreated> createOrder(",
 		"validation.test.ValidationTest.CreateOrder cmd",
 		"validation.test.ValidationTest.State.Builder state, io.angzarr.router.CommandContext cctx) throws Exception;",
@@ -1142,7 +1065,6 @@ func projectorInputPlusHandlerDomains(o optionTypes) []declMsg {
 // filter over the given quoted-and-joined domain list.
 var projectorFilterCalls = map[string]func(joined string) string{
 	"go":         func(j string) string { return "dispatch.ForDomains(" + j + ")" },
-	"python":     func(j string) string { return "dispatch.for_domains(" + j + ")" },
 	"java":       func(j string) string { return ".forDomains(" + j + ")" },
 	"csharp":     func(j string) string { return ".ForDomains(" + j + ")" },
 	"cpp":        func(j string) string { return "dispatch.ForDomains({" + j + "});" },
@@ -1160,7 +1082,7 @@ func TestGenerate_Projector_DomainFilterIncludesInputDomain(t *testing.T) {
 		{"handler domains span two", projectorMultiDomain(o), `"hand", "table"`},
 		{"input_domain plus handler domains", projectorInputPlusHandlerDomains(o), `"hand", "player", "table"`},
 	}
-	for _, lang := range codegen.Languages() {
+	for _, lang := range codegen.BuiltinLanguages() {
 		for _, tc := range cases {
 			t.Run(lang+"/"+tc.name, func(t *testing.T) {
 				resp, err := generate(t, lang, ioPkg, tc.msgs...)
@@ -1195,7 +1117,6 @@ func TestGenerateScaffold_UnnamedComponentStubDoesNotShadowAnchor(t *testing.T) 
 		"go": {"order_saga_angzarr_handler.go",
 			[]string{"type OrderSagaImpl struct{}", "var _ OrderSagaHandler = OrderSagaImpl{}", "func (OrderSagaImpl) OrderPlaced("},
 			"type OrderSaga struct"},
-		"python": {"order_saga_angzarr_handler.py", []string{"class OrderSagaImpl:"}, "class OrderSaga:"},
 		"java": {"OrderSagaImpl.java",
 			[]string{"public final class OrderSagaImpl implements OrderSagaAngzarr.OrderSagaHandler {"},
 			"class OrderSaga "},
@@ -1209,7 +1130,7 @@ func TestGenerateScaffold_UnnamedComponentStubDoesNotShadowAnchor(t *testing.T) 
 			[]string{"export class OrderSagaImpl implements OrderSagaHandler {"},
 			"class OrderSaga "},
 	}
-	for _, lang := range codegen.Languages() {
+	for _, lang := range codegen.BuiltinLanguages() {
 		tc, ok := cases[lang]
 		if !ok {
 			t.Fatalf("no stub-name expectation for language %q", lang)
@@ -1262,13 +1183,12 @@ func TestGenerate_SagaTargetsAllOutputDomains(t *testing.T) {
 	}
 	want := map[string]string{
 		"go":         `NewSagaDispatch("OrderSaga", "orders", "fulfillment", "billing")`,
-		"python":     `SagaDispatch("OrderSaga", "orders", targets=["fulfillment", "billing"])`,
 		"java":       `"OrderSaga", "orders", java.util.List.of("fulfillment", "billing"))`,
 		"csharp":     `("OrderSaga", "orders", "fulfillment", "billing")`,
 		"cpp":        `dispatch("OrderSaga", "orders", {"fulfillment", "billing"});`,
 		"typescript": `("OrderSaga", "orders", ["fulfillment", "billing"]);`,
 	}
-	for _, lang := range codegen.Languages() {
+	for _, lang := range codegen.BuiltinLanguages() {
 		t.Run(lang, func(t *testing.T) {
 			resp, err := generate(t, lang, ioPkg, msgs...)
 			if err != nil {
@@ -1313,13 +1233,12 @@ func TestGenerate_OwnedDomainRegistersAggregateAndProcessManager(t *testing.T) {
 	}
 	want := map[string][2]string{
 		"go":         {`NewAggregateDispatch("OrderAggregate", "orders", rebuilder)`, `NewProcessManagerDispatch("Flow", "workflow", rebuilder, "fulfillment")`},
-		"python":     {`AggregateDispatch("OrderAggregate", "orders", rebuilder)`, `ProcessManagerDispatch("Flow", "workflow", rebuilder, targets=["fulfillment"])`},
 		"java":       {`("OrderAggregate", "orders", rebuilder)`, `("Flow", "workflow", java.util.List.of("fulfillment"), rebuilder)`},
 		"csharp":     {`("OrderAggregate", "orders", rebuilder)`, `("Flow", "workflow", new[] { "fulfillment" }, rebuilder)`},
 		"cpp":        {`dispatch("OrderAggregate", "orders", std::move(rebuilder));`, `dispatch("Flow", "workflow", {"fulfillment"}, std::move(rebuilder));`},
 		"typescript": {`("OrderAggregate", "orders", rebuilder);`, `("Flow", "workflow", rebuilder, ["fulfillment"]);`},
 	}
-	for _, lang := range codegen.Languages() {
+	for _, lang := range codegen.BuiltinLanguages() {
 		t.Run(lang, func(t *testing.T) {
 			for i, msgs := range [][]declMsg{agg, pm} {
 				resp, err := generate(t, lang, ioPkg, msgs...)

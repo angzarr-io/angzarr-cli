@@ -51,5 +51,8 @@ jobs:
       - name: Smoke (all languages, codegen + scaffold)
         run: just smoke-check
 
+      - name: Golden (pinned client-repo templates over conformance + blackjack)
+        run: just golden
+
       - name: Compile generated Go against angzarr-router
         run: just compile-go-pinned

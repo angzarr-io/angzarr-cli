@@ -20,7 +20,7 @@ func TestSnakeToPascal_MatchesProtocOuterClassRule(t *testing.T) {
 		"table_hand9": "TableHand9",
 	} {
 		if got := SnakeToPascal(in); got != want {
-			t.Errorf("snakeToPascal(%q) = %q, want %q", in, got, want)
+			t.Errorf("SnakeToPascal(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

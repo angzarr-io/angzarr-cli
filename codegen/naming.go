@@ -74,7 +74,9 @@ func QuoteLiteral(s string) string {
 	return b.String()
 }
 
-// Snake converts an exported CamelCase identifier to snake_case.
+// Snake converts a CamelCase identifier to snake_case. An upper-case letter
+// starts a new word after a lower-case letter, or ends an acronym run when a
+// lower-case letter follows it (HTTPGet → http_get).
 func Snake(name string) string {
 	var b strings.Builder
 	for i, r := range name {
@@ -90,12 +92,13 @@ func Snake(name string) string {
 	return b.String()
 }
 
-// LowerFirst lower-cases the first byte of s (camelCase from PascalCase).
+// LowerFirst lower-cases the first letter of s (camelCase from PascalCase).
 func LowerFirst(s string) string {
-	if s == "" {
-		return s
+	r := []rune(s)
+	if len(r) > 0 {
+		r[0] = unicode.ToLower(r[0])
 	}
-	return strings.ToLower(s[:1]) + s[1:]
+	return string(r)
 }
 
 // SnakeToPascal is protoc's UnderscoresToCamelCase with the first letter

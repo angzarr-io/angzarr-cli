@@ -43,22 +43,6 @@ var abiV2Want = map[string]map[string][]string{
 			"OrderPlaced(projection *Ledger, event *OrderPlaced, ctx _go.PageContext) error",
 		},
 	},
-	"python": {
-		"OrderAggregate": {
-			`dispatch.on_undo("validation.test.ReserveStock", handler.on_reserve_stock_undo)`,
-			"def on_reserve_stock_undo(self, n: _t.Notification, compensate: _t.Compensate, state: _validation_test.State, cctx: _az.CommandContext) -> Optional[_ch.BusinessResponse]",
-		},
-		"Flow": {
-			`_az.ProcessManagerDispatch("Flow", "flow", rebuilder, targets=["inventory", "billing"])`,
-			`dispatch.on_event_with_cover("orders", "validation.test.OrderPlaced", _on_order_placed)`,
-			"def order_placed(self, event: _validation_test.OrderPlaced, state: _validation_test.FlowState, dests: _az.Destinations, trigger_cover: Optional[_t.Cover]) -> _pm.ProcessManagerHandleResponse",
-			"def on_reserve_stock_rejected(self, n: _t.Notification, rejection: _t.RejectionNotification, state: _validation_test.FlowState) -> Optional[_pm.ProcessManagerHandleResponse]",
-		},
-		"LedgerProjector": {
-			`dispatch.on_event_with_context("validation.test.OrderPlaced", _on_order_placed)`,
-			"def order_placed(self, projection: _validation_test.Ledger, event: _validation_test.OrderPlaced, ctx: _az.PageContext) -> None",
-		},
-	},
 	"java": {
 		"OrderAggregate": {
 			`.onUndo("validation.test.ReserveStock", (n, compensate, state, cctx) ->`,
@@ -150,7 +134,7 @@ func keys(m map[string]string) []string {
 
 func TestGenerate_ABIv2Surface(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
-	for _, lang := range codegen.Languages() {
+	for _, lang := range codegen.BuiltinLanguages() {
 		t.Run(lang, func(t *testing.T) {
 			resp, err := generate(t, lang, ioPkg, abiV2Surface(o)...)
 			if err != nil {
@@ -175,10 +159,10 @@ func TestGenerate_ABIv2Surface(t *testing.T) {
 func TestGenerateScaffold_ABIv2StubsImplementTheNewMethods(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
 	want := map[string]string{
-		"go": "OnReserveStockUndo(", "python": "def on_reserve_stock_undo(", "java": "onReserveStockUndo(",
+		"go": "OnReserveStockUndo(", "java": "onReserveStockUndo(",
 		"csharp": "OnReserveStockUndo(", "cpp": "OnReserveStockUndo(", "typescript": "onReserveStockUndo(",
 	}
-	for _, lang := range codegen.Languages() {
+	for _, lang := range codegen.BuiltinLanguages() {
 		t.Run(lang, func(t *testing.T) {
 			resp, err := scaffold(t, lang, ioPkg, func(string) bool { return false }, abiV2Surface(o)...)
 			if err != nil {
@@ -217,7 +201,7 @@ func TestGenerate_ProjectorWithoutDomainsHasNoFilter(t *testing.T) {
 		{"Ledger", o.componentDecl(4, "", "", "LedgerProjector")},
 		{"OrderPlaced", o.eventDecl(eventEntry{component: fq("Ledger")})},
 	}
-	for _, lang := range codegen.Languages() {
+	for _, lang := range codegen.BuiltinLanguages() {
 		t.Run(lang, func(t *testing.T) {
 			resp, err := generate(t, lang, ioPkg, msgs...)
 			if err != nil {
@@ -277,19 +261,6 @@ var pageContextWant = map[string]map[string][]string{
 			"OrderPlaced(event *OrderPlaced, dests *_go.Destinations, source _go.PageContext) (",
 		},
 	},
-	"python": {
-		"OrderAggregate": {
-			`rebuilder.apply_with_context("validation.test.OrderPlaced", _apply_apply_order_placed)`,
-			"def apply_order_placed(self, state: _validation_test.State, event: _validation_test.OrderPlaced, ctx: _az.PageContext) -> None",
-		},
-		"Flow": {
-			`rebuilder.apply_with_context("validation.test.FlowAdvanced", `,
-		},
-		"OrderSaga": {
-			`dispatch.on_event_with_context("validation.test.OrderPlaced", _on_order_placed)`,
-			"def order_placed(self, event: _validation_test.OrderPlaced, dests: _az.Destinations, source: _az.PageContext)",
-		},
-	},
 	"java": {
 		"OrderAggregate": {
 			`rebuilder.applyWithContext("validation.test.OrderPlaced", (state, payload, ctx) ->`,
@@ -342,7 +313,7 @@ var pageContextWant = map[string]map[string][]string{
 
 func TestGenerate_PageContextSurface(t *testing.T) {
 	o := buildOptionTypes(t, ioPkg)
-	for _, lang := range codegen.Languages() {
+	for _, lang := range codegen.BuiltinLanguages() {
 		t.Run(lang, func(t *testing.T) {
 			resp, err := generate(t, lang, ioPkg, pageContextSurface(o)...)
 			if err != nil {

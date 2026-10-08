@@ -149,7 +149,10 @@ plugins:
 ```
 
 Then `buf generate`. `angzarr codegen languages` lists the supported targets:
-`cpp`, `csharp`, `go`, `java`, `python`, `typescript`.
+`cpp`, `csharp`, `go`, `java`, `python`, `typescript`. Python is rendered from
+angzarr-client-python's templates: add
+`templates=github.com/angzarr-io/angzarr-client-python@<commit>` to both
+python plugins' `opt` ([templates.md](templates.md)).
 
 - **`strategy: all`** on both angzarr plugins is required. A component's
   commands and events point at it by name, not by import, so all of its files
@@ -416,7 +419,7 @@ one handler per type — model extra reactions as extra components.)
   set; short names never match dispatch, and generation fails on them rather
   than emitting wiring that silently never fires.
 - **The wiring depends on the binding.** Generated `*_angzarr.*` imports the
-  language binding (`ffirouter` / `angzarr_router_ffi`). Don't have the binding
+  language binding (`ffirouter` / `angzarr_client.router`). Don't have the binding
   package consume its *own* generated wiring from inside its own package — put
   consumers in a separate package (a normal dependency direction) to avoid an
   import cycle.

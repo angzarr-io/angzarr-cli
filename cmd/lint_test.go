@@ -50,3 +50,32 @@ func TestRunLint_GarbageInput_Errors(t *testing.T) {
 		t.Fatal("expected error on garbage input")
 	}
 }
+
+func TestRunLint_ImageWithoutGoPackage_Lints(t *testing.T) {
+	// Lint emits no Go: files need no go_package.
+	set := &descriptorpb.FileDescriptorSet{File: []*descriptorpb.FileDescriptorProto{{
+		Name: strp("a/plain.proto"), Package: strp("plain"), Syntax: strp("proto3"),
+		MessageType: []*descriptorpb.DescriptorProto{{Name: strp("Thing")}},
+	}}}
+	raw, err := proto.Marshal(set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if err := runLint(bytes.NewReader(raw), &out, &errOut, false); err != nil {
+		t.Fatalf("runLint: %v (stderr: %s)", err, errOut.String())
+	}
+	if !strings.Contains(out.String(), "lint OK") {
+		t.Errorf("stdout = %q, want lint OK", out.String())
+	}
+}
+
+func TestRunLint_RequestWithoutGoPackage_Lints(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if err := runLint(bytes.NewReader(aggregateRequestGoPackage(t, "", "")), &out, &errOut, true); err != nil {
+		t.Fatalf("runLint --request: %v (stderr %s)", err, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "ANZ103") {
+		t.Errorf("want ANZ103 from analysing the request, got stderr %q", errOut.String())
+	}
+}
