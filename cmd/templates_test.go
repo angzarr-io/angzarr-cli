@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
@@ -99,5 +101,37 @@ func TestRunModel_RefusesRenderingParameters(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "unknown parameter") {
 			t.Errorf("%s: the model plugin renders nothing and must refuse it, got %v", param, err)
 		}
+	}
+}
+
+func TestRunModel_InvalidDeclarationTravelsInResponse(t *testing.T) {
+	// OrderState declared an aggregate with no domain: ANZ008, reported in the
+	// response rather than as a protocol error.
+	var sub []byte
+	sub = protowire.AppendTag(sub, 1, protowire.VarintType)
+	sub = protowire.AppendVarint(sub, 1)
+	var raw []byte
+	raw = protowire.AppendTag(raw, 50100, protowire.BytesType)
+	raw = protowire.AppendBytes(raw, sub)
+	opts := &descriptorpb.MessageOptions{}
+	if err := proto.Unmarshal(raw, opts); err != nil {
+		t.Fatal(err)
+	}
+	req := &pluginpb.CodeGeneratorRequest{}
+	if err := proto.Unmarshal(aggregateRequest(t, ""), req); err != nil {
+		t.Fatal(err)
+	}
+	req.ProtoFile[len(req.ProtoFile)-1].MessageType[0].Options = opts
+	in, err := proto.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runModel(bytes.NewReader(in), &out); err != nil {
+		t.Fatalf("protocol-level error: %v", err)
+	}
+	resp := decodeResponse(t, out.Bytes())
+	if !strings.Contains(resp.GetError(), "ANZ008") || len(resp.File) != 0 {
+		t.Fatalf("want ANZ008 in the response and no model, got error %q, %d files", resp.GetError(), len(resp.File))
 	}
 }

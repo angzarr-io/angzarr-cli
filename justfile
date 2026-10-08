@@ -45,16 +45,13 @@ archlint:
 # The emitter packages are exercised end to end by the codegen tests, so
 # coverage is gathered across every package (--coverpkg) and each mutant runs
 # the whole suite (--integration).
-# diff, when set, mutates only the lines changed since that commit.
 # Usage: just mutants ./codegen
-#        just mutants ./... origin/main
-mutants pkg="./..." diff="":
+mutants pkg="./...":
     #!/usr/bin/env bash
     set -euo pipefail
-    diff="{{diff}}"
     export GOCACHE="$(mktemp -d)"
     trap 'chmod -R u+w "$GOCACHE"; rm -r "$GOCACHE"' EXIT
-    cd "{{TOP}}" && gremlins unleash --workers 1 --timeout-coefficient 20 --coverpkg ./... --integration ${diff:+--diff "$diff"} {{pkg}}
+    cd "{{TOP}}" && gremlins unleash --workers 1 --timeout-coefficient 20 --coverpkg ./... --integration {{pkg}}
 
 # Lint component declarations before they are generated: resolution errors
 # block, coherence warnings are reported. Codegen gates on the same analysis
