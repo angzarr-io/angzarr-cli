@@ -3,10 +3,12 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"path"
 	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 
 	"github.com/angzarr-io/angzarr-cli/codegen"
@@ -29,6 +31,52 @@ type paramKeys struct {
 	// modelOnly refuses the rendering parameters (templates=, param.*): the
 	// model plugin emits the language-neutral model and renders nothing.
 	modelOnly bool
+	// analysisOnly marks a run that only analyses the request (lint).
+	analysisOnly bool
+}
+
+// placeholderImportPath prefixes the Go import path given to a file that sets
+// no go_package in a run that emits no Go. The .invalid TLD never resolves.
+const placeholderImportPath = "angzarr.invalid"
+
+// rendersOnly reports whether a run emits no Go of its own: the model
+// plugin, lint, and any run rendering a template set (templates=). Such runs
+// do not need the Go import paths protogen otherwise demands of every file.
+func rendersOnly(parameter string, keys paramKeys) bool {
+	if keys.modelOnly || keys.analysisOnly {
+		return true
+	}
+	for _, p := range strings.Split(parameter, ",") {
+		if name, _, _ := strings.Cut(p, "="); name == "templates" {
+			return true
+		}
+	}
+	return false
+}
+
+// withPlaceholderImportPaths appends an M<file>=<import path> mapping to the
+// plugin parameter for every file that sets no go_package and has no M
+// mapping yet, so protogen accepts a request carrying no Go options. The
+// placeholder never reaches generated code or the model (which reports the
+// options the files set).
+func withPlaceholderImportPaths(parameter string, files []*descriptorpb.FileDescriptorProto) string {
+	mapped := map[string]bool{}
+	for _, p := range strings.Split(parameter, ",") {
+		if name, _, ok := strings.Cut(p, "="); ok && strings.HasPrefix(name, "M") {
+			mapped[name[1:]] = true
+		}
+	}
+	params := []string{}
+	if parameter != "" {
+		params = append(params, parameter)
+	}
+	for _, f := range files {
+		if f.GetOptions().GetGoPackage() != "" || mapped[f.GetName()] {
+			continue
+		}
+		params = append(params, "M"+f.GetName()+"="+path.Join(placeholderImportPath, path.Dir(f.GetName())))
+	}
+	return strings.Join(params, ",")
 }
 
 // readPlugin reads a CodeGeneratorRequest and builds the protogen.Plugin,
@@ -47,6 +95,9 @@ func pluginFromRequest(raw []byte, keys paramKeys) (*protogen.Plugin, *pluginPar
 	req := &pluginpb.CodeGeneratorRequest{}
 	if err := proto.Unmarshal(raw, req); err != nil {
 		return nil, nil, fmt.Errorf("parse CodeGeneratorRequest: %w", err)
+	}
+	if rendersOnly(req.GetParameter(), keys) {
+		req.Parameter = proto.String(withPlaceholderImportPaths(req.GetParameter(), req.GetProtoFile()))
 	}
 	params := &pluginParams{}
 	pgo := protogen.Options{

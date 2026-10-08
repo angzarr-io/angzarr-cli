@@ -76,12 +76,23 @@ func aggregateOptions(t *testing.T) *descriptorpb.MessageOptions {
 // parameter string.
 func aggregateRequest(t *testing.T, parameter string) []byte {
 	t.Helper()
+	return aggregateRequestGoPackage(t, parameter, "example.test/orders;orders")
+}
+
+// aggregateRequestGoPackage is aggregateRequest with orders.proto's
+// go_package option set to goPackage (unset when empty).
+func aggregateRequestGoPackage(t *testing.T, parameter, goPackage string) []byte {
+	t.Helper()
+	fileOpts := &descriptorpb.FileOptions{}
+	if goPackage != "" {
+		fileOpts.GoPackage = strp(goPackage)
+	}
 	orders := &descriptorpb.FileDescriptorProto{
 		Name:        strp("orders.proto"),
 		Package:     strp("shop.orders"),
 		Syntax:      strp("proto3"),
 		Dependency:  []string{"io/angzarr/v1/options.proto"},
-		Options:     &descriptorpb.FileOptions{GoPackage: strp("example.test/orders;orders")},
+		Options:     fileOpts,
 		MessageType: []*descriptorpb.DescriptorProto{{Name: strp("OrderState"), Options: aggregateOptions(t)}},
 	}
 	req := &pluginpb.CodeGeneratorRequest{
@@ -216,5 +227,89 @@ func TestRunPluginAndScaffold_GenerationFailureTravelsInResponse(t *testing.T) {
 				t.Fatalf("want response error naming the unknown language, got %q", resp.GetError())
 			}
 		})
+	}
+}
+
+func TestRenderingPlugins_NeedNoGoImportPath(t *testing.T) {
+	// The model and template-rendered plugins never emit Go, so a request
+	// whose files carry no go_package still renders; the model reports only
+	// the options the files set.
+	var out bytes.Buffer
+	if err := runModel(bytes.NewReader(aggregateRequestGoPackage(t, "", "")), &out); err != nil {
+		t.Fatalf("runModel: %v", err)
+	}
+	resp := decodeResponse(t, out.Bytes())
+	if resp.GetError() != "" || len(resp.File) != 1 {
+		t.Fatalf("model response: error %q, %d files", resp.GetError(), len(resp.File))
+	}
+	if strings.Contains(resp.File[0].GetContent(), "go_package") {
+		t.Errorf("model reports a go_package the file does not set:\n%s", resp.File[0].GetContent())
+	}
+
+	out.Reset()
+	param := "paths=source_relative,templates=" + goTemplateSet(t)
+	if err := runPlugin(bytes.NewReader(aggregateRequestGoPackage(t, param, "")), &out, "go"); err != nil {
+		t.Fatalf("runPlugin with templates=: %v", err)
+	}
+	if resp := decodeResponse(t, out.Bytes()); resp.GetError() != "" || len(resp.File) != 1 {
+		t.Fatalf("template render: error %q, files %v", resp.GetError(), resp.File)
+	}
+
+	out.Reset()
+	param = "paths=source_relative,out_dir=" + t.TempDir() + ",templates=" + goTemplateSet(t)
+	if err := runScaffold(bytes.NewReader(aggregateRequestGoPackage(t, param, "")), &out, "go"); err != nil {
+		t.Fatalf("runScaffold with templates=: %v", err)
+	}
+	if resp := decodeResponse(t, out.Bytes()); resp.GetError() != "" || len(resp.File) != 1 {
+		t.Fatalf("template scaffold: error %q, files %v", resp.GetError(), resp.File)
+	}
+}
+
+func TestBuiltInGoEmitter_StillNeedsAGoImportPath(t *testing.T) {
+	var out bytes.Buffer
+	err := runPlugin(bytes.NewReader(aggregateRequestGoPackage(t, "paths=source_relative", "")), &out, "go")
+	if err == nil || !strings.Contains(err.Error(), "Go import path") {
+		t.Fatalf("the built-in Go emitter must require go_package, got %v", err)
+	}
+}
+
+func TestPlaceholderImportPaths_KeepExplicitMappings(t *testing.T) {
+	req := &pluginpb.CodeGeneratorRequest{
+		Parameter: strp("templates=x,Mb.proto=example.test/b"),
+		ProtoFile: []*descriptorpb.FileDescriptorProto{
+			{Name: strp("a/x/a.proto")},
+			{Name: strp("b.proto")},
+			{Name: strp("c.proto"), Options: &descriptorpb.FileOptions{GoPackage: strp("example.test/c")}},
+			{Name: strp("d.proto")},
+		},
+	}
+	got := withPlaceholderImportPaths(req.GetParameter(), req.GetProtoFile())
+	want := "templates=x,Mb.proto=example.test/b,Ma/x/a.proto=angzarr.invalid/a/x,Md.proto=angzarr.invalid"
+	if got != want {
+		t.Errorf("parameter = %q\nwant        %q", got, want)
+	}
+	if got := withPlaceholderImportPaths("", req.GetProtoFile()[2:3]); got != "" {
+		t.Errorf("no placeholders needed: parameter = %q", got)
+	}
+	if got := withPlaceholderImportPaths("", req.GetProtoFile()[3:]); got != "Md.proto=angzarr.invalid" {
+		t.Errorf("empty parameter: %q", got)
+	}
+}
+
+func TestRendersOnly(t *testing.T) {
+	for param, want := range map[string]bool{
+		"":                          false,
+		"paths=source_relative":     false,
+		"templates=x":               true,
+		"paths=import,templates=./": true,
+		"xtemplates=y":              false,
+		"templates":                 true,
+	} {
+		if got := rendersOnly(param, paramKeys{}); got != want {
+			t.Errorf("rendersOnly(%q) = %v, want %v", param, got, want)
+		}
+	}
+	if !rendersOnly("", paramKeys{modelOnly: true}) {
+		t.Errorf("the model plugin renders only")
 	}
 }
