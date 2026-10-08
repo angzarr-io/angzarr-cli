@@ -56,3 +56,30 @@ func TestProtoFile_EmptyDeclarationListsAreNotNull(t *testing.T) {
 		t.Errorf("empty file = %+v; lists must be present (empty), dir \".\"", pf)
 	}
 }
+
+func TestFileOptions_ReportsExactlyTheOptionsSet(t *testing.T) {
+	s := func(v string) *string { return &v }
+	b := func(v bool) *bool { return &v }
+	all := &descriptorpb.FileOptions{
+		GoPackage: s("go"), JavaPackage: s("jp"), JavaOuterClassname: s("joc"), JavaMultipleFiles: b(true),
+		CsharpNamespace: s("cs"), ObjcClassPrefix: s("objc"), PhpNamespace: s("php"), RubyPackage: s("rb"), SwiftPrefix: s("sw"),
+	}
+	want := map[string]string{
+		"go_package": "go", "java_package": "jp", "java_outer_classname": "joc", "java_multiple_files": "true",
+		"csharp_namespace": "cs", "objc_class_prefix": "objc", "php_namespace": "php", "ruby_package": "rb", "swift_prefix": "sw",
+	}
+	if got := fileOptions(all); !reflect.DeepEqual(got, want) {
+		t.Errorf("every option set: %v\nwant %v", got, want)
+	}
+	// Set to empty values, options are still reported; unset ones are absent.
+	empty := &descriptorpb.FileOptions{GoPackage: s(""), JavaMultipleFiles: b(false)}
+	if got := fileOptions(empty); !reflect.DeepEqual(got, map[string]string{"go_package": "", "java_multiple_files": "false"}) {
+		t.Errorf("explicitly empty options: %v", got)
+	}
+	if got := fileOptions(&descriptorpb.FileOptions{}); len(got) != 0 {
+		t.Errorf("no options set: %v", got)
+	}
+	if got := fileOptions(nil); got == nil || len(got) != 0 {
+		t.Errorf("nil options: %v", got)
+	}
+}

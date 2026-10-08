@@ -285,10 +285,10 @@ func identifier(s string) string {
 // spaces (n ≤ 0: s unchanged); blank lines stay empty of trailing space.
 func indent(n any, s string) (string, error) {
 	i, err := toInt(n)
-	if err != nil || i <= 0 {
+	if err != nil {
 		return s, err
 	}
-	pad := strings.Repeat(" ", i)
+	pad := strings.Repeat(" ", max(i, 0))
 	lines := strings.Split(s, "\n")
 	for j, l := range lines {
 		if strings.TrimSpace(l) != "" {

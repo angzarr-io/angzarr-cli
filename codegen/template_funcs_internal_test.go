@@ -54,6 +54,7 @@ func TestBaseHelpers(t *testing.T) {
 		`{{ join "," (split "/" "a/b/c") }}`:                                           "a,b,c",
 		`{{ commonPrefix .names .other }}`:                                             "2",
 		`{{ commonPrefix .names .empty }}`:                                             "0",
+		`{{ commonPrefix (list "io") .names }}{{ commonPrefix .names (list "io") }}`:   "11",
 		`{{ repeat (add (sub .n 2) 1) "." }}`:                                          "..",
 		`{{ repeat (sub 0 4) "." }}`:                                                   "",
 		`{{ last .names }}|{{ first .names }}`:                                         "v1|io",
