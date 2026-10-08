@@ -10,15 +10,21 @@ import (
 	"github.com/angzarr-io/angzarr-cli/codegen"
 )
 
+// Full commit SHAs (SHA-1 and SHA-256) for template source specs.
+const (
+	sha1   = "5147f50bdc9aee5607e33e1b35a9a303b410df19"
+	sha256 = "5147f50bdc9aee5607e33e1b35a9a303b410df195147f50bdc9aee5607e33e1b"
+)
+
 func TestParseTemplateSource(t *testing.T) {
 	for spec, want := range map[string]codegen.TemplateSource{
-		"github.com/angzarr-io/angzarr-client-python@v1.2.3": {Repo: "github.com/angzarr-io/angzarr-client-python", URL: "https://github.com/angzarr-io/angzarr-client-python.git", Rev: "v1.2.3"},
-		"github.com/org/repo.git@abc123":                     {Repo: "github.com/org/repo.git", URL: "https://github.com/org/repo.git", Rev: "abc123"},
-		"file:///srv/repo@main":                              {Repo: "file:///srv/repo", URL: "file:///srv/repo", Rev: "main"},
-		"../client-python":                                   {Local: "../client-python"},
-		"/abs/dir@with-at":                                   {Local: "/abs/dir@with-at"},
-		"codegen":                                            {Local: "codegen"},
-		"~/x":                                                {Local: "~/x"},
+		"github.com/angzarr-io/angzarr-client-python@" + sha1: {Repo: "github.com/angzarr-io/angzarr-client-python", URL: "https://github.com/angzarr-io/angzarr-client-python.git", Rev: sha1},
+		"github.com/org/repo.git@" + sha256:                   {Repo: "github.com/org/repo.git", URL: "https://github.com/org/repo.git", Rev: sha256},
+		"file:///srv/repo@" + sha1:                            {Repo: "file:///srv/repo", URL: "file:///srv/repo", Rev: sha1},
+		"../client-python":                                    {Local: "../client-python"},
+		"/abs/dir@with-at":                                    {Local: "/abs/dir@with-at"},
+		"codegen":                                             {Local: "codegen"},
+		"~/x":                                                 {Local: "~/x"},
 	} {
 		got, err := codegen.ParseTemplateSource(spec)
 		if err != nil {
@@ -30,12 +36,19 @@ func TestParseTemplateSource(t *testing.T) {
 		}
 	}
 	for spec, want := range map[string]string{
-		"":                         "empty",
-		"github.com/org/repo@":     "<repository>@<revision>",
-		"@abc":                     "<repository>@<revision>",
-		"https://github.com/o/r@x": "host/path",
-		"repo@x":                   "not host/path",
-		"localhost/repo@x":         "not host/path",
+		"":                                  "empty",
+		"github.com/org/repo@":              "<repository>@<revision>",
+		"@abc":                              "<repository>@<revision>",
+		"https://github.com/o/r@" + sha1:    "host/path",
+		"repo@" + sha1:                      "not host/path",
+		"localhost/repo@" + sha1:            "not host/path",
+		"github.com/org/repo@v1.2.3":        "not a full commit SHA",
+		"github.com/org/repo@main":          "not a full commit SHA",
+		"github.com/org/repo@5147f50":       "not a full commit SHA",
+		"github.com/org/repo@" + sha1[1:]:   "not a full commit SHA",
+		"github.com/org/repo@" + sha1 + "0": "not a full commit SHA",
+		"github.com/org/repo@" + strings.ToUpper(sha1): "not a full commit SHA",
+		"file:///srv/repo@v1":                          "not a full commit SHA",
 	} {
 		if _, err := codegen.ParseTemplateSource(spec); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: want error containing %q, got %v", spec, want, err)
@@ -88,7 +101,7 @@ func cleanGitEnv() []string {
 }
 
 // templateRepo makes a git repo whose codegen/manifest.yaml content is body,
-// tagged v1, and returns its path and commit.
+// serving any commit by SHA, and returns its path and commit.
 func templateRepo(t *testing.T, body string) (string, string) {
 	t.Helper()
 	repo := t.TempDir()
@@ -101,14 +114,14 @@ func templateRepo(t *testing.T, body string) (string, string) {
 	}
 	git(t, repo, "add", ".")
 	git(t, repo, "commit", "-q", "-m", "templates")
-	git(t, repo, "tag", "v1")
+	git(t, repo, "config", "uploadpack.allowAnySHA1InWant", "true")
 	return repo, git(t, repo, "rev-parse", "HEAD")
 }
 
 func TestResolve_GitFetchesOnceIntoTheCache(t *testing.T) {
 	repo, commit := templateRepo(t, "first")
 	cache := t.TempDir()
-	src, err := codegen.ParseTemplateSource("file://" + repo + "@v1")
+	src, err := codegen.ParseTemplateSource("file://" + repo + "@" + commit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,9 +157,8 @@ func TestResolve_GitFetchesOnceIntoTheCache(t *testing.T) {
 	}
 }
 
-func TestResolve_GitByCommitAndUnknownRevision(t *testing.T) {
+func TestResolve_GitByCommitAndUnknownCommit(t *testing.T) {
 	repo, commit := templateRepo(t, "pinned")
-	git(t, repo, "config", "uploadpack.allowAnySHA1InWant", "true")
 	cache := t.TempDir()
 	src, _ := codegen.ParseTemplateSource("file://" + repo + "@" + commit)
 	dir, err := src.Resolve(cache)
@@ -156,11 +168,15 @@ func TestResolve_GitByCommitAndUnknownRevision(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(dir, "manifest.yaml")); string(got) != "pinned" {
 		t.Errorf("manifest = %q", got)
 	}
-	bad, _ := codegen.ParseTemplateSource("file://" + repo + "@no-such-rev")
-	if _, err := bad.Resolve(cache); err == nil || !strings.Contains(err.Error(), "fetch templates") {
-		t.Fatalf("an unknown revision must fail the fetch, got %v", err)
+	const unknown = "0000000000000000000000000000000000000000"
+	bad, err := codegen.ParseTemplateSource("file://" + repo + "@" + unknown)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(cache, filepath.Base(repo)+"@no-such-rev")); !os.IsNotExist(err) {
+	if _, err := bad.Resolve(cache); err == nil || !strings.Contains(err.Error(), "fetch templates") {
+		t.Fatalf("an unknown commit must fail the fetch, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cache, filepath.Base(repo)+"@"+unknown)); !os.IsNotExist(err) {
 		t.Errorf("a failed fetch leaves no cache entry")
 	}
 }
@@ -178,7 +194,7 @@ func TestTemplateCacheDir_HonoursTheEnvironment(t *testing.T) {
 }
 
 func TestGenerate_TemplateOptionResolvesAGitSource(t *testing.T) {
-	// The fixture set, committed to a repo, renders through templates=file://…@v1.
+	// The fixture set, committed to a repo, renders through templates=file://…@<commit>.
 	repo := t.TempDir()
 	git(t, repo, "init", "-q")
 	src, err := filepath.Abs(tmplSet)
@@ -198,7 +214,8 @@ func TestGenerate_TemplateOptionResolvesAGitSource(t *testing.T) {
 	}
 	git(t, repo, "add", ".")
 	git(t, repo, "commit", "-q", "-m", "set")
-	git(t, repo, "tag", "v1")
+	git(t, repo, "config", "uploadpack.allowAnySHA1InWant", "true")
+	commit := git(t, repo, "rev-parse", "HEAD")
 	t.Setenv(codegen.TemplateCacheEnv, t.TempDir())
 
 	o := buildOptionTypes(t, ioPkg)
@@ -206,7 +223,7 @@ func TestGenerate_TemplateOptionResolvesAGitSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := codegen.Generate(gen, "testlang", codegen.Options{Templates: "file://" + repo + "@v1"}); err != nil {
+	if err := codegen.Generate(gen, "testlang", codegen.Options{Templates: "file://" + repo + "@" + commit}); err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 	if n := len(gen.Response().File); n != 2 {
@@ -217,12 +234,12 @@ func TestGenerate_TemplateOptionResolvesAGitSource(t *testing.T) {
 func TestResolve_GitIgnoresAnInheritedRepository(t *testing.T) {
 	// A hook-run CLI inherits GIT_DIR / GIT_INDEX_FILE / GIT_WORK_TREE for the
 	// caller's repository; fetching templates must leave that repository alone.
-	repo, _ := templateRepo(t, "fetched")
+	repo, commit := templateRepo(t, "fetched")
 	decoy, decoyHead := templateRepo(t, "decoy")
 	t.Setenv("GIT_DIR", filepath.Join(decoy, ".git"))
 	t.Setenv("GIT_INDEX_FILE", filepath.Join(decoy, ".git", "index"))
 	t.Setenv("GIT_WORK_TREE", decoy)
-	src, _ := codegen.ParseTemplateSource("file://" + repo + "@v1")
+	src, _ := codegen.ParseTemplateSource("file://" + repo + "@" + commit)
 	dir, err := src.Resolve(t.TempDir())
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)

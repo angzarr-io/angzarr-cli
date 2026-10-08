@@ -30,13 +30,18 @@ type TemplateSource struct {
 	// Local is a directory on disk; empty for a git source.
 	Local string
 	// Repo is the repository as written (github.com/org/repo, or a file://
-	// URL); URL is what git fetches; Rev is the commit, tag or branch.
+	// URL); URL is what git fetches; Rev is the full commit SHA.
 	Repo, URL, Rev string
 }
 
+// fullCommitSHA matches a full SHA-1 or SHA-256 commit id, lower-case hex.
+var fullCommitSHA = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
 // ParseTemplateSource parses a templates= value. A value containing "@" whose
 // repository part is a host path (github.com/org/repo) or a file:// URL is a
-// git source; anything else is a local directory.
+// git source pinned by a full commit SHA; anything else is a local directory.
+// Tags, branches and abbreviated SHAs are refused: a cache entry is never
+// refreshed, so a git source must name content that cannot move.
 func ParseTemplateSource(spec string) (TemplateSource, error) {
 	if spec == "" {
 		return TemplateSource{}, errors.New("empty templates= value")
@@ -49,6 +54,9 @@ func ParseTemplateSource(spec string) (TemplateSource, error) {
 	repo, rev := spec[:at], spec[at+1:]
 	if repo == "" || rev == "" {
 		return TemplateSource{}, fmt.Errorf("templates=%s: want <repository>@<revision>", spec)
+	}
+	if !fullCommitSHA.MatchString(rev) {
+		return TemplateSource{}, fmt.Errorf("templates=%s: revision %q is not a full commit SHA (40 or 64 lower-case hex digits); tags, branches and abbreviated SHAs are refused", spec, rev)
 	}
 	if strings.HasPrefix(repo, "file://") {
 		return TemplateSource{Repo: repo, URL: repo, Rev: rev}, nil
@@ -86,7 +94,7 @@ func cacheKey(repo, rev string) string {
 
 // Resolve returns the directory holding the source's manifest.yaml, fetching
 // a git source into cacheRoot first when it is not cached. A cached entry is
-// reused as is: pin commits or immutable tags, not branches.
+// reused as is (its commit cannot move).
 func (s TemplateSource) Resolve(cacheRoot string) (string, error) {
 	root := s.Local
 	if root == "" {
@@ -144,6 +152,9 @@ func (s TemplateSource) fetch(cacheRoot string) (string, error) {
 	commit, err := git("rev-parse", "HEAD")
 	if err != nil {
 		return "", err
+	}
+	if commit != s.Rev {
+		return "", fmt.Errorf("fetch templates %s@%s: fetched commit %s", s.Repo, s.Rev, commit)
 	}
 	if err := os.RemoveAll(filepath.Join(tmp, ".git")); err != nil {
 		return "", err
