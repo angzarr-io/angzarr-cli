@@ -37,15 +37,21 @@ type ModelFile struct {
 	Components []ModelComponent `json:"components"`
 }
 
-// ProtoFile is a proto file's identity and the language mapping options it
-// carries. Dir and Stem split Path ("a/b/c.proto" → "a/b", "c"); Dir is "."
-// for a file at the proto root.
+// ProtoFile is a proto file's identity, the language mapping options it
+// carries and the names it declares at top level. Dir and Stem split Path
+// ("a/b/c.proto" → "a/b", "c"); Dir is "." for a file at the proto root.
 type ProtoFile struct {
 	Path    string            `json:"path"`
 	Dir     string            `json:"dir"`
 	Stem    string            `json:"stem"`
 	Package string            `json:"package"`
 	Options map[string]string `json:"options"`
+	// TopLevelMessages, TopLevelEnums and TopLevelServices are the names the
+	// file declares at top level, in declaration order (a generated outer
+	// type or module named after the file must not collide with them).
+	TopLevelMessages []string `json:"top_level_messages"`
+	TopLevelEnums    []string `json:"top_level_enums"`
+	TopLevelServices []string `json:"top_level_services"`
 }
 
 // MessageRef names a proto message language-neutrally: templates map it to a
@@ -182,13 +188,26 @@ func buildModel(gen *protogen.Plugin, files []fileComponents) *Model {
 func protoFile(f *protogen.File) ProtoFile {
 	p := f.Desc.Path()
 	dir := path.Dir(p)
-	return ProtoFile{
-		Path:    p,
-		Dir:     dir,
-		Stem:    strings.TrimSuffix(path.Base(p), ".proto"),
-		Package: string(f.Desc.Package()),
-		Options: fileOptions(f.Proto.GetOptions()),
+	pf := ProtoFile{
+		Path:             p,
+		Dir:              dir,
+		Stem:             strings.TrimSuffix(path.Base(p), ".proto"),
+		Package:          string(f.Desc.Package()),
+		Options:          fileOptions(f.Proto.GetOptions()),
+		TopLevelMessages: []string{},
+		TopLevelEnums:    []string{},
+		TopLevelServices: []string{},
 	}
+	for i, ms := 0, f.Desc.Messages(); i < ms.Len(); i++ {
+		pf.TopLevelMessages = append(pf.TopLevelMessages, string(ms.Get(i).Name()))
+	}
+	for i, es := 0, f.Desc.Enums(); i < es.Len(); i++ {
+		pf.TopLevelEnums = append(pf.TopLevelEnums, string(es.Get(i).Name()))
+	}
+	for i, ss := 0, f.Desc.Services(); i < ss.Len(); i++ {
+		pf.TopLevelServices = append(pf.TopLevelServices, string(ss.Get(i).Name()))
+	}
+	return pf
 }
 
 // fileOptions extracts the language mapping file options a template may need.

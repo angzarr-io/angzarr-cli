@@ -104,3 +104,75 @@ func TestBaseHelpers_Errors(t *testing.T) {
 		}
 	}
 }
+
+func TestNamingHelpers(t *testing.T) {
+	for text, want := range map[string]string{
+		// protocPascal: protoc's file-name / package-segment rule.
+		`{{ protocPascal "buy_in" }}`:      "BuyIn",
+		`{{ protocPascal "foo2bar" }}`:     "Foo2Bar",
+		`{{ protocPascal "buy-in.v1" }}`:   "BuyInV1",
+		`{{ protocPascal "HTTPGet" }}`:     "HTTPGet",
+		`{{ protocPascal "" }}`:            "",
+		`{{ lowerFirst "OrderCreated" }}`:  "orderCreated",
+		`{{ lowerFirst "Order_created" }}`: "order_created",
+		`{{ lowerFirst "" }}`:              "",
+		`{{ upperFirst "orderCreated" }}`:  "OrderCreated",
+		`{{ upperFirst "éa" }}`:            "Éa",
+		`{{ upperFirst "" }}`:              "",
+		`{{ identifier "examples-v1" }}`:   "examples_v1",
+		`{{ identifier "2fa" }}`:           "_2fa",
+		`{{ identifier "a.b/c" }}`:         "a_b_c",
+		`{{ identifier "_ok9" }}`:          "_ok9",
+		`{{ identifier "ünï" }}`:           "ünï",
+		`{{ identifier "" }}`:              "_",
+	} {
+		got, err := run(t, text, nil)
+		if err != nil {
+			t.Errorf("%s: %v", text, err)
+			continue
+		}
+		if got != want {
+			t.Errorf("%s = %q, want %q", text, got, want)
+		}
+	}
+}
+
+func TestLayoutHelpers(t *testing.T) {
+	var data map[string]any
+	if err := json.Unmarshal([]byte(`{"paths":["b/x.proto","a/y.proto","b/x.proto","a/y.proto","c"],"empty":[]}`), &data); err != nil {
+		t.Fatal(err)
+	}
+	for text, want := range map[string]string{
+		`{{ join "," (uniq .paths) }}`:           "b/x.proto,a/y.proto,c",
+		`{{ len (uniq .empty) }}`:                "0",
+		`{{ pathJoin "." "a" "b.go" }}`:          "a/b.go",
+		`{{ pathJoin "io/angzarr" "../x" }}`:     "io/x",
+		`{{ pathJoin }}`:                         "",
+		`{{ pathDir "io/angzarr/v1/x.proto" }}`:  "io/angzarr/v1",
+		`{{ pathDir "x.proto" }}`:                ".",
+		`{{ pathBase "io/angzarr/v1/x.proto" }}`: "x.proto",
+		`{{ trim "  a b \n" }}`:                  "a b",
+		"{{ indent 2 \"a\\n\\nb\\n\" }}":         "  a\n\n  b\n",
+		"{{ indent 4 \"x\" }}":                   "    x",
+		"{{ indent 0 \"x\\ny\" }}":               "x\ny",
+		"{{ indent -1 \"x\" }}":                  "x",
+		"{{ indent 1 \" \\t\\nz\" }}":            " \t\n z",
+	} {
+		got, err := run(t, text, data)
+		if err != nil {
+			t.Errorf("%s: %v", text, err)
+			continue
+		}
+		if got != want {
+			t.Errorf("%s = %q, want %q", text, got, want)
+		}
+	}
+	for text, want := range map[string]string{
+		`{{ uniq 1 }}`:        "want a list",
+		`{{ indent "x" "" }}`: "want an integer",
+	} {
+		if _, err := run(t, text, nil); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: want error containing %q, got %v", text, want, err)
+		}
+	}
+}

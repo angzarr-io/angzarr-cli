@@ -7,6 +7,7 @@ package codegen
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 	"text/template"
@@ -21,6 +22,12 @@ func baseFuncs() template.FuncMap {
 		"pascal": pascal,
 		"upper":  strings.ToUpper,
 		"lower":  strings.ToLower,
+		// protocPascal is protoc's rule for names derived from file names and
+		// package segments (buy_in → BuyIn, foo2bar → Foo2Bar).
+		"protocPascal": SnakeToPascal,
+		"lowerFirst":   LowerFirst,
+		"upperFirst":   upperFirst,
+		"identifier":   identifier,
 		// Strings.
 		"quote":      QuoteLiteral,
 		"join":       join,
@@ -32,6 +39,12 @@ func baseFuncs() template.FuncMap {
 		"hasSuffix":  func(suffix, s string) bool { return strings.HasSuffix(s, suffix) },
 		"contains":   func(sub, s string) bool { return strings.Contains(s, sub) },
 		"repeat":     func(n any, s string) (string, error) { i, err := toInt(n); return strings.Repeat(s, max(i, 0)), err },
+		"trim":       strings.TrimSpace,
+		"indent":     indent,
+		// Slash-separated paths (proto paths, output paths).
+		"pathJoin": path.Join,
+		"pathDir":  path.Dir,
+		"pathBase": path.Base,
 		// Lists.
 		"list": func(items ...any) []any { return items },
 		"append": func(l any, items ...any) ([]any, error) {
@@ -45,6 +58,7 @@ func baseFuncs() template.FuncMap {
 		"sortStrings":  sortStrings,
 		"commonPrefix": commonPrefix,
 		"has":          has,
+		"uniq":         uniq,
 		// Arithmetic.
 		"add": func(a, b any) (int, error) {
 			x, err := toInt(a)
@@ -239,4 +253,65 @@ func dict(kv ...any) (map[string]any, error) {
 		m[k] = kv[i+1]
 	}
 	return m, nil
+}
+
+// upperFirst upper-cases the first letter of s (orderCreated →
+// OrderCreated).
+func upperFirst(s string) string {
+	r := []rune(s)
+	if len(r) > 0 {
+		r[0] = unicode.ToUpper(r[0])
+	}
+	return string(r)
+}
+
+// identifier makes s a C-family identifier: every rune that is not a letter,
+// digit or underscore becomes an underscore, and a leading digit (or an empty
+// result) gets an underscore prefix. Language keywords are left to templates.
+func identifier(s string) string {
+	out := []rune(strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
+			return r
+		}
+		return '_'
+	}, s))
+	if len(out) == 0 || unicode.IsDigit(out[0]) {
+		out = append([]rune{'_'}, out...)
+	}
+	return string(out)
+}
+
+// indent prefixes every line of s holding a non-space character with n
+// spaces (n ≤ 0: s unchanged); blank lines stay empty of trailing space.
+func indent(n any, s string) (string, error) {
+	i, err := toInt(n)
+	if err != nil || i <= 0 {
+		return s, err
+	}
+	pad := strings.Repeat(" ", i)
+	lines := strings.Split(s, "\n")
+	for j, l := range lines {
+		if strings.TrimSpace(l) != "" {
+			lines[j] = pad + l
+		}
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+// uniq is a list without repeated elements, first occurrences in order.
+func uniq(l any) ([]any, error) {
+	s, err := toList(l)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	out := []any{}
+	for _, it := range s {
+		k := fmt.Sprint(it)
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, it)
+		}
+	}
+	return out, nil
 }

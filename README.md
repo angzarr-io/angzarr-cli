@@ -64,10 +64,11 @@ plugins:
 - **Scaffold needs `out_dir`** set to the same directory as `out:` (relative to
   where buf runs). Existing stubs are looked up there and never overwritten;
   without `out_dir` scaffold refuses to run.
-- Every request file needs a `go_package` (or buf managed mode), whatever the
-  target language: output paths follow protogen's rules, so use
-  `paths=source_relative`.
-- `templates=<repo>@<rev>` (or a local directory) renders the language from a
+- The built-in emitters need every request file's Go import path (a
+  `go_package`, or buf managed mode) and place output by protogen's rules, so
+  use `paths=source_relative`. Template-rendered languages, the model plugin
+  and `lint` need no `go_package`.
+- `templates=<repo>@<full commit SHA>` (or a local directory) renders the language from a
   client repository's template set instead of a built-in emitter;
   `param.<name>=<value>` overrides a parameter the set declares. See
   [docs/templates.md](docs/templates.md).

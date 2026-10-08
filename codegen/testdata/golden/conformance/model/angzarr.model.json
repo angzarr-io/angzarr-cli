@@ -1,0 +1,397 @@
+{
+  "schema_version": 1,
+  "files": [
+    {
+      "path": "test/counter/counter.proto",
+      "dir": "test/counter",
+      "stem": "counter",
+      "package": "test.counter",
+      "options": {},
+      "top_level_messages": [
+        "Increased",
+        "IncreaseBy",
+        "FailHard",
+        "Reserve",
+        "CounterState",
+        "OrderSaga",
+        "CounterProjectorState",
+        "OrderProcessManagerState",
+        "AuditProcessManagerState"
+      ],
+      "top_level_enums": [],
+      "top_level_services": [],
+      "components": [
+        {
+          "kind": "AGGREGATE",
+          "name": "CounterAggregate",
+          "stub_name": "CounterAggregate",
+          "anchor": {
+            "full_name": "test.counter.CounterState",
+            "name": "CounterState",
+            "nested_names": [
+              "CounterState"
+            ],
+            "package": "test.counter",
+            "file": "test/counter/counter.proto"
+          },
+          "state": {
+            "full_name": "test.counter.CounterState",
+            "name": "CounterState",
+            "nested_names": [
+              "CounterState"
+            ],
+            "package": "test.counter",
+            "file": "test/counter/counter.proto"
+          },
+          "domain": "counter",
+          "input_domain": "",
+          "output_domains": [],
+          "projector_domains": [],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "test.counter.IncreaseBy",
+                "name": "IncreaseBy",
+                "nested_names": [
+                  "IncreaseBy"
+                ],
+                "package": "test.counter",
+                "file": "test/counter/counter.proto"
+              },
+              "method": "IncreaseBy",
+              "source_domain": "",
+              "emits": [
+                {
+                  "full_name": "test.counter.Increased",
+                  "name": "Increased",
+                  "nested_names": [
+                    "Increased"
+                  ],
+                  "package": "test.counter",
+                  "file": "test/counter/counter.proto"
+                }
+              ],
+              "typed_emit": true
+            },
+            {
+              "message": {
+                "full_name": "test.counter.FailHard",
+                "name": "FailHard",
+                "nested_names": [
+                  "FailHard"
+                ],
+                "package": "test.counter",
+                "file": "test/counter/counter.proto"
+              },
+              "method": "FailHard",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [
+            {
+              "message": {
+                "full_name": "test.counter.Increased",
+                "name": "Increased",
+                "nested_names": [
+                  "Increased"
+                ],
+                "package": "test.counter",
+                "file": "test/counter/counter.proto"
+              },
+              "method": "ApplyIncreased"
+            }
+          ],
+          "rejections": [
+            {
+              "key": "test.counter.Reserve",
+              "command": "test.counter.Reserve",
+              "domain": "",
+              "method": "OnReserveRejected"
+            }
+          ],
+          "undos": [],
+          "facts": [],
+          "finish_method": "",
+          "referenced_files": [
+            "test/counter/counter.proto"
+          ]
+        },
+        {
+          "kind": "SAGA",
+          "name": "OrderSaga",
+          "stub_name": "OrderSagaImpl",
+          "anchor": {
+            "full_name": "test.counter.OrderSaga",
+            "name": "OrderSaga",
+            "nested_names": [
+              "OrderSaga"
+            ],
+            "package": "test.counter",
+            "file": "test/counter/counter.proto"
+          },
+          "state": null,
+          "domain": "",
+          "input_domain": "order",
+          "output_domains": [
+            "inventory"
+          ],
+          "projector_domains": [],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "test.counter.Increased",
+                "name": "Increased",
+                "nested_names": [
+                  "Increased"
+                ],
+                "package": "test.counter",
+                "file": "test/counter/counter.proto"
+              },
+              "method": "Increased",
+              "source_domain": "order",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [],
+          "rejections": [],
+          "undos": [],
+          "facts": [],
+          "finish_method": "",
+          "referenced_files": [
+            "test/counter/counter.proto"
+          ]
+        },
+        {
+          "kind": "PROJECTOR",
+          "name": "CounterProjector",
+          "stub_name": "CounterProjector",
+          "anchor": {
+            "full_name": "test.counter.CounterProjectorState",
+            "name": "CounterProjectorState",
+            "nested_names": [
+              "CounterProjectorState"
+            ],
+            "package": "test.counter",
+            "file": "test/counter/counter.proto"
+          },
+          "state": {
+            "full_name": "test.counter.CounterProjectorState",
+            "name": "CounterProjectorState",
+            "nested_names": [
+              "CounterProjectorState"
+            ],
+            "package": "test.counter",
+            "file": "test/counter/counter.proto"
+          },
+          "domain": "",
+          "input_domain": "counter",
+          "output_domains": [],
+          "projector_domains": [
+            "counter"
+          ],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "test.counter.Increased",
+                "name": "Increased",
+                "nested_names": [
+                  "Increased"
+                ],
+                "package": "test.counter",
+                "file": "test/counter/counter.proto"
+              },
+              "method": "Increased",
+              "source_domain": "counter",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [],
+          "rejections": [],
+          "undos": [],
+          "facts": [],
+          "finish_method": "Finish",
+          "referenced_files": [
+            "test/counter/counter.proto"
+          ]
+        },
+        {
+          "kind": "PROCESS_MANAGER",
+          "name": "OrderProcessManager",
+          "stub_name": "OrderProcessManager",
+          "anchor": {
+            "full_name": "test.counter.OrderProcessManagerState",
+            "name": "OrderProcessManagerState",
+            "nested_names": [
+              "OrderProcessManagerState"
+            ],
+            "package": "test.counter",
+            "file": "test/counter/counter.proto"
+          },
+          "state": {
+            "full_name": "test.counter.OrderProcessManagerState",
+            "name": "OrderProcessManagerState",
+            "nested_names": [
+              "OrderProcessManagerState"
+            ],
+            "package": "test.counter",
+            "file": "test/counter/counter.proto"
+          },
+          "domain": "order-pm",
+          "input_domain": "",
+          "output_domains": [
+            "inventory"
+          ],
+          "projector_domains": [],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "test.counter.Increased",
+                "name": "Increased",
+                "nested_names": [
+                  "Increased"
+                ],
+                "package": "test.counter",
+                "file": "test/counter/counter.proto"
+              },
+              "method": "Increased",
+              "source_domain": "counter",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [
+            {
+              "message": {
+                "full_name": "test.counter.Increased",
+                "name": "Increased",
+                "nested_names": [
+                  "Increased"
+                ],
+                "package": "test.counter",
+                "file": "test/counter/counter.proto"
+              },
+              "method": "ApplyIncreased"
+            }
+          ],
+          "rejections": [
+            {
+              "key": "test.counter.Reserve",
+              "command": "test.counter.Reserve",
+              "domain": "",
+              "method": "OnReserveRejected"
+            }
+          ],
+          "undos": [],
+          "facts": [],
+          "finish_method": "",
+          "referenced_files": [
+            "test/counter/counter.proto"
+          ]
+        },
+        {
+          "kind": "PROCESS_MANAGER",
+          "name": "AuditProcessManager",
+          "stub_name": "AuditProcessManager",
+          "anchor": {
+            "full_name": "test.counter.AuditProcessManagerState",
+            "name": "AuditProcessManagerState",
+            "nested_names": [
+              "AuditProcessManagerState"
+            ],
+            "package": "test.counter",
+            "file": "test/counter/counter.proto"
+          },
+          "state": {
+            "full_name": "test.counter.AuditProcessManagerState",
+            "name": "AuditProcessManagerState",
+            "nested_names": [
+              "AuditProcessManagerState"
+            ],
+            "package": "test.counter",
+            "file": "test/counter/counter.proto"
+          },
+          "domain": "audit-pm",
+          "input_domain": "",
+          "output_domains": [],
+          "projector_domains": [],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "test.counter.Increased",
+                "name": "Increased",
+                "nested_names": [
+                  "Increased"
+                ],
+                "package": "test.counter",
+                "file": "test/counter/counter.proto"
+              },
+              "method": "Increased",
+              "source_domain": "counter",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [
+            {
+              "message": {
+                "full_name": "test.counter.Increased",
+                "name": "Increased",
+                "nested_names": [
+                  "Increased"
+                ],
+                "package": "test.counter",
+                "file": "test/counter/counter.proto"
+              },
+              "method": "ApplyIncreased"
+            }
+          ],
+          "rejections": [
+            {
+              "key": "test.counter.Reserve",
+              "command": "test.counter.Reserve",
+              "domain": "",
+              "method": "OnReserveRejected"
+            }
+          ],
+          "undos": [],
+          "facts": [],
+          "finish_method": "",
+          "referenced_files": [
+            "test/counter/counter.proto"
+          ]
+        }
+      ]
+    }
+  ],
+  "proto_files": {
+    "test/counter/counter.proto": {
+      "path": "test/counter/counter.proto",
+      "dir": "test/counter",
+      "stem": "counter",
+      "package": "test.counter",
+      "options": {},
+      "top_level_messages": [
+        "Increased",
+        "IncreaseBy",
+        "FailHard",
+        "Reserve",
+        "CounterState",
+        "OrderSaga",
+        "CounterProjectorState",
+        "OrderProcessManagerState",
+        "AuditProcessManagerState"
+      ],
+      "top_level_enums": [],
+      "top_level_services": []
+    }
+  }
+}

@@ -6,10 +6,11 @@ import? 'angzarr-project/submodule.just'
 
 TOP := `git rev-parse --show-toplevel`
 
-# angzarr-router revision compile-go-pinned builds the generated Go against
-# (rem/review-2026-09, router ABI 3).
+# angzarr-router commit compile-go-pinned builds the generated Go against and
+# golden renders the conformance protos (conformance/proto) from
+# (rem/review-2026-09, router ABI 3). A full SHA; bumps are deliberate commits.
 ROUTER_REPO := "https://github.com/angzarr-io/angzarr-router.git"
-ROUTER_REV := "32540ce"
+ROUTER_REV := "fb3c0acccea4d2cf1cb183ff9558cdaee73df244"
 PROTOC_GEN_GO_VERSION := "v1.36.11"
 
 default: test
@@ -44,13 +45,16 @@ archlint:
 # The emitter packages are exercised end to end by the codegen tests, so
 # coverage is gathered across every package (--coverpkg) and each mutant runs
 # the whole suite (--integration).
+# diff, when set, mutates only the lines changed since that commit.
 # Usage: just mutants ./codegen
-mutants pkg="./...":
+#        just mutants ./... origin/main
+mutants pkg="./..." diff="":
     #!/usr/bin/env bash
     set -euo pipefail
+    diff="{{diff}}"
     export GOCACHE="$(mktemp -d)"
     trap 'chmod -R u+w "$GOCACHE"; rm -r "$GOCACHE"' EXIT
-    cd "{{TOP}}" && gremlins unleash --workers 1 --timeout-coefficient 20 --coverpkg ./... --integration {{pkg}}
+    cd "{{TOP}}" && gremlins unleash --workers 1 --timeout-coefficient 20 --coverpkg ./... --integration ${diff:+--diff "$diff"} {{pkg}}
 
 # Lint component declarations before they are generated: resolution errors
 # block, coherence warnings are reported. Codegen gates on the same analysis
@@ -244,6 +248,71 @@ compile-go-pinned:
         --exclude-path angzarr-project/proto/google --exclude-path proto/google \
         --exclude-path angzarr-project/proto/io/angzarr/examples)
     just --justfile "{{TOP}}/justfile" compile-go "$work/router"
+
+# Golden tests of the template contract. Each line of GOLDEN_PINS pins one
+# language's client-repo template set (<lang> <repository> <full commit SHA>);
+# golden renders the conformance protos (angzarr-router at ROUTER_REV) and the
+# blackjack protos (the angzarr-project submodule) with the model plugin and
+# every pinned set, codegen and scaffold, and compares the result with the
+# committed tree under GOLDEN_DIR (<suite>/model, <suite>/<lang>/{codegen,scaffold}).
+# The committed models are also validated against docs/model.v1.schema.json
+# by `just test`.
+GOLDEN_DIR := TOP / "codegen/testdata/golden"
+GOLDEN_PINS := GOLDEN_DIR / "templates.pins"
+
+# Render the goldens and fail on any difference from the committed tree.
+golden: (_golden "check")
+
+# Render the goldens and replace the committed tree with the result.
+golden-update: (_golden "update")
+
+_golden action:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    work="$(mktemp -d)"
+    trap 'chmod -R u+w "$work"; rm -r "$work"' EXIT
+    export GOCACHE="$work/gocache" ANGZARR_TEMPLATE_CACHE="$work/templates"
+    go build -o "$work/angzarr" "{{TOP}}"
+    git clone --quiet --filter=blob:none "{{ROUTER_REPO}}" "$work/router"
+    git -C "$work/router" checkout --quiet "{{ROUTER_REV}}"
+    git -C "$work/router" submodule update --quiet --init angzarr-project
+    {
+        echo "version: v2"
+        echo "plugins:"
+        echo "  - local: [\"$work/angzarr\", \"codegen\", \"model\"]"
+        echo "    out: model"
+        echo "    strategy: all"
+        while read -r lang repo sha; do
+            case "$lang" in ''|'#'*) continue ;; esac
+            [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "golden: $lang pin '$sha' is not a full commit SHA" >&2; exit 1; }
+            for mode in codegen scaffold; do
+                opt="paths=source_relative,templates=$repo@$sha"
+                if [ "$mode" = scaffold ]; then opt="$opt,out_dir=$lang/scaffold"; fi
+                echo "  - local: [\"$work/angzarr\", \"$mode\", \"$lang\"]"
+                echo "    out: $lang/$mode"
+                echo "    opt: $opt"
+                echo "    strategy: all"
+            done
+        done < "{{GOLDEN_PINS}}"
+    } > "$work/buf.gen.yaml"
+    render() { # suite input path
+        mkdir -p "$work/out/$1"
+        (cd "$work/out/$1" && buf generate "$2" --path "$3" --template "$work/buf.gen.yaml")
+    }
+    render conformance "$work/router" "$work/router/conformance/proto/test"
+    render blackjack "{{TOP}}/angzarr-project/proto" "{{TOP}}/angzarr-project/proto/io/angzarr/examples"
+    if [ "{{action}}" = update ]; then
+        for suite in conformance blackjack; do
+            rm -rf "{{GOLDEN_DIR}}/$suite"
+            cp -r "$work/out/$suite" "{{GOLDEN_DIR}}/$suite"
+        done
+        echo "golden updated: $(find "$work/out" -type f | wc -l) files"
+    else
+        for suite in conformance blackjack; do
+            diff -ru "{{GOLDEN_DIR}}/$suite" "$work/out/$suite" || { echo "FAIL: $suite differs from the goldens (just golden-update after reviewing the diff)"; exit 1; }
+        done
+        echo "golden OK: $(find "$work/out" -type f | wc -l) files"
+    fi
 
 # Install the protoc plugins the codegen recipes drive (protoc-gen-go).
 tools:

@@ -1,0 +1,1944 @@
+{
+  "schema_version": 1,
+  "files": [
+    {
+      "path": "io/angzarr/examples/v1/buy_in.proto",
+      "dir": "io/angzarr/examples/v1",
+      "stem": "buy_in",
+      "package": "io.angzarr.examples.v1",
+      "options": {
+        "csharp_namespace": "Angzarr.Examples",
+        "go_package": "github.com/benjaminabbitt/angzarr/examples/go/proto/io/angzarr/examples/v1;examples",
+        "java_multiple_files": "true",
+        "java_package": "io.angzarr.examples",
+        "ruby_package": "Angzarr::Examples"
+      },
+      "top_level_messages": [
+        "BuyInStarted",
+        "BuyInFundsHeld",
+        "BuyInSeated",
+        "BuyInCompleted",
+        "BuyInFailed",
+        "BuyInState"
+      ],
+      "top_level_enums": [],
+      "top_level_services": [],
+      "components": [
+        {
+          "kind": "PROCESS_MANAGER",
+          "name": "BuyInProcessManager",
+          "stub_name": "BuyInProcessManager",
+          "anchor": {
+            "full_name": "io.angzarr.examples.v1.BuyInState",
+            "name": "BuyInState",
+            "nested_names": [
+              "BuyInState"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/buy_in.proto"
+          },
+          "state": {
+            "full_name": "io.angzarr.examples.v1.BuyInState",
+            "name": "BuyInState",
+            "nested_names": [
+              "BuyInState"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/buy_in.proto"
+          },
+          "domain": "buy-in",
+          "input_domain": "",
+          "output_domains": [
+            "player",
+            "table"
+          ],
+          "projector_domains": [],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.FundsHeld",
+                "name": "FundsHeld",
+                "nested_names": [
+                  "FundsHeld"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "FundsHeld",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.FundsCaptured",
+                "name": "FundsCaptured",
+                "nested_names": [
+                  "FundsCaptured"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "FundsCaptured",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.SeatHeld",
+                "name": "SeatHeld",
+                "nested_names": [
+                  "SeatHeld"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "SeatHeld",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.PlayerSeated",
+                "name": "PlayerSeated",
+                "nested_names": [
+                  "PlayerSeated"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "PlayerSeated",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.BuyInStarted",
+                "name": "BuyInStarted",
+                "nested_names": [
+                  "BuyInStarted"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/buy_in.proto"
+              },
+              "method": "ApplyBuyInStarted"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.BuyInFundsHeld",
+                "name": "BuyInFundsHeld",
+                "nested_names": [
+                  "BuyInFundsHeld"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/buy_in.proto"
+              },
+              "method": "ApplyBuyInFundsHeld"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.BuyInSeated",
+                "name": "BuyInSeated",
+                "nested_names": [
+                  "BuyInSeated"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/buy_in.proto"
+              },
+              "method": "ApplyBuyInSeated"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.BuyInCompleted",
+                "name": "BuyInCompleted",
+                "nested_names": [
+                  "BuyInCompleted"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/buy_in.proto"
+              },
+              "method": "ApplyBuyInCompleted"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.BuyInFailed",
+                "name": "BuyInFailed",
+                "nested_names": [
+                  "BuyInFailed"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/buy_in.proto"
+              },
+              "method": "ApplyBuyInFailed"
+            }
+          ],
+          "rejections": [
+            {
+              "key": "io.angzarr.examples.v1.HoldFunds",
+              "command": "io.angzarr.examples.v1.HoldFunds",
+              "domain": "",
+              "method": "OnHoldFundsRejected"
+            },
+            {
+              "key": "io.angzarr.examples.v1.ConfirmSeat",
+              "command": "io.angzarr.examples.v1.ConfirmSeat",
+              "domain": "",
+              "method": "OnConfirmSeatRejected"
+            }
+          ],
+          "undos": [],
+          "facts": [],
+          "finish_method": "",
+          "referenced_files": [
+            "io/angzarr/examples/v1/buy_in.proto",
+            "io/angzarr/examples/v1/player.proto",
+            "io/angzarr/examples/v1/table.proto"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "io/angzarr/examples/v1/ledger.proto",
+      "dir": "io/angzarr/examples/v1",
+      "stem": "ledger",
+      "package": "io.angzarr.examples.v1",
+      "options": {
+        "csharp_namespace": "Angzarr.Examples",
+        "go_package": "github.com/benjaminabbitt/angzarr/examples/go/proto/io/angzarr/examples/v1;examples",
+        "java_multiple_files": "true",
+        "java_package": "io.angzarr.examples",
+        "ruby_package": "Angzarr::Examples"
+      },
+      "top_level_messages": [
+        "LedgerRoundResult",
+        "PlayerLedgerRow",
+        "TableLedgerRow",
+        "LedgerTotals",
+        "LedgerProjection",
+        "GetPlayerBalanceRequest",
+        "PlayerBalanceView",
+        "GetLedgerRequest",
+        "LedgerView"
+      ],
+      "top_level_enums": [],
+      "top_level_services": [
+        "LedgerQueryService"
+      ],
+      "components": [
+        {
+          "kind": "PROJECTOR",
+          "name": "LedgerProjector",
+          "stub_name": "LedgerProjector",
+          "anchor": {
+            "full_name": "io.angzarr.examples.v1.LedgerProjection",
+            "name": "LedgerProjection",
+            "nested_names": [
+              "LedgerProjection"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/ledger.proto"
+          },
+          "state": {
+            "full_name": "io.angzarr.examples.v1.LedgerProjection",
+            "name": "LedgerProjection",
+            "nested_names": [
+              "LedgerProjection"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/ledger.proto"
+          },
+          "domain": "",
+          "input_domain": "",
+          "output_domains": [],
+          "projector_domains": [
+            "player",
+            "table"
+          ],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.PlayerRegistered",
+                "name": "PlayerRegistered",
+                "nested_names": [
+                  "PlayerRegistered"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "PlayerRegistered",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.PlayerImported",
+                "name": "PlayerImported",
+                "nested_names": [
+                  "PlayerImported"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "PlayerImported",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.ProfileUpdated",
+                "name": "ProfileUpdated",
+                "nested_names": [
+                  "ProfileUpdated"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ProfileUpdated",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.FundsDeposited",
+                "name": "FundsDeposited",
+                "nested_names": [
+                  "FundsDeposited"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "FundsDeposited",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.FundsWithdrawn",
+                "name": "FundsWithdrawn",
+                "nested_names": [
+                  "FundsWithdrawn"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "FundsWithdrawn",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.FundsHeld",
+                "name": "FundsHeld",
+                "nested_names": [
+                  "FundsHeld"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "FundsHeld",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.FundsCaptured",
+                "name": "FundsCaptured",
+                "nested_names": [
+                  "FundsCaptured"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "FundsCaptured",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.HoldReleased",
+                "name": "HoldReleased",
+                "nested_names": [
+                  "HoldReleased"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "HoldReleased",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.TopUpRequested",
+                "name": "TopUpRequested",
+                "nested_names": [
+                  "TopUpRequested"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "TopUpRequested",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.TopUpRefused",
+                "name": "TopUpRefused",
+                "nested_names": [
+                  "TopUpRefused"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "TopUpRefused",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.TopUpSettled",
+                "name": "TopUpSettled",
+                "nested_names": [
+                  "TopUpSettled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "TopUpSettled",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.CashOutCredited",
+                "name": "CashOutCredited",
+                "nested_names": [
+                  "CashOutCredited"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "CashOutCredited",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.LoyaltyEnrolled",
+                "name": "LoyaltyEnrolled",
+                "nested_names": [
+                  "LoyaltyEnrolled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "LoyaltyEnrolled",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RoundResultRecorded",
+                "name": "RoundResultRecorded",
+                "nested_names": [
+                  "RoundResultRecorded"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "RoundResultRecorded",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RoundResultRetracted",
+                "name": "RoundResultRetracted",
+                "nested_names": [
+                  "RoundResultRetracted"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "RoundResultRetracted",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.LoyaltyPointsAwarded",
+                "name": "LoyaltyPointsAwarded",
+                "nested_names": [
+                  "LoyaltyPointsAwarded"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "LoyaltyPointsAwarded",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.TableCreated",
+                "name": "TableCreated",
+                "nested_names": [
+                  "TableCreated"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "TableCreated",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.PlayerSeated",
+                "name": "PlayerSeated",
+                "nested_names": [
+                  "PlayerSeated"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "PlayerSeated",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.ChipsAdded",
+                "name": "ChipsAdded",
+                "nested_names": [
+                  "ChipsAdded"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ChipsAdded",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.PlayerCashedOut",
+                "name": "PlayerCashedOut",
+                "nested_names": [
+                  "PlayerCashedOut"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "PlayerCashedOut",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.BetPlaced",
+                "name": "BetPlaced",
+                "nested_names": [
+                  "BetPlaced"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "BetPlaced",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.HandDoubled",
+                "name": "HandDoubled",
+                "nested_names": [
+                  "HandDoubled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "HandDoubled",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RoundSettled",
+                "name": "RoundSettled",
+                "nested_names": [
+                  "RoundSettled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "RoundSettled",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [],
+          "rejections": [],
+          "undos": [],
+          "facts": [],
+          "finish_method": "Finish",
+          "referenced_files": [
+            "io/angzarr/examples/v1/ledger.proto",
+            "io/angzarr/examples/v1/player.proto",
+            "io/angzarr/examples/v1/table.proto"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "io/angzarr/examples/v1/player.proto",
+      "dir": "io/angzarr/examples/v1",
+      "stem": "player",
+      "package": "io.angzarr.examples.v1",
+      "options": {
+        "csharp_namespace": "Angzarr.Examples",
+        "go_package": "github.com/benjaminabbitt/angzarr/examples/go/proto/io/angzarr/examples/v1;examples",
+        "java_multiple_files": "true",
+        "java_package": "io.angzarr.examples",
+        "ruby_package": "Angzarr::Examples"
+      },
+      "top_level_messages": [
+        "RegisterPlayer",
+        "ImportPlayer",
+        "UpdateProfile",
+        "DepositFunds",
+        "WithdrawFunds",
+        "RequestTopUp",
+        "EnrollLoyalty",
+        "HoldFunds",
+        "CaptureFunds",
+        "ReleaseHold",
+        "RecordRoundResult",
+        "AwardLoyaltyPoints",
+        "PlayerRegistered",
+        "PlayerImported",
+        "ProfileUpdated",
+        "FundsDeposited",
+        "FundsDepositedV1",
+        "FundsWithdrawn",
+        "FundsHeld",
+        "FundsCaptured",
+        "HoldReleased",
+        "TopUpRequested",
+        "TopUpRefused",
+        "TopUpSettled",
+        "CashOutCredited",
+        "LoyaltyEnrolled",
+        "RoundResultRecorded",
+        "RoundResultRetracted",
+        "LoyaltyPointsAwarded",
+        "Hold",
+        "RoundResult",
+        "PlayerState"
+      ],
+      "top_level_enums": [],
+      "top_level_services": [],
+      "components": [
+        {
+          "kind": "AGGREGATE",
+          "name": "PlayerAggregate",
+          "stub_name": "PlayerAggregate",
+          "anchor": {
+            "full_name": "io.angzarr.examples.v1.PlayerState",
+            "name": "PlayerState",
+            "nested_names": [
+              "PlayerState"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/player.proto"
+          },
+          "state": {
+            "full_name": "io.angzarr.examples.v1.PlayerState",
+            "name": "PlayerState",
+            "nested_names": [
+              "PlayerState"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/player.proto"
+          },
+          "domain": "player",
+          "input_domain": "",
+          "output_domains": [],
+          "projector_domains": [],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RegisterPlayer",
+                "name": "RegisterPlayer",
+                "nested_names": [
+                  "RegisterPlayer"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "RegisterPlayer",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.ImportPlayer",
+                "name": "ImportPlayer",
+                "nested_names": [
+                  "ImportPlayer"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ImportPlayer",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.UpdateProfile",
+                "name": "UpdateProfile",
+                "nested_names": [
+                  "UpdateProfile"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "UpdateProfile",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.DepositFunds",
+                "name": "DepositFunds",
+                "nested_names": [
+                  "DepositFunds"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "DepositFunds",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.WithdrawFunds",
+                "name": "WithdrawFunds",
+                "nested_names": [
+                  "WithdrawFunds"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "WithdrawFunds",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RequestTopUp",
+                "name": "RequestTopUp",
+                "nested_names": [
+                  "RequestTopUp"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "RequestTopUp",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.EnrollLoyalty",
+                "name": "EnrollLoyalty",
+                "nested_names": [
+                  "EnrollLoyalty"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "EnrollLoyalty",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.HoldFunds",
+                "name": "HoldFunds",
+                "nested_names": [
+                  "HoldFunds"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "HoldFunds",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.CaptureFunds",
+                "name": "CaptureFunds",
+                "nested_names": [
+                  "CaptureFunds"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "CaptureFunds",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.ReleaseHold",
+                "name": "ReleaseHold",
+                "nested_names": [
+                  "ReleaseHold"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ReleaseHold",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RecordRoundResult",
+                "name": "RecordRoundResult",
+                "nested_names": [
+                  "RecordRoundResult"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "RecordRoundResult",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.AwardLoyaltyPoints",
+                "name": "AwardLoyaltyPoints",
+                "nested_names": [
+                  "AwardLoyaltyPoints"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "AwardLoyaltyPoints",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.PlayerRegistered",
+                "name": "PlayerRegistered",
+                "nested_names": [
+                  "PlayerRegistered"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyPlayerRegistered"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.PlayerImported",
+                "name": "PlayerImported",
+                "nested_names": [
+                  "PlayerImported"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyPlayerImported"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.ProfileUpdated",
+                "name": "ProfileUpdated",
+                "nested_names": [
+                  "ProfileUpdated"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyProfileUpdated"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.FundsDeposited",
+                "name": "FundsDeposited",
+                "nested_names": [
+                  "FundsDeposited"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyFundsDeposited"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.FundsWithdrawn",
+                "name": "FundsWithdrawn",
+                "nested_names": [
+                  "FundsWithdrawn"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyFundsWithdrawn"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.FundsHeld",
+                "name": "FundsHeld",
+                "nested_names": [
+                  "FundsHeld"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyFundsHeld"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.FundsCaptured",
+                "name": "FundsCaptured",
+                "nested_names": [
+                  "FundsCaptured"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyFundsCaptured"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.HoldReleased",
+                "name": "HoldReleased",
+                "nested_names": [
+                  "HoldReleased"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyHoldReleased"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.TopUpRequested",
+                "name": "TopUpRequested",
+                "nested_names": [
+                  "TopUpRequested"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyTopUpRequested"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.TopUpRefused",
+                "name": "TopUpRefused",
+                "nested_names": [
+                  "TopUpRefused"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyTopUpRefused"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.TopUpSettled",
+                "name": "TopUpSettled",
+                "nested_names": [
+                  "TopUpSettled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyTopUpSettled"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.CashOutCredited",
+                "name": "CashOutCredited",
+                "nested_names": [
+                  "CashOutCredited"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyCashOutCredited"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.LoyaltyEnrolled",
+                "name": "LoyaltyEnrolled",
+                "nested_names": [
+                  "LoyaltyEnrolled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyLoyaltyEnrolled"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RoundResultRecorded",
+                "name": "RoundResultRecorded",
+                "nested_names": [
+                  "RoundResultRecorded"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyRoundResultRecorded"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RoundResultRetracted",
+                "name": "RoundResultRetracted",
+                "nested_names": [
+                  "RoundResultRetracted"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyRoundResultRetracted"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.LoyaltyPointsAwarded",
+                "name": "LoyaltyPointsAwarded",
+                "nested_names": [
+                  "LoyaltyPointsAwarded"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "ApplyLoyaltyPointsAwarded"
+            }
+          ],
+          "rejections": [
+            {
+              "key": "io.angzarr.examples.v1.AddChips",
+              "command": "io.angzarr.examples.v1.AddChips",
+              "domain": "",
+              "method": "OnAddChipsRejected"
+            }
+          ],
+          "undos": [
+            {
+              "command": "io.angzarr.examples.v1.RecordRoundResult",
+              "method": "OnRecordRoundResultUndo"
+            }
+          ],
+          "facts": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.TopUpSettled",
+                "name": "TopUpSettled",
+                "nested_names": [
+                  "TopUpSettled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "OnTopUpSettledFact"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.CashOutCredited",
+                "name": "CashOutCredited",
+                "nested_names": [
+                  "CashOutCredited"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "OnCashOutCreditedFact"
+            }
+          ],
+          "finish_method": "",
+          "referenced_files": [
+            "io/angzarr/examples/v1/player.proto"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "io/angzarr/examples/v1/sagas.proto",
+      "dir": "io/angzarr/examples/v1",
+      "stem": "sagas",
+      "package": "io.angzarr.examples.v1",
+      "options": {
+        "csharp_namespace": "Angzarr.Examples",
+        "go_package": "github.com/benjaminabbitt/angzarr/examples/go/proto/io/angzarr/examples/v1;examples",
+        "java_multiple_files": "true",
+        "java_package": "io.angzarr.examples",
+        "ruby_package": "Angzarr::Examples"
+      },
+      "top_level_messages": [
+        "PlayerTableSaga",
+        "TablePlayerSettlementSaga",
+        "TablePlayerHistorySaga",
+        "TablePlayerLoyaltySaga"
+      ],
+      "top_level_enums": [],
+      "top_level_services": [],
+      "components": [
+        {
+          "kind": "SAGA",
+          "name": "PlayerTableSaga",
+          "stub_name": "PlayerTableSagaImpl",
+          "anchor": {
+            "full_name": "io.angzarr.examples.v1.PlayerTableSaga",
+            "name": "PlayerTableSaga",
+            "nested_names": [
+              "PlayerTableSaga"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/sagas.proto"
+          },
+          "state": null,
+          "domain": "",
+          "input_domain": "player",
+          "output_domains": [
+            "table"
+          ],
+          "projector_domains": [],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.TopUpRequested",
+                "name": "TopUpRequested",
+                "nested_names": [
+                  "TopUpRequested"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/player.proto"
+              },
+              "method": "TopUpRequested",
+              "source_domain": "player",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [],
+          "rejections": [],
+          "undos": [],
+          "facts": [],
+          "finish_method": "",
+          "referenced_files": [
+            "io/angzarr/examples/v1/player.proto"
+          ]
+        },
+        {
+          "kind": "SAGA",
+          "name": "TablePlayerSettlementSaga",
+          "stub_name": "TablePlayerSettlementSagaImpl",
+          "anchor": {
+            "full_name": "io.angzarr.examples.v1.TablePlayerSettlementSaga",
+            "name": "TablePlayerSettlementSaga",
+            "nested_names": [
+              "TablePlayerSettlementSaga"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/sagas.proto"
+          },
+          "state": null,
+          "domain": "",
+          "input_domain": "table",
+          "output_domains": [
+            "player"
+          ],
+          "projector_domains": [],
+          "emits_facts": [
+            "io.angzarr.examples.v1.TopUpSettled",
+            "io.angzarr.examples.v1.CashOutCredited"
+          ],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.ChipsAdded",
+                "name": "ChipsAdded",
+                "nested_names": [
+                  "ChipsAdded"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ChipsAdded",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.PlayerCashedOut",
+                "name": "PlayerCashedOut",
+                "nested_names": [
+                  "PlayerCashedOut"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "PlayerCashedOut",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [],
+          "rejections": [],
+          "undos": [],
+          "facts": [],
+          "finish_method": "",
+          "referenced_files": [
+            "io/angzarr/examples/v1/table.proto"
+          ]
+        },
+        {
+          "kind": "SAGA",
+          "name": "TablePlayerHistorySaga",
+          "stub_name": "TablePlayerHistorySagaImpl",
+          "anchor": {
+            "full_name": "io.angzarr.examples.v1.TablePlayerHistorySaga",
+            "name": "TablePlayerHistorySaga",
+            "nested_names": [
+              "TablePlayerHistorySaga"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/sagas.proto"
+          },
+          "state": null,
+          "domain": "",
+          "input_domain": "table",
+          "output_domains": [
+            "player"
+          ],
+          "projector_domains": [],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RoundSettled",
+                "name": "RoundSettled",
+                "nested_names": [
+                  "RoundSettled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "RoundSettled",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [],
+          "rejections": [],
+          "undos": [],
+          "facts": [],
+          "finish_method": "",
+          "referenced_files": [
+            "io/angzarr/examples/v1/table.proto"
+          ]
+        },
+        {
+          "kind": "SAGA",
+          "name": "TablePlayerLoyaltySaga",
+          "stub_name": "TablePlayerLoyaltySagaImpl",
+          "anchor": {
+            "full_name": "io.angzarr.examples.v1.TablePlayerLoyaltySaga",
+            "name": "TablePlayerLoyaltySaga",
+            "nested_names": [
+              "TablePlayerLoyaltySaga"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/sagas.proto"
+          },
+          "state": null,
+          "domain": "",
+          "input_domain": "table",
+          "output_domains": [
+            "player"
+          ],
+          "projector_domains": [],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RoundSettled",
+                "name": "RoundSettled",
+                "nested_names": [
+                  "RoundSettled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "RoundSettled",
+              "source_domain": "table",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [],
+          "rejections": [],
+          "undos": [],
+          "facts": [],
+          "finish_method": "",
+          "referenced_files": [
+            "io/angzarr/examples/v1/table.proto"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "io/angzarr/examples/v1/table.proto",
+      "dir": "io/angzarr/examples/v1",
+      "stem": "table",
+      "package": "io.angzarr.examples.v1",
+      "options": {
+        "csharp_namespace": "Angzarr.Examples",
+        "go_package": "github.com/benjaminabbitt/angzarr/examples/go/proto/io/angzarr/examples/v1;examples",
+        "java_multiple_files": "true",
+        "java_package": "io.angzarr.examples",
+        "ruby_package": "Angzarr::Examples"
+      },
+      "top_level_messages": [
+        "CreateTable",
+        "RequestSeat",
+        "LeaveTable",
+        "PlaceBet",
+        "DealRound",
+        "Hit",
+        "Stand",
+        "DoubleDown",
+        "ConfirmSeat",
+        "ReleaseSeat",
+        "AddChips",
+        "TableCreated",
+        "ShoeShuffled",
+        "SeatHeld",
+        "SeatReleased",
+        "PlayerSeated",
+        "ChipsAdded",
+        "PlayerCashedOut",
+        "BetPlaced",
+        "SeatHand",
+        "RoundDealt",
+        "CardDealt",
+        "HandStood",
+        "HandDoubled",
+        "DealerPlayed",
+        "SeatOutcome",
+        "RoundSettled",
+        "TableSeat",
+        "TableSeatHold",
+        "TableState"
+      ],
+      "top_level_enums": [],
+      "top_level_services": [],
+      "components": [
+        {
+          "kind": "AGGREGATE",
+          "name": "TableAggregate",
+          "stub_name": "TableAggregate",
+          "anchor": {
+            "full_name": "io.angzarr.examples.v1.TableState",
+            "name": "TableState",
+            "nested_names": [
+              "TableState"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/table.proto"
+          },
+          "state": {
+            "full_name": "io.angzarr.examples.v1.TableState",
+            "name": "TableState",
+            "nested_names": [
+              "TableState"
+            ],
+            "package": "io.angzarr.examples.v1",
+            "file": "io/angzarr/examples/v1/table.proto"
+          },
+          "domain": "table",
+          "input_domain": "",
+          "output_domains": [],
+          "projector_domains": [],
+          "emits_facts": [],
+          "handlers": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.CreateTable",
+                "name": "CreateTable",
+                "nested_names": [
+                  "CreateTable"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "CreateTable",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RequestSeat",
+                "name": "RequestSeat",
+                "nested_names": [
+                  "RequestSeat"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "RequestSeat",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.LeaveTable",
+                "name": "LeaveTable",
+                "nested_names": [
+                  "LeaveTable"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "LeaveTable",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.PlaceBet",
+                "name": "PlaceBet",
+                "nested_names": [
+                  "PlaceBet"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "PlaceBet",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.DealRound",
+                "name": "DealRound",
+                "nested_names": [
+                  "DealRound"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "DealRound",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.Hit",
+                "name": "Hit",
+                "nested_names": [
+                  "Hit"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "Hit",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.Stand",
+                "name": "Stand",
+                "nested_names": [
+                  "Stand"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "Stand",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.DoubleDown",
+                "name": "DoubleDown",
+                "nested_names": [
+                  "DoubleDown"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "DoubleDown",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.ConfirmSeat",
+                "name": "ConfirmSeat",
+                "nested_names": [
+                  "ConfirmSeat"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ConfirmSeat",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.ReleaseSeat",
+                "name": "ReleaseSeat",
+                "nested_names": [
+                  "ReleaseSeat"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ReleaseSeat",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.AddChips",
+                "name": "AddChips",
+                "nested_names": [
+                  "AddChips"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "AddChips",
+              "source_domain": "",
+              "emits": [],
+              "typed_emit": false
+            }
+          ],
+          "appliers": [
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.TableCreated",
+                "name": "TableCreated",
+                "nested_names": [
+                  "TableCreated"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyTableCreated"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.ShoeShuffled",
+                "name": "ShoeShuffled",
+                "nested_names": [
+                  "ShoeShuffled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyShoeShuffled"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.SeatHeld",
+                "name": "SeatHeld",
+                "nested_names": [
+                  "SeatHeld"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplySeatHeld"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.SeatReleased",
+                "name": "SeatReleased",
+                "nested_names": [
+                  "SeatReleased"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplySeatReleased"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.PlayerSeated",
+                "name": "PlayerSeated",
+                "nested_names": [
+                  "PlayerSeated"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyPlayerSeated"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.ChipsAdded",
+                "name": "ChipsAdded",
+                "nested_names": [
+                  "ChipsAdded"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyChipsAdded"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.PlayerCashedOut",
+                "name": "PlayerCashedOut",
+                "nested_names": [
+                  "PlayerCashedOut"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyPlayerCashedOut"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.BetPlaced",
+                "name": "BetPlaced",
+                "nested_names": [
+                  "BetPlaced"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyBetPlaced"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RoundDealt",
+                "name": "RoundDealt",
+                "nested_names": [
+                  "RoundDealt"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyRoundDealt"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.CardDealt",
+                "name": "CardDealt",
+                "nested_names": [
+                  "CardDealt"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyCardDealt"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.HandStood",
+                "name": "HandStood",
+                "nested_names": [
+                  "HandStood"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyHandStood"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.HandDoubled",
+                "name": "HandDoubled",
+                "nested_names": [
+                  "HandDoubled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyHandDoubled"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.DealerPlayed",
+                "name": "DealerPlayed",
+                "nested_names": [
+                  "DealerPlayed"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyDealerPlayed"
+            },
+            {
+              "message": {
+                "full_name": "io.angzarr.examples.v1.RoundSettled",
+                "name": "RoundSettled",
+                "nested_names": [
+                  "RoundSettled"
+                ],
+                "package": "io.angzarr.examples.v1",
+                "file": "io/angzarr/examples/v1/table.proto"
+              },
+              "method": "ApplyRoundSettled"
+            }
+          ],
+          "rejections": [],
+          "undos": [],
+          "facts": [],
+          "finish_method": "",
+          "referenced_files": [
+            "io/angzarr/examples/v1/table.proto"
+          ]
+        }
+      ]
+    }
+  ],
+  "proto_files": {
+    "io/angzarr/examples/v1/buy_in.proto": {
+      "path": "io/angzarr/examples/v1/buy_in.proto",
+      "dir": "io/angzarr/examples/v1",
+      "stem": "buy_in",
+      "package": "io.angzarr.examples.v1",
+      "options": {
+        "csharp_namespace": "Angzarr.Examples",
+        "go_package": "github.com/benjaminabbitt/angzarr/examples/go/proto/io/angzarr/examples/v1;examples",
+        "java_multiple_files": "true",
+        "java_package": "io.angzarr.examples",
+        "ruby_package": "Angzarr::Examples"
+      },
+      "top_level_messages": [
+        "BuyInStarted",
+        "BuyInFundsHeld",
+        "BuyInSeated",
+        "BuyInCompleted",
+        "BuyInFailed",
+        "BuyInState"
+      ],
+      "top_level_enums": [],
+      "top_level_services": []
+    },
+    "io/angzarr/examples/v1/ledger.proto": {
+      "path": "io/angzarr/examples/v1/ledger.proto",
+      "dir": "io/angzarr/examples/v1",
+      "stem": "ledger",
+      "package": "io.angzarr.examples.v1",
+      "options": {
+        "csharp_namespace": "Angzarr.Examples",
+        "go_package": "github.com/benjaminabbitt/angzarr/examples/go/proto/io/angzarr/examples/v1;examples",
+        "java_multiple_files": "true",
+        "java_package": "io.angzarr.examples",
+        "ruby_package": "Angzarr::Examples"
+      },
+      "top_level_messages": [
+        "LedgerRoundResult",
+        "PlayerLedgerRow",
+        "TableLedgerRow",
+        "LedgerTotals",
+        "LedgerProjection",
+        "GetPlayerBalanceRequest",
+        "PlayerBalanceView",
+        "GetLedgerRequest",
+        "LedgerView"
+      ],
+      "top_level_enums": [],
+      "top_level_services": [
+        "LedgerQueryService"
+      ]
+    },
+    "io/angzarr/examples/v1/player.proto": {
+      "path": "io/angzarr/examples/v1/player.proto",
+      "dir": "io/angzarr/examples/v1",
+      "stem": "player",
+      "package": "io.angzarr.examples.v1",
+      "options": {
+        "csharp_namespace": "Angzarr.Examples",
+        "go_package": "github.com/benjaminabbitt/angzarr/examples/go/proto/io/angzarr/examples/v1;examples",
+        "java_multiple_files": "true",
+        "java_package": "io.angzarr.examples",
+        "ruby_package": "Angzarr::Examples"
+      },
+      "top_level_messages": [
+        "RegisterPlayer",
+        "ImportPlayer",
+        "UpdateProfile",
+        "DepositFunds",
+        "WithdrawFunds",
+        "RequestTopUp",
+        "EnrollLoyalty",
+        "HoldFunds",
+        "CaptureFunds",
+        "ReleaseHold",
+        "RecordRoundResult",
+        "AwardLoyaltyPoints",
+        "PlayerRegistered",
+        "PlayerImported",
+        "ProfileUpdated",
+        "FundsDeposited",
+        "FundsDepositedV1",
+        "FundsWithdrawn",
+        "FundsHeld",
+        "FundsCaptured",
+        "HoldReleased",
+        "TopUpRequested",
+        "TopUpRefused",
+        "TopUpSettled",
+        "CashOutCredited",
+        "LoyaltyEnrolled",
+        "RoundResultRecorded",
+        "RoundResultRetracted",
+        "LoyaltyPointsAwarded",
+        "Hold",
+        "RoundResult",
+        "PlayerState"
+      ],
+      "top_level_enums": [],
+      "top_level_services": []
+    },
+    "io/angzarr/examples/v1/sagas.proto": {
+      "path": "io/angzarr/examples/v1/sagas.proto",
+      "dir": "io/angzarr/examples/v1",
+      "stem": "sagas",
+      "package": "io.angzarr.examples.v1",
+      "options": {
+        "csharp_namespace": "Angzarr.Examples",
+        "go_package": "github.com/benjaminabbitt/angzarr/examples/go/proto/io/angzarr/examples/v1;examples",
+        "java_multiple_files": "true",
+        "java_package": "io.angzarr.examples",
+        "ruby_package": "Angzarr::Examples"
+      },
+      "top_level_messages": [
+        "PlayerTableSaga",
+        "TablePlayerSettlementSaga",
+        "TablePlayerHistorySaga",
+        "TablePlayerLoyaltySaga"
+      ],
+      "top_level_enums": [],
+      "top_level_services": []
+    },
+    "io/angzarr/examples/v1/table.proto": {
+      "path": "io/angzarr/examples/v1/table.proto",
+      "dir": "io/angzarr/examples/v1",
+      "stem": "table",
+      "package": "io.angzarr.examples.v1",
+      "options": {
+        "csharp_namespace": "Angzarr.Examples",
+        "go_package": "github.com/benjaminabbitt/angzarr/examples/go/proto/io/angzarr/examples/v1;examples",
+        "java_multiple_files": "true",
+        "java_package": "io.angzarr.examples",
+        "ruby_package": "Angzarr::Examples"
+      },
+      "top_level_messages": [
+        "CreateTable",
+        "RequestSeat",
+        "LeaveTable",
+        "PlaceBet",
+        "DealRound",
+        "Hit",
+        "Stand",
+        "DoubleDown",
+        "ConfirmSeat",
+        "ReleaseSeat",
+        "AddChips",
+        "TableCreated",
+        "ShoeShuffled",
+        "SeatHeld",
+        "SeatReleased",
+        "PlayerSeated",
+        "ChipsAdded",
+        "PlayerCashedOut",
+        "BetPlaced",
+        "SeatHand",
+        "RoundDealt",
+        "CardDealt",
+        "HandStood",
+        "HandDoubled",
+        "DealerPlayed",
+        "SeatOutcome",
+        "RoundSettled",
+        "TableSeat",
+        "TableSeatHold",
+        "TableState"
+      ],
+      "top_level_enums": [],
+      "top_level_services": []
+    }
+  }
+}
