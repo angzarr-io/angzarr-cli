@@ -162,16 +162,23 @@ func (s TemplateSource) fetch(cacheRoot string) (string, error) {
 	if err := os.WriteFile(filepath.Join(tmp, fetchedMarker), []byte(commit+"\n"), 0o644); err != nil {
 		return "", err
 	}
-	_ = os.RemoveAll(entry) // an incomplete entry from an interrupted fetch
+	beforePublish()
+	// An entry only ever appears by this rename of a complete fetch, so it is
+	// never removed: concurrent plugin runs (codegen and scaffold in one buf
+	// generate) may be reading it.
 	if err := os.Rename(tmp, entry); err != nil {
 		// A concurrent fetch of the same entry finished first.
 		if _, statErr := os.Stat(filepath.Join(entry, fetchedMarker)); statErr == nil {
 			return entry, nil
 		}
-		return "", err
+		return "", fmt.Errorf("template cache entry %s is not a complete fetch (delete it): %w", entry, err)
 	}
 	return entry, nil
 }
+
+// beforePublish runs between a completed fetch and its rename into the cache
+// (a test seam for concurrent fetches).
+var beforePublish = func() {}
 
 // repoLocatingGitVars are the variables that point git at a repository
 // (`git rev-parse --local-env-vars`). git exports several of them to hooks, so
