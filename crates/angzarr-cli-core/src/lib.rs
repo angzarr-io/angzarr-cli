@@ -1,5 +1,6 @@
 //! The angzarr component model, read from the `io.angzarr.v1` options in a
-//! compiled descriptor set, and the lint rules that check it.
+//! compiled descriptor set, the lint rules that check it, and a project's
+//! committed settings ([`project`]: `.angzarr/config.yaml` and `lock.yaml`).
 //!
 //! Pure: no I/O, no argument parsing, no file system. A descriptor set comes
 //! in as a [`DescriptorSet`]; results go out as data.
@@ -7,6 +8,7 @@
 pub mod lint;
 pub mod model;
 pub mod options;
+pub mod project;
 pub mod run;
 
 #[cfg(any(test, feature = "test-support"))]
@@ -34,6 +36,7 @@ pub const EN_US: &str = include_str!("../locales/en-US/angzarr-cli-core.ftl");
 pub fn diagnostic_samples() -> Vec<Box<dyn annals_diagnostic::Diagnostic>> {
     let mut samples = lint::samples();
     samples.extend(run::samples());
+    samples.extend(project::samples());
     samples
 }
 

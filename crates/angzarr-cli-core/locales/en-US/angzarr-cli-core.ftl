@@ -62,6 +62,21 @@ angzarr-cli-core-run-model-observed = the model was already observed in this run
 angzarr-cli-core-run-no-model = the model must be observed before the lint
 angzarr-cli-core-run-linted = this run was already linted
 
+## Project settings (.angzarr/). $source is where a value came from: a file
+## path or a flag (--target). $file is a file path; $key is a dotted path
+## from the file's root (output.non_tty_format).
+
+angzarr-cli-core-project-unknown-target = { $source }: "{ $target }" is not a target angzarr generates for
+angzarr-cli-core-project-bad-format = { $source }: "{ $value }" is not an output format
+angzarr-cli-core-project-bad-commit = { $source }: "{ $value }" is not a full commit id
+angzarr-cli-core-project-unknown-key = { $file }: unknown key { $key }
+angzarr-cli-core-project-missing-key = { $file }: { $key } is required
+# $shape is mapping or scalar.
+angzarr-cli-core-project-wrong-shape = { $file }: { $key } must be { $shape ->
+        [mapping] a mapping
+       *[other] a single value
+    }
+
 ## Remedies.
 
 angzarr-cli-core-fix-one-run = declare the component, and build one image from every file that declares part of it
@@ -83,3 +98,8 @@ angzarr-cli-core-fix-element-key = name a singular scalar, string, bytes or enum
 angzarr-cli-core-fix-ordered = set element_key, or remove ordered
 angzarr-cli-core-fix-whole-state = use whole_state on its own
 angzarr-cli-core-fix-oneof = give every member of the oneof an empty (conflict), or every member whole_state
+angzarr-cli-core-fix-target = use rust or python
+angzarr-cli-core-fix-format = use json, yaml, toml, text or markdown
+angzarr-cli-core-fix-commit = give the angzarr-project commit in full, as git rev-parse prints it: 40 hex digits, or 64 for a SHA-256 repository
+angzarr-cli-core-fix-unknown-key = remove { $key }, or correct its spelling
+angzarr-cli-core-fix-missing-key = set { $key }
