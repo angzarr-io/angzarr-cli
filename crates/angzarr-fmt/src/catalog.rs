@@ -14,6 +14,10 @@ use crate::error::FmtError;
 /// This crate's en-US messages.
 pub const EN_US: &str = include_str!("../locales/en-US/angzarr-fmt.ftl");
 
+/// The largest integer a Fluent number (an `f64`) holds exactly. A larger
+/// one goes to Fluent as its digits, so none is lost.
+const EXACT: u64 = 1 << 53;
+
 /// Messages for one language, gathered from every crate's catalog.
 pub struct Catalog {
     bundle: FluentBundle<FluentResource>,
@@ -55,6 +59,8 @@ impl Catalog {
         let mut args = FluentArgs::new();
         for (name, arg) in d.args() {
             match arg {
+                Arg::Int(n) if n.unsigned_abs() > EXACT => args.set(name, n.to_string()),
+                Arg::Uint(n) if n > EXACT => args.set(name, n.to_string()),
                 Arg::Int(n) => args.set(name, n),
                 Arg::Uint(n) => args.set(name, n),
                 Arg::Str(s) => args.set(name, s),
@@ -282,6 +288,29 @@ mod tests {
             .arg("who", "world")
             .arg("n", 3u32);
         assert_eq!(catalog.render(&d), "hello world, 3 times");
+    }
+
+    #[test]
+    fn numbers_select_plurals_and_large_ones_keep_every_digit() {
+        let mut catalog = Catalog::en_us();
+        catalog
+            .add("t-n = { $n ->\n    [one] one file\n   *[other] { $n } files\n }\n")
+            .unwrap();
+        let n = |v: Arg| Report::new("t-n", "n").arg("n", v);
+        assert_eq!(catalog.render(&n(Arg::Uint(1))), "one file");
+        assert_eq!(catalog.render(&n(Arg::Int(3))), "3 files");
+        assert_eq!(
+            catalog.render(&n(Arg::Uint(u64::MAX))),
+            "18446744073709551615 files"
+        );
+        assert_eq!(
+            catalog.render(&n(Arg::Int(-9_007_199_254_740_993))),
+            "-9007199254740993 files"
+        );
+        assert_eq!(
+            catalog.render(&n(Arg::Uint(9_007_199_254_740_992))),
+            "9007199254740992 files"
+        );
     }
 
     #[test]
