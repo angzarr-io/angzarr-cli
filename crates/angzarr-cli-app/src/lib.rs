@@ -581,6 +581,100 @@ mod tests {
     }
 
     #[test]
+    fn a_component_lists_only_what_it_has_with_the_rest_as_none_or_no() {
+        use angzarr_cli_core::model::{Command, Component, ConflictMarker, Event, Kind, State};
+        let full = Component {
+            anchor: "p.v1.Full".into(),
+            file: "p.proto".into(),
+            kind: Kind::ProcessManager,
+            name: "Full".into(),
+            domain: Some("d".into()),
+            input_domain: Some("in".into()),
+            output_domains: vec!["o1".into(), "o2".into()],
+            commands: vec![
+                Command {
+                    type_name: "p.v1.Go".into(),
+                    file: "p.proto".into(),
+                    emits: vec!["p.v1.Went".into(), "p.v1.Gone".into()],
+                },
+                Command {
+                    type_name: "p.v1.Idle".into(),
+                    file: "p.proto".into(),
+                    emits: vec![],
+                },
+            ],
+            events: vec![
+                Event {
+                    type_name: "p.v1.Went".into(),
+                    file: "p.proto".into(),
+                    domain: Some("d".into()),
+                    applies: true,
+                },
+                Event {
+                    type_name: "p.v1.Gone".into(),
+                    file: "p.proto".into(),
+                    domain: None,
+                    applies: false,
+                },
+            ],
+            state: Some(State {
+                conflict_resolutions: vec!["strict", "commutative"],
+            }),
+            conflict_units: vec![
+                ConflictMarker {
+                    message: "p.v1.Full".into(),
+                    field: "a".into(),
+                    descend: true,
+                    element_key: Some("id".into()),
+                    ordered: true,
+                    whole_state: true,
+                },
+                ConflictMarker {
+                    message: "p.v1.Full".into(),
+                    field: "b".into(),
+                    descend: false,
+                    element_key: None,
+                    ordered: false,
+                    whole_state: false,
+                },
+            ],
+        };
+        let bare = Component {
+            anchor: "p.v1.Bare".into(),
+            file: "p.proto".into(),
+            kind: Kind::Projector,
+            name: "Bare".into(),
+            domain: None,
+            input_domain: None,
+            output_domains: vec![],
+            commands: vec![],
+            events: vec![],
+            state: Some(State {
+                conflict_resolutions: vec![],
+            }),
+            conflict_units: vec![],
+        };
+        let report = ModelReport(ComponentModel {
+            components: vec![full, bare],
+        });
+        assert_eq!(
+            rendered(Format::Text, &report),
+            "Full:\n  Kind: process-manager\n  Anchor: p.v1.Full\n  File: p.proto\n  \
+             Domain: d\n  Input domain: in\n  Output domains: o1, o2\n  \
+             Conflict resolutions: strict, commutative\n  \
+             Commands:\n    Type       Emits\n    p.v1.Go    p.v1.Went, p.v1.Gone\n    \
+             p.v1.Idle  (none)\n  \
+             Events:\n    Type       Domain  Applies\n    p.v1.Went  d       yes\n    \
+             p.v1.Gone  (none)  no\n  \
+             Conflict units:\n    Message    Field  Unit\n    \
+             p.v1.Full  a      descend, element_key=id, ordered, whole_state\n    \
+             p.v1.Full  b      field\n\
+             Bare:\n  Kind: projector\n  Anchor: p.v1.Bare\n  File: p.proto\n  \
+             Conflict resolutions: (none)\n"
+        );
+    }
+
+    #[test]
     fn an_empty_model_reads_as_none() {
         let report = model(&Fixed(Image::new())).unwrap();
         assert_eq!(rendered(Format::Text, &report), "(none)\n");
@@ -700,6 +794,22 @@ mod tests {
         assert_eq!(
             catalog().render(&*err),
             "--target: \"go\" is not a target angzarr generates for"
+        );
+        assert_eq!(
+            err.to_string(),
+            "--target: \"go\" is not a target angzarr generates for"
+        );
+        let args: Vec<_> = err
+            .args()
+            .into_iter()
+            .map(|(n, a)| (n, format!("{a:?}")))
+            .collect();
+        assert_eq!(
+            args,
+            vec![
+                ("source", format!("{:?}", Arg::from("--target"))),
+                ("target", format!("{:?}", Arg::from("go"))),
+            ]
         );
         assert_eq!(err.remedy().unwrap().code(), "angzarr-cli-core-fix-target");
         let err = init(&project, &request(&[], "b1f00d2", false)).unwrap_err();
