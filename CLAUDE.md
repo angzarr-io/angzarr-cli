@@ -11,9 +11,12 @@ rejected alternative may stay only as rationale ("not X, because ...").
 
 The core is pure: no I/O, no clap, no tonic, no file system. Use cases sit
 behind ports (traits); adapters implement them. `angzarr-cli-core` is the
-core (model, lint rules, and the annals domain each invocation runs in
-memory), `angzarr-cli-app` the use cases and ports, `angzarr-cli-adapters`
-the adapters, `angzarr-cli` the binary that wires them. In the run domain,
+core (model, lint rules, the annals domain each invocation runs in memory,
+and a project's settings as data with their validation),
+`angzarr-cli-app` the use cases and ports (`DescriptorSource`, `Project`),
+`angzarr-cli-adapters` the adapters (reading and writing `.angzarr/` is
+theirs, with an in-memory `Project` for tests), `angzarr-cli` the binary
+that wires them. In the run domain,
 decide reads the descriptor set from its context and apply only folds
 events; apply never sees the descriptor set. Results are data: a command
 returns one value and `angzarr-fmt` decides how it is written, so the output
@@ -35,6 +38,17 @@ keeps an English `Display` as the fallback.
   the catalog test (`angzarr_fmt::check`) fails otherwise.
 - A failure that the user can act on names its remedy, itself a coded
   message.
+
+## `.angzarr/` files are versioned: bump, register a step, keep an old fixture
+
+`config.yaml` and `lock.yaml` are annals-yaml versioned documents. A
+schema change bumps `CONFIG_VERSION` or `LOCK_VERSION`
+(`angzarr_cli_core::project`), registers the step from the old version in
+`config_loader` or `lock_loader` (`angzarr-cli-adapters`), and keeps the
+fixture at the old version under `crates/angzarr-cli-adapters/fixtures/project/`
+with its expected current-version output. Unknown keys are refused, so a
+new key is a schema change too. These files are settings only: nothing
+about a run is written there.
 
 ## Unicode in source is visible
 
