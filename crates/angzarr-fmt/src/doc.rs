@@ -14,7 +14,8 @@ pub enum Block {
     Field { label: String, value: String },
     /// A titled, nested document.
     Section { title: String, body: Doc },
-    /// An aligned table: one cell per column in every row.
+    /// An aligned table, one cell per column in a row. A row with fewer
+    /// cells leaves the rest blank; extra cells get a column with no header.
     Table {
         title: Option<String>,
         columns: Vec<String>,
@@ -34,9 +35,12 @@ pub const NONE: &str = "(none)";
 
 /// The view derived from a serialized value. Objects become fields and
 /// sections, lists of scalars a joined field (or a list at the top), lists of
-/// records with the same keys a table, other lists one section per item.
+/// records a table of every key any of them has (a record without a key
+/// reads [`NONE`] there), other lists one section per item. An empty value
+/// reads [`NONE`].
 pub fn derive(value: &Value) -> Doc {
     match value {
+        Value::Object(map) if map.is_empty() => vec![Block::Para(NONE.to_string())],
         Value::Object(map) => fields(map),
         Value::Array(items) => list(None, items),
         scalar => vec![Block::Para(scalar_text(scalar))],
@@ -95,7 +99,7 @@ fn list(title: Option<String>, items: &[Value]) -> Doc {
             .filter_map(Value::as_object)
             .map(|record| {
                 keys.iter()
-                    .map(|k| cell_text(&record[k.as_str()]))
+                    .map(|k| record.get(k).map_or_else(|| NONE.to_string(), cell_text))
                     .collect()
             })
             .collect();
@@ -120,19 +124,18 @@ fn list(title: Option<String>, items: &[Value]) -> Doc {
         .collect()
 }
 
-/// The keys every item has, in the first item's order, when every item is a
-/// record with exactly those keys.
+/// Every key of every item, in first-seen order, when every item is a
+/// record and at least one has a key.
 fn shared_keys(items: &[Value]) -> Option<Vec<String>> {
-    let first: Vec<String> = items.first()?.as_object()?.keys().cloned().collect();
-    if first.is_empty() {
-        return None;
+    let mut keys: Vec<String> = Vec::new();
+    for item in items {
+        for key in item.as_object()?.keys() {
+            if !keys.contains(key) {
+                keys.push(key.clone());
+            }
+        }
     }
-    let same = items.iter().all(|item| {
-        item.as_object().is_some_and(|record| {
-            record.len() == first.len() && first.iter().all(|k| record.contains_key(k))
-        })
-    });
-    same.then_some(first)
+    (!keys.is_empty()).then_some(keys)
 }
 
 fn is_scalar(value: &Value) -> bool {
@@ -156,18 +159,52 @@ fn cell_text(value: &Value) -> String {
     }
 }
 
-/// A serialized key as a label: separators become spaces and the first
-/// letter is capitalized (`schema_version` reads `Schema version`).
+/// A serialized key as a label: `_` and `-` separate words, and so does a
+/// change of case (`schemaVersion`, `SchemaVersion`, `HTTPServer`); the
+/// first letter is capitalized and a capitalized later word lowercased, an
+/// all-caps word kept (`schema_version` reads `Schema version`, `userID`
+/// reads `User ID`).
 pub fn humanize(key: &str) -> String {
-    let spaced: String = key
-        .chars()
-        .map(|c| if c == '_' || c == '-' { ' ' } else { c })
-        .collect();
-    let mut chars = spaced.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => spaced,
+    let chars: Vec<char> = key.chars().collect();
+    let mut words: Vec<String> = Vec::new();
+    let mut word = String::new();
+    for (i, &c) in chars.iter().enumerate() {
+        if c == '_' || c == '-' {
+            if !word.is_empty() {
+                words.push(std::mem::take(&mut word));
+            }
+            continue;
+        }
+        let prev = i.checked_sub(1).map(|p| chars[p]);
+        let next = chars.get(i + 1).copied();
+        let boundary = c.is_uppercase()
+            && prev.is_some_and(|p| {
+                p.is_lowercase()
+                    || p.is_ascii_digit()
+                    || (p.is_uppercase() && next.is_some_and(char::is_lowercase))
+            });
+        if boundary && !word.is_empty() {
+            words.push(std::mem::take(&mut word));
+        }
+        word.push(c);
     }
+    if !word.is_empty() {
+        words.push(word);
+    }
+    let mut out = Vec::with_capacity(words.len());
+    for (i, w) in words.iter().enumerate() {
+        let acronym = w.chars().count() > 1 && !w.chars().any(char::is_lowercase);
+        let mut cs = w.chars();
+        let first = cs.next().expect("words are not empty");
+        out.push(if acronym {
+            w.clone()
+        } else if i == 0 {
+            first.to_uppercase().chain(cs).collect()
+        } else {
+            first.to_lowercase().chain(cs).collect()
+        });
+    }
+    out.join(" ")
 }
 
 #[cfg(test)]
@@ -255,8 +292,25 @@ mod tests {
     }
 
     #[test]
-    fn records_with_different_keys_are_one_section_each() {
-        let doc = derive(&json!([{"a": 1}, {"b": 2}]));
+    fn records_with_different_keys_are_a_table_of_every_key_with_gaps_as_none() {
+        let doc = derive(&json!([{"a": 1, "b": 2}, {"a": 3}, {"c": 4, "a": 5}]));
+        assert_eq!(
+            doc,
+            [Block::Table {
+                title: None,
+                columns: vec!["A".into(), "B".into(), "C".into()],
+                rows: vec![
+                    vec!["1".into(), "2".into(), NONE.into()],
+                    vec!["3".into(), NONE.into(), NONE.into()],
+                    vec!["5".into(), NONE.into(), "4".into()],
+                ],
+            }]
+        );
+    }
+
+    #[test]
+    fn a_list_mixing_records_and_other_values_is_one_section_each() {
+        let doc = derive(&json!([{"a": 1}, [2, 3]]));
         assert_eq!(
             doc,
             [
@@ -266,10 +320,18 @@ mod tests {
                 },
                 Block::Section {
                     title: "Item 2".into(),
-                    body: vec![field("B", "2")]
+                    body: vec![Block::List {
+                        title: None,
+                        items: vec!["2".into(), "3".into()]
+                    }]
                 },
             ]
         );
+    }
+
+    #[test]
+    fn an_empty_record_at_the_top_reads_as_none() {
+        assert_eq!(derive(&json!({})), [Block::Para(NONE.into())]);
     }
 
     #[test]
@@ -280,6 +342,11 @@ mod tests {
     #[test]
     fn humanize_handles_hyphens_and_the_empty_key() {
         assert_eq!(humanize("off-terminal"), "Off terminal");
+        assert_eq!(humanize("SchemaVersion"), "Schema version");
+        assert_eq!(humanize("schemaVersion"), "Schema version");
+        assert_eq!(humanize("HTTPServer"), "HTTP server");
+        assert_eq!(humanize("userID"), "User ID");
+        assert_eq!(humanize("v2Name"), "V2 name");
         assert_eq!(humanize(""), "");
     }
 }
