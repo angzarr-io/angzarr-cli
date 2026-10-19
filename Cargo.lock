@@ -23,6 +23,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "angzarr-cli-adapters"
+version = "0.1.0"
+dependencies = [
+ "angzarr-cli-app",
+ "angzarr-cli-core",
+ "angzarr-fmt",
+ "annals-diagnostic",
+ "prost",
+ "prost-reflect",
+]
+
+[[package]]
 name = "angzarr-cli-app"
 version = "0.1.0"
 dependencies = [

@@ -37,7 +37,7 @@ pub use annals_diagnostic::{Arg, Diagnostic, Report};
 pub use catalog::{Catalog, EN_US, check};
 pub use diagnostics::{Diagnostics, Finding, Severity};
 pub use doc::{Block, Doc, NONE, derive, humanize};
-pub use error::{FmtError, diagnostic_samples};
+pub use error::{FmtError, diagnostic_samples, io_kind};
 pub use failure::{
     Failure, Warning, diagnostic_value, failure_value, write_failure, write_warning,
 };

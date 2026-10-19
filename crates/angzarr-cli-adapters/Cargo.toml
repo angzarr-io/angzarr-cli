@@ -1,0 +1,22 @@
+[package]
+name = "angzarr-cli-adapters"
+version = "0.1.0"
+description = "Adapters for the angzarr CLI's ports: a descriptor set from an image file or stdin."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+angzarr-cli-app.workspace = true
+angzarr-cli-core.workspace = true
+angzarr-fmt.workspace = true
+annals-diagnostic.workspace = true
+prost.workspace = true
+prost-reflect.workspace = true
+
+[dev-dependencies]
+angzarr-cli-core = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true

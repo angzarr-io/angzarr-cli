@@ -47,7 +47,7 @@ impl FmtError {
 
 /// An I/O error kind as a stable kebab-case token; a kind not listed here is
 /// `other`.
-pub(crate) fn io_kind(kind: std::io::ErrorKind) -> &'static str {
+pub fn io_kind(kind: std::io::ErrorKind) -> &'static str {
     use std::io::ErrorKind as K;
     match kind {
         K::NotFound => "not-found",
