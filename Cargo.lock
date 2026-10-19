@@ -33,6 +33,7 @@ dependencies = [
  "angzarr-cli-core",
  "angzarr-fmt",
  "annals-diagnostic",
+ "annals-yaml",
  "prost",
  "prost-reflect",
 ]

@@ -6,6 +6,13 @@
 //! build -o`). A buf image marks the files present only as imports; every
 //! other file, and every file of a plain `FileDescriptorSet`, counts as
 //! generated in this run.
+//!
+//! [`project`] reads and writes a project's `.angzarr/` settings:
+//! [`DirProject`] on disk, [`MemoryProject`] in memory.
+
+pub mod project;
+
+pub use project::{DirProject, MemoryProject};
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -119,7 +126,7 @@ pub fn diagnostic_samples() -> Vec<Box<dyn Diagnostic>> {
         detail: "x".into(),
     };
     let remedy = decode.remedy().expect("a decode failure has a remedy");
-    vec![
+    let mut samples: Vec<Box<dyn Diagnostic>> = vec![
         Box::new(SourceError::Read {
             input: "x".into(),
             kind: "not-found",
@@ -127,7 +134,9 @@ pub fn diagnostic_samples() -> Vec<Box<dyn Diagnostic>> {
         Box::new(SourceError::StdinTerminal),
         Box::new(decode),
         Box::new(remedy),
-    ]
+    ];
+    samples.extend(project::samples());
+    samples
 }
 
 /// A buf image file's own extension (`buf.alpha.image.v1.ImageFileExtension`).

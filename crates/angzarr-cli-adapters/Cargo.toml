@@ -1,7 +1,7 @@
 [package]
 name = "angzarr-cli-adapters"
 version = "0.1.0"
-description = "Adapters for the angzarr CLI's ports: a descriptor set from an image file or stdin."
+description = "Adapters for the angzarr CLI's ports: a descriptor set from an image file or stdin, and a project's .angzarr/ directory."
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -12,6 +12,7 @@ angzarr-cli-app.workspace = true
 angzarr-cli-core.workspace = true
 angzarr-fmt.workspace = true
 annals-diagnostic.workspace = true
+annals-yaml.workspace = true
 prost.workspace = true
 prost-reflect.workspace = true
 

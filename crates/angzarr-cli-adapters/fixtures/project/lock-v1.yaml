@@ -1,0 +1,9 @@
+# lock.yaml at version 1, every key set. Kept as written: when the schema
+# moves on, this file stays and its test gains the expected current-version
+# output.
+version: 1
+spec:
+  commit: b1f00d2710eb7bee60308f6df520893d782012a6
+targets:
+  rust:
+    client_api: 1

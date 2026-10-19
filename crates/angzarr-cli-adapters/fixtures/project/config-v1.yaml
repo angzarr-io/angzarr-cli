@@ -1,0 +1,12 @@
+# config.yaml at version 1, every key set. Kept as written: when the schema
+# moves on, this file stays and its test gains the expected current-version
+# output.
+version: 1
+protos: api/proto
+targets:
+  rust:
+    out: gen/rust
+  python:
+    out: gen/python
+output:
+  non_tty_format: yaml
