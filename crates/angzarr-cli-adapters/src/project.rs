@@ -823,8 +823,17 @@ mod tests {
         assert_eq!(project.read_config().unwrap(), report.config);
         assert_eq!(project.read_lock().unwrap(), report.lock);
         assert_eq!(project.file(".gitignore").as_deref(), Some("cache/\n"));
+        assert!(project.exists().unwrap());
         let err = init(&project, &request).unwrap_err();
         assert_eq!(err.code(), "angzarr-cli-app-project-exists");
+        assert_eq!(err.to_string(), ".angzarr already exists");
+    }
+
+    #[test]
+    fn a_memory_project_with_files_exists_and_is_named_as_the_directory() {
+        let project = MemoryProject::with_files(&[]);
+        assert!(project.exists().unwrap());
+        assert_eq!(project.dir(), ".angzarr");
     }
 
     #[test]

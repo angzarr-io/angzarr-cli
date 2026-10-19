@@ -49,10 +49,22 @@ fn create_refuses_an_existing_directory_and_leaves_it_alone() {
     std::fs::create_dir(root.join(".angzarr")).unwrap();
     let project = DirProject::at(&root);
     let (config, lock) = settings();
+    let dir = root.join(".angzarr").display().to_string();
+    assert_eq!(project.dir(), dir);
     let err = project.create(&config, &lock).unwrap_err();
     assert_eq!(err.code(), "angzarr-cli-app-project-exists");
+    assert_eq!(err.to_string(), format!("{dir} already exists"));
     assert!(err.remedy().is_some());
     assert_eq!(std::fs::read_dir(root.join(".angzarr")).unwrap().count(), 0);
+}
+
+#[test]
+fn create_under_a_missing_parent_is_a_write_failure_not_exists() {
+    let root = fresh("no-parent").join("absent");
+    let (config, lock) = settings();
+    let err = DirProject::at(&root).create(&config, &lock).unwrap_err();
+    assert_eq!(err.code(), "angzarr-cli-adapters-project-write");
+    assert!(!root.exists());
 }
 
 #[test]
