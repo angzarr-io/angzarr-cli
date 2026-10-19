@@ -27,7 +27,7 @@ enum Command {
 struct Version {
     name: &'static str,
     version: &'static str,
-    /// `git describe` of the checkout it was built from, when there was one.
+    /// The short hash of the commit it was built from, when there was one.
     commit: Option<&'static str>,
 }
 
