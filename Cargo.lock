@@ -33,6 +33,7 @@ dependencies = [
  "prost",
  "prost-reflect",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
