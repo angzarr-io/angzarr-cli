@@ -7,6 +7,7 @@
 pub mod lint;
 pub mod model;
 pub mod options;
+pub mod run;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod fixture;
@@ -31,7 +32,9 @@ pub const EN_US: &str = include_str!("../locales/en-US/angzarr-cli-core.ftl");
 
 /// One of every diagnostic this crate raises, for the catalog check.
 pub fn diagnostic_samples() -> Vec<Box<dyn annals_diagnostic::Diagnostic>> {
-    lint::samples()
+    let mut samples = lint::samples();
+    samples.extend(run::samples());
+    samples
 }
 
 #[cfg(test)]

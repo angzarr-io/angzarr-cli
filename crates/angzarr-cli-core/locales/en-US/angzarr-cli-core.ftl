@@ -56,6 +56,12 @@ angzarr-cli-core-whole-state-combined = { $message }.{ $field }: whole_state can
 angzarr-cli-core-oneof-member-refined = { $message }.{ $oneof }: oneof members carry only an empty (conflict), or all carry whole_state
 angzarr-cli-core-oneof-partially-marked = { $message }.{ $oneof }: some but not all members of the oneof carry (conflict)
 
+## The run's refusals.
+
+angzarr-cli-core-run-model-observed = the model was already observed in this run
+angzarr-cli-core-run-no-model = the model must be observed before the lint
+angzarr-cli-core-run-linted = this run was already linted
+
 ## Remedies.
 
 angzarr-cli-core-fix-one-run = declare the component, and build one image from every file that declares part of it
