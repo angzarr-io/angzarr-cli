@@ -12,12 +12,16 @@ name = "angzarr"
 path = "src/main.rs"
 
 [dependencies]
+angzarr-cli-adapters.workspace = true
+angzarr-cli-app.workspace = true
+angzarr-cli-core.workspace = true
 angzarr-fmt.workspace = true
 angzarr-fmt-clap.workspace = true
 clap.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+angzarr-cli-core = { workspace = true, features = ["test-support"] }
 serde_json.workspace = true
 
 [lints]

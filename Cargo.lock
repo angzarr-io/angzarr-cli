@@ -15,6 +15,9 @@ dependencies = [
 name = "angzarr-cli"
 version = "0.1.0"
 dependencies = [
+ "angzarr-cli-adapters",
+ "angzarr-cli-app",
+ "angzarr-cli-core",
  "angzarr-fmt",
  "angzarr-fmt-clap",
  "clap",
