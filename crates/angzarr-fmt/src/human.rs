@@ -256,6 +256,13 @@ fn escape(line: &str, starts: bool) -> String {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_line_starting_with_a_dot_or_paren_and_no_digits_is_not_escaped() {
+        assert_eq!(escape(".x", true), ".x");
+        assert_eq!(escape(")x", true), ")x");
+        assert_eq!(escape("1.x", true), "1\\.x");
+    }
+
     fn text(doc: &Doc) -> String {
         let mut out = Vec::new();
         write_text(&mut out, doc).unwrap();

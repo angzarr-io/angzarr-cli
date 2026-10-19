@@ -260,6 +260,50 @@ mod tests {
     }
 
     #[test]
+    fn every_listed_io_kind_has_its_own_token() {
+        use std::io::ErrorKind as K;
+        for (kind, token) in [
+            (K::NotFound, "not-found"),
+            (K::PermissionDenied, "permission-denied"),
+            (K::ConnectionRefused, "connection-refused"),
+            (K::ConnectionReset, "connection-reset"),
+            (K::ConnectionAborted, "connection-aborted"),
+            (K::NotConnected, "not-connected"),
+            (K::BrokenPipe, "broken-pipe"),
+            (K::AlreadyExists, "already-exists"),
+            (K::WouldBlock, "would-block"),
+            (K::InvalidInput, "invalid-input"),
+            (K::InvalidData, "invalid-data"),
+            (K::TimedOut, "timed-out"),
+            (K::WriteZero, "write-zero"),
+            (K::Interrupted, "interrupted"),
+            (K::Unsupported, "unsupported"),
+            (K::UnexpectedEof, "unexpected-eof"),
+            (K::OutOfMemory, "out-of-memory"),
+            (K::StorageFull, "storage-full"),
+            (K::ReadOnlyFilesystem, "read-only-filesystem"),
+            (K::IsADirectory, "is-a-directory"),
+            (K::NotADirectory, "not-a-directory"),
+            (K::Other, "other"),
+            (K::AddrInUse, "other"),
+        ] {
+            assert_eq!(io_kind(kind), token, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn the_english_fallback_for_toml_needs_table_has_no_article_before_null() {
+        assert_eq!(
+            FmtError::TomlNeedsTable { found: "null" }.to_string(),
+            "TOML output needs a table at the top level, not null"
+        );
+        assert_eq!(
+            FmtError::TomlNeedsTable { found: "list" }.to_string(),
+            "TOML output needs a table at the top level, not a list"
+        );
+    }
+
+    #[test]
     fn the_remedy_names_formats_not_a_flag() {
         let mut catalog = Catalog::en_us();
         catalog.add(EN_US).unwrap();

@@ -402,6 +402,28 @@ mod tests {
     }
 
     #[test]
+    fn yaml_indents_a_collection_under_a_top_level_item() {
+        assert_eq!(
+            run(write_yaml, &json!([{"a": 1, "b": 2}, [3, 4]])).unwrap(),
+            "- a: 1\n  b: 2\n- - 3\n  - 4\n"
+        );
+    }
+
+    #[test]
+    fn yaml_escapes_other_controls_and_separators_by_code_point() {
+        assert_eq!(yaml_string("a\u{7}b"), "\"a\\u0007b\"");
+        assert_eq!(yaml_string("a\u{2028}b"), "\"a\\u2028b\"");
+    }
+
+    #[test]
+    fn yaml_writes_spaces_and_inner_quotes_plain() {
+        assert_eq!(yaml_string("a b"), "a b");
+        assert_eq!(yaml_string("a,b"), "a,b");
+        assert_eq!(yaml_string("it's"), "it's");
+        assert_eq!(yaml_string("a 'b'"), "\"a 'b'\"");
+    }
+
+    #[test]
     fn toml_leaves_out_null_fields() {
         let out = run(write_toml, &json!({"version": "0.1.0", "commit": null})).unwrap();
         assert_eq!(out, "version = \"0.1.0\"\n");

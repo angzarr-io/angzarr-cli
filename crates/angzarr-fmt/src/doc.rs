@@ -340,6 +340,12 @@ mod tests {
     }
 
     #[test]
+    fn humanize_lowercases_a_one_letter_capital_word() {
+        assert_eq!(humanize("a_B"), "A b");
+        assert_eq!(humanize("pageX"), "Page x");
+    }
+
+    #[test]
     fn humanize_handles_hyphens_and_the_empty_key() {
         assert_eq!(humanize("off-terminal"), "Off terminal");
         assert_eq!(humanize("SchemaVersion"), "Schema version");

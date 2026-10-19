@@ -354,6 +354,43 @@ mod tests {
     }
 
     #[test]
+    fn a_small_signed_number_selects_its_plural_category() {
+        let mut catalog = Catalog::en_us();
+        catalog
+            .add("t-n = { $n ->\n    [one] one file\n   *[other] { $n } files\n }\n")
+            .unwrap();
+        let d = Report::new("t-n", "n").arg("n", Arg::Int(1));
+        assert_eq!(catalog.render(&d), "one file");
+    }
+
+    #[test]
+    fn two_to_the_53_is_still_passed_as_a_number() {
+        let mut catalog = Catalog::en_us();
+        catalog
+            .add(concat!(
+                "t-n = { $n ->\n",
+                "    [9007199254740992] exact\n",
+                "    [-9007199254740992] exact negative\n",
+                "   *[other] text\n",
+                " }\n",
+            ))
+            .unwrap();
+        let n = |v: Arg| Report::new("t-n", "n").arg("n", v);
+        assert_eq!(catalog.render(&n(Arg::Uint(1 << 53))), "exact");
+        assert_eq!(catalog.render(&n(Arg::Int(1 << 53))), "exact");
+        assert_eq!(catalog.render(&n(Arg::Int(-(1 << 53)))), "exact negative");
+        assert_eq!(catalog.render(&n(Arg::Uint((1 << 53) + 1))), "text");
+    }
+
+    #[test]
+    fn a_variant_name_becomes_a_kebab_token() {
+        assert_eq!(kebab("ExpectedToken('a')"), "expected-token");
+        assert_eq!(kebab("Unbalanced"), "unbalanced");
+        assert_eq!(kebab("MissingValue { id }"), "missing-value");
+        assert_eq!(kebab("ABC"), "a-b-c");
+    }
+
+    #[test]
     fn an_unknown_code_falls_back_to_the_english() {
         let d = Report::new("not-in-catalog", "english fallback");
         assert_eq!(Catalog::en_us().render(&d), "english fallback");
