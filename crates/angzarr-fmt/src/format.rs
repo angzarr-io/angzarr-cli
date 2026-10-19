@@ -72,6 +72,17 @@ pub fn resolve(requested: Option<Format>, terminal: bool, off_terminal: Format) 
     }
 }
 
+/// The format a failure or warning is written to stderr in. The structured
+/// envelope goes out when the format was asked for (`explicit`) or stderr
+/// is not a terminal; a person at a terminal who did not ask gets text.
+pub fn diagnostic_format(format: Format, explicit: bool, stderr_terminal: bool) -> Format {
+    if explicit || !stderr_terminal {
+        format
+    } else {
+        Format::Text
+    }
+}
+
 /// A format name that is not one of [`Format::ALL`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnknownFormat {
@@ -123,6 +134,14 @@ mod tests {
     fn unset_off_a_terminal_is_the_configured_default() {
         assert_eq!(resolve(None, false, Format::Json), Format::Json);
         assert_eq!(resolve(None, false, Format::Toml), Format::Toml);
+    }
+
+    #[test]
+    fn a_failure_is_structured_when_asked_for_or_off_a_terminal() {
+        assert_eq!(diagnostic_format(Format::Json, true, true), Format::Json);
+        assert_eq!(diagnostic_format(Format::Json, false, false), Format::Json);
+        assert_eq!(diagnostic_format(Format::Json, false, true), Format::Text);
+        assert_eq!(diagnostic_format(Format::Yaml, true, false), Format::Yaml);
     }
 
     #[test]

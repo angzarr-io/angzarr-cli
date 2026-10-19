@@ -25,6 +25,14 @@ pub trait Failure: Diagnostic {
     }
 }
 
+/// Any failure boxes into the common form, so a command returning
+/// `Result<_, Box<dyn Failure>>` can `?` each of its failure types.
+impl<E: Failure + 'static> From<E> for Box<dyn Failure> {
+    fn from(e: E) -> Box<dyn Failure> {
+        Box::new(e)
+    }
+}
+
 /// A diagnostic as data: its code, its message in the catalog's language,
 /// and its args (a nested cause as an object of the same shape).
 pub fn diagnostic_value(catalog: &Catalog, d: &dyn Diagnostic) -> Value {

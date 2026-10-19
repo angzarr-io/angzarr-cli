@@ -44,3 +44,23 @@ fn an_unknown_format_fails_before_running_anything() {
     assert!(!out.status.success());
     assert!(out.stdout.is_empty());
 }
+
+/// A result stdout refuses is a failure on stderr, structured because
+/// stderr is piped, with the failure's exit status.
+#[cfg(target_os = "linux")]
+#[test]
+fn output_that_cannot_be_written_fails_on_stderr_with_status_1() {
+    let full = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_angzarr"))
+        .arg("version")
+        .stdout(full)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let value: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
+    assert_eq!(value["error"]["code"], "angzarr-fmt-write");
+    assert_eq!(value["error"]["args"]["kind"], "storage-full");
+}

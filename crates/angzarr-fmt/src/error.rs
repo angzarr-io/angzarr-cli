@@ -75,6 +75,12 @@ pub(crate) fn io_kind(kind: std::io::ErrorKind) -> &'static str {
     }
 }
 
+impl From<std::io::Error> for FmtError {
+    fn from(e: std::io::Error) -> FmtError {
+        FmtError::write(e)
+    }
+}
+
 impl fmt::Display for FmtError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

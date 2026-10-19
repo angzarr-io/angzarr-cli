@@ -7,7 +7,7 @@ plus the tooling to develop and operate them.
 | Crate | What it is |
 |---|---|
 | [`angzarr-fmt`](crates/angzarr-fmt) | CLI output: one result rendered as json, yaml, toml, text or markdown; localizable failures and warnings |
-| [`angzarr-fmt-clap`](crates/angzarr-fmt-clap) | angzarr-fmt for clap: the global `--format`, format resolution, the process tail |
+| [`angzarr-fmt-clap`](crates/angzarr-fmt-clap) | angzarr-fmt for clap: the global `--format`, format resolution, warnings and the process tail |
 | [`angzarr-cli`](crates/angzarr-cli) | the `angzarr` binary |
 
 ## Output
@@ -26,10 +26,16 @@ $ angzarr version | jq .version
 "0.1.0"
 ```
 
-A failure goes to stderr in the same format: `{"error": {...}, "remedy":
-{...}}` in a structured format, `Error:` and `Fix:` lines in text. Each
-diagnostic has a stable code and named args (`annals-diagnostic`), rendered
-through the crate's en-US Fluent catalog.
+A failure goes to stderr: `{"error": {...}, "remedy": {...}}` in the
+selected structured format when `--format` was given or stderr is not a
+terminal, otherwise `Error:` and `Fix:` lines. Warnings follow the same
+rule, as JSON Lines when structured. Each diagnostic has a stable code and
+named args (`annals-diagnostic`), rendered through the crate's en-US Fluent
+catalog.
+
+A command can write its result and still fail: a lint writes its findings
+(a list of diagnostics, each with a severity and an optional location) and
+exits 1 when any is an error.
 
 ## Building
 

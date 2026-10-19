@@ -2,8 +2,8 @@
 
 use std::process::ExitCode;
 
-use angzarr_fmt::{Catalog, Failure, Format, Viewable};
-use angzarr_fmt_clap::{FormatArgs, finish};
+use angzarr_fmt::{Catalog, FmtError, Format, Viewable};
+use angzarr_fmt_clap::{FormatArgs, Outcome};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 
@@ -52,9 +52,9 @@ fn catalog() -> Catalog {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let format = cli.format.resolve(Format::Json);
     let catalog = catalog();
+    let reporter = cli.format.reporter(Format::Json, &catalog, "angzarr");
     match cli.command {
-        Command::Version => finish(format, &catalog, Ok::<_, Box<dyn Failure>>(version())),
+        Command::Version => reporter.finish(Ok::<_, FmtError>(Outcome::ok(version()))),
     }
 }
