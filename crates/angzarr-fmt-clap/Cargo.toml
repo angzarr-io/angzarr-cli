@@ -1,0 +1,16 @@
+[package]
+name = "angzarr-fmt-clap"
+version = "0.1.0"
+description = "angzarr-fmt for clap: one global --format, the resolved format, and the process tail."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+# The only crate that joins angzarr-fmt and clap, so angzarr-fmt never links clap.
+[dependencies]
+angzarr-fmt.workspace = true
+clap.workspace = true
+
+[lints]
+workspace = true
