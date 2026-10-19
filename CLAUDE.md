@@ -10,7 +10,12 @@ rejected alternative may stay only as rationale ("not X, because ...").
 ## Hexagonal
 
 The core is pure: no I/O, no clap, no tonic, no file system. Use cases sit
-behind ports (traits); adapters implement them. Results are data: a command
+behind ports (traits); adapters implement them. `angzarr-cli-core` is the
+core (model, lint rules, and the annals domain each invocation runs in
+memory), `angzarr-cli-app` the use cases and ports, `angzarr-cli-adapters`
+the adapters, `angzarr-cli` the binary that wires them. In the run domain,
+decide reads the descriptor set from its context and apply only folds
+events; apply never sees the descriptor set. Results are data: a command
 returns one value and `angzarr-fmt` decides how it is written, so the output
 format is never a branch in business logic. `angzarr-fmt` knows nothing
 about angzarr or about clap; `angzarr-fmt-clap` is the only crate joining
