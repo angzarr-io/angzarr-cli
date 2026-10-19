@@ -2,7 +2,7 @@
 //! args fill its variables. A code the catalog lacks, or a message that does
 //! not format, falls back to the diagnostic's English `Display`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use annals_diagnostic::{Arg, Diagnostic};
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
@@ -73,78 +73,189 @@ impl Catalog {
     }
 }
 
-/// Problems with a catalog against the diagnostics it must cover: a code
-/// with no message, or a message whose variables are not exactly the code's
-/// args. Empty means the catalog is complete.
-pub fn check(ftl: &str, samples: &[Box<dyn Diagnostic>]) -> Vec<String> {
-    let resource = match fluent_syntax::parser::parse(ftl) {
-        Ok(resource) => resource,
-        Err((_, errors)) => return vec![format!("catalog does not parse: {errors:?}")],
-    };
+/// Problems with one crate's catalog against the diagnostics it must cover.
+/// Empty means the catalog is complete. The rules:
+///
+/// - The catalog parses, with no junk, no id twice, and a value for every
+///   message. A message names its own args: a message reference is refused.
+/// - Every code is kebab-case and starts with `prefix-`, has a message whose
+///   variables (in selects, function and term args, and attributes) are
+///   exactly its args, gives each arg once, and has a non-empty English
+///   `Display`.
+/// - A nested cause whose code starts with `prefix-` is checked in its own
+///   right; another crate's cause is that crate's catalog's to cover.
+/// - Every message belongs to some diagnostic.
+pub fn check(ftl: &str, prefix: &str, samples: &[Box<dyn Diagnostic>]) -> Vec<String> {
     let mut problems = Vec::new();
+    let messages = read_messages(ftl, &mut problems);
+    let mut seen = BTreeSet::new();
     for sample in samples {
-        let code = sample.code();
-        let message = resource.body.iter().find_map(|entry| match entry {
-            ast::Entry::Message(m) if m.id.name == code => Some(m),
-            _ => None,
-        });
-        let Some(message) = message else {
-            problems.push(format!("{code}: no message"));
-            continue;
-        };
-        let mut used = BTreeSet::new();
-        if let Some(pattern) = &message.value {
-            pattern_vars(pattern, &mut used);
-        }
-        let given: BTreeSet<String> = sample
-            .args()
-            .into_iter()
-            .map(|(name, _)| name.to_string())
-            .collect();
-        if used != given {
-            problems.push(format!(
-                "{code}: message uses {used:?}, the code gives {given:?}"
-            ));
+        check_one(&**sample, prefix, &messages, &mut problems, &mut seen);
+    }
+    for id in messages.keys() {
+        if !seen.contains(id.as_str()) {
+            problems.push(format!("{id}: no diagnostic has this code"));
         }
     }
     problems
 }
 
-fn pattern_vars(pattern: &ast::Pattern<&str>, out: &mut BTreeSet<String>) {
-    for element in &pattern.elements {
-        if let ast::PatternElement::Placeable { expression } = element {
-            expression_vars(expression, out);
+/// Message id to the variables its value and attributes use.
+type Messages = BTreeMap<String, BTreeSet<String>>;
+
+fn read_messages(ftl: &str, problems: &mut Vec<String>) -> Messages {
+    let resource = match fluent_syntax::parser::parse(ftl) {
+        Ok(resource) => resource,
+        Err((resource, errors)) => {
+            for e in &errors {
+                problems.push(format!("catalog syntax error: {e:?}"));
+            }
+            resource
+        }
+    };
+    let mut messages = Messages::new();
+    for entry in &resource.body {
+        match entry {
+            ast::Entry::Message(m) => {
+                let id = m.id.name;
+                let mut vars = BTreeSet::new();
+                let mut walk = Walk {
+                    id,
+                    vars: &mut vars,
+                    problems,
+                };
+                match &m.value {
+                    Some(value) => walk.pattern(value),
+                    None => walk.problems.push(format!("{id} has no value")),
+                }
+                for attribute in &m.attributes {
+                    walk.pattern(&attribute.value);
+                }
+                if messages.insert(id.to_string(), vars).is_some() {
+                    problems.push(format!("{id} twice"));
+                }
+            }
+            ast::Entry::Junk { content } => problems.push(format!("junk {content:?}")),
+            ast::Entry::Term(_)
+            | ast::Entry::Comment(_)
+            | ast::Entry::GroupComment(_)
+            | ast::Entry::ResourceComment(_) => {}
+        }
+    }
+    messages
+}
+
+fn check_one(
+    d: &dyn Diagnostic,
+    prefix: &str,
+    messages: &Messages,
+    problems: &mut Vec<String>,
+    seen: &mut BTreeSet<&'static str>,
+) {
+    let code = d.code();
+    seen.insert(code);
+    if d.to_string().trim().is_empty() {
+        problems.push(format!("{code}: empty English Display"));
+    }
+    if !code_ok(code, prefix) {
+        problems.push(format!("{code}: not kebab-case starting `{prefix}-`"));
+    }
+    let args = d.args();
+    let mut given = BTreeSet::new();
+    for (name, _) in &args {
+        if !given.insert(name.to_string()) {
+            problems.push(format!("{code}: arg {name} twice"));
+        }
+    }
+    match messages.get(code) {
+        None => problems.push(format!("{code}: no message")),
+        Some(used) if *used != given => problems.push(format!(
+            "{code}: message uses {used:?}, the code gives {given:?}"
+        )),
+        Some(_) => {}
+    }
+    for (_, arg) in &args {
+        if let Arg::Nested(inner) = arg
+            && inner.code().starts_with(&format!("{prefix}-"))
+        {
+            check_one(&**inner, prefix, messages, problems, seen);
         }
     }
 }
 
-fn expression_vars(expression: &ast::Expression<&str>, out: &mut BTreeSet<String>) {
-    match expression {
-        ast::Expression::Inline(inline) => inline_vars(inline, out),
-        ast::Expression::Select { selector, variants } => {
-            inline_vars(selector, out);
-            for variant in variants {
-                pattern_vars(&variant.value, out);
+/// kebab-case words of lowercase ASCII letters and digits after `prefix-`.
+fn code_ok(code: &str, prefix: &str) -> bool {
+    code.strip_prefix(prefix)
+        .and_then(|rest| rest.strip_prefix('-'))
+        .is_some_and(|rest| {
+            !rest.is_empty()
+                && rest.split('-').all(|word| {
+                    !word.is_empty()
+                        && word
+                            .bytes()
+                            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+                })
+        })
+}
+
+/// Collects one message's variables, refusing message references.
+struct Walk<'a> {
+    id: &'a str,
+    vars: &'a mut BTreeSet<String>,
+    problems: &'a mut Vec<String>,
+}
+
+impl Walk<'_> {
+    fn pattern(&mut self, pattern: &ast::Pattern<&str>) {
+        for element in &pattern.elements {
+            if let ast::PatternElement::Placeable { expression } = element {
+                self.expression(expression);
             }
         }
     }
-}
 
-fn inline_vars(inline: &ast::InlineExpression<&str>, out: &mut BTreeSet<String>) {
-    match inline {
-        ast::InlineExpression::VariableReference { id } => {
-            out.insert(id.name.to_string());
-        }
-        ast::InlineExpression::FunctionReference { arguments, .. } => {
-            for positional in &arguments.positional {
-                inline_vars(positional, out);
-            }
-            for named in &arguments.named {
-                inline_vars(&named.value, out);
+    fn expression(&mut self, expression: &ast::Expression<&str>) {
+        match expression {
+            ast::Expression::Inline(inline) => self.inline(inline),
+            ast::Expression::Select { selector, variants } => {
+                self.inline(selector);
+                for variant in variants {
+                    self.pattern(&variant.value);
+                }
             }
         }
-        ast::InlineExpression::Placeable { expression } => expression_vars(expression, out),
-        _ => {}
+    }
+
+    fn arguments(&mut self, arguments: &ast::CallArguments<&str>) {
+        for positional in &arguments.positional {
+            self.inline(positional);
+        }
+        for named in &arguments.named {
+            self.inline(&named.value);
+        }
+    }
+
+    fn inline(&mut self, inline: &ast::InlineExpression<&str>) {
+        match inline {
+            ast::InlineExpression::VariableReference { id } => {
+                self.vars.insert(id.name.to_string());
+            }
+            ast::InlineExpression::FunctionReference { arguments, .. } => {
+                self.arguments(arguments);
+            }
+            ast::InlineExpression::TermReference { arguments, .. } => {
+                if let Some(arguments) = arguments {
+                    self.arguments(arguments);
+                }
+            }
+            ast::InlineExpression::MessageReference { id, .. } => self.problems.push(format!(
+                "{}: references message {}; name the args instead",
+                self.id, id.name
+            )),
+            ast::InlineExpression::Placeable { expression } => self.expression(expression),
+            ast::InlineExpression::StringLiteral { .. }
+            | ast::InlineExpression::NumberLiteral { .. } => {}
+        }
     }
 }
 
@@ -156,7 +267,7 @@ mod tests {
     #[test]
     fn this_crates_catalog_covers_every_diagnostic_with_exactly_its_args() {
         assert_eq!(
-            check(EN_US, &crate::error::diagnostic_samples()),
+            check(EN_US, "angzarr-fmt", &crate::error::diagnostic_samples()),
             Vec::<String>::new()
         );
     }
@@ -197,15 +308,129 @@ mod tests {
         assert!(catalog.add("a = two\n").is_err());
     }
 
+    fn problems(ftl: &str, samples: Vec<Box<dyn Diagnostic>>) -> Vec<String> {
+        check(ftl, "t", &samples)
+    }
+
+    fn has(problems: &[String], needle: &str) -> bool {
+        problems.iter().any(|p| p.contains(needle))
+    }
+
     #[test]
     fn check_names_a_missing_message_and_mismatched_args() {
-        let samples: Vec<Box<dyn Diagnostic>> = vec![
-            Box::new(Report::new("missing", "m")),
-            Box::new(Report::new("wrong-args", "w").arg("expected", "x")),
-        ];
-        let problems = check("wrong-args = uses { $other }\n", &samples);
-        assert_eq!(problems.len(), 2);
-        assert!(problems[0].starts_with("missing: no message"));
-        assert!(problems[1].starts_with("wrong-args:"));
+        let p = problems(
+            "t-wrong-args = uses { $other }\n",
+            vec![
+                Box::new(Report::new("t-missing", "m")),
+                Box::new(Report::new("t-wrong-args", "w").arg("expected", "x")),
+            ],
+        );
+        assert_eq!(p.len(), 2, "{p:?}");
+        assert!(p[0].starts_with("t-missing: no message"));
+        assert!(p[1].starts_with("t-wrong-args:"));
+    }
+
+    #[test]
+    fn check_refuses_a_message_reference() {
+        let p = problems(
+            "t-a = see { t-b }\nt-b = b\n",
+            vec![
+                Box::new(Report::new("t-a", "a")),
+                Box::new(Report::new("t-b", "b")),
+            ],
+        );
+        assert_eq!(p.len(), 1, "{p:?}");
+        assert!(has(&p, "t-a: references message t-b"));
+    }
+
+    #[test]
+    fn check_reads_variables_in_selects_functions_term_args_and_attributes() {
+        let ftl = "t-a = { $x ->\n    [one] one { $y }\n   *[other] { NUMBER($z) } { -t($w) }\n }\n    .tip = { $v }\n-t = term\n";
+        let mut sample = Report::new("t-a", "a");
+        for name in ["v", "w", "x", "y", "z"] {
+            sample = sample.arg(name, "1");
+        }
+        assert_eq!(problems(ftl, vec![Box::new(sample)]), Vec::<String>::new());
+    }
+
+    #[test]
+    fn check_flags_junk_duplicate_ids_and_messages_without_a_value() {
+        let p = problems(
+            "t-a = one\nt-a = two\nt-b =\n    .attr = x\nthis is not fluent\n",
+            vec![
+                Box::new(Report::new("t-a", "a")),
+                Box::new(Report::new("t-b", "b")),
+            ],
+        );
+        assert!(has(&p, "t-a twice"), "{p:?}");
+        assert!(has(&p, "t-b has no value"), "{p:?}");
+        assert!(has(&p, "junk"), "{p:?}");
+    }
+
+    #[test]
+    fn check_flags_a_message_no_diagnostic_has() {
+        let p = problems(
+            "t-a = a\nt-orphan = o\n",
+            vec![Box::new(Report::new("t-a", "a"))],
+        );
+        assert_eq!(p.len(), 1, "{p:?}");
+        assert!(has(&p, "t-orphan: no diagnostic has this code"));
+    }
+
+    #[test]
+    fn check_flags_codes_that_are_not_kebab_case_under_the_prefix() {
+        let ftl = "t-Upper = u\nt--double = d\nother-x = o\nt = bare\n";
+        let p = problems(
+            ftl,
+            vec![
+                Box::new(Report::new("t-Upper", "u")),
+                Box::new(Report::new("t--double", "d")),
+                Box::new(Report::new("other-x", "o")),
+                Box::new(Report::new("t", "bare")),
+            ],
+        );
+        for code in ["t-Upper", "t--double", "other-x", "t:"] {
+            assert!(has(&p, code), "{code} not flagged: {p:?}");
+        }
+        assert_eq!(p.len(), 4, "{p:?}");
+    }
+
+    #[test]
+    fn check_flags_an_arg_given_twice_and_an_empty_english() {
+        let p = problems(
+            "t-a = { $x }\nt-b = b\n",
+            vec![
+                Box::new(Report::new("t-a", "a").arg("x", "1").arg("x", "2")),
+                Box::new(Report::new("t-b", " ")),
+            ],
+        );
+        assert!(has(&p, "t-a: arg x twice"), "{p:?}");
+        assert!(has(&p, "t-b: empty English"), "{p:?}");
+    }
+
+    #[test]
+    fn check_follows_nested_causes_under_the_prefix() {
+        let inner = Report::new("t-inner", "i").arg("path", "p");
+        let foreign = Report::new("other-inner", "o");
+        let outer = Report::new("t-outer", "o")
+            .arg("cause", Arg::nested(&inner))
+            .arg("other", Arg::nested(&foreign));
+        let p = problems(
+            "t-outer = { $cause } { $other }\n",
+            vec![Box::new(outer.clone())],
+        );
+        assert_eq!(p.len(), 1, "{p:?}");
+        assert!(p[0].starts_with("t-inner: no message"));
+        let p = problems(
+            "t-outer = { $cause } { $other }\nt-inner = { $path }\n",
+            vec![Box::new(outer)],
+        );
+        assert_eq!(p, Vec::<String>::new());
+    }
+
+    #[test]
+    fn check_reports_a_syntax_error() {
+        let p = problems("t-a = { $x\n", vec![]);
+        assert!(!p.is_empty());
     }
 }
