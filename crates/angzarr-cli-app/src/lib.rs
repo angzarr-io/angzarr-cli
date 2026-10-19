@@ -4,12 +4,17 @@
 //!
 //! - [`lint`]: every finding, as a [`LintReport`] (`{"diagnostics": [...]}`).
 //! - [`model`]: the component model, as a [`ModelReport`].
+//!
+//! [`init`] creates a project's `.angzarr/` directory through the
+//! [`Project`] port, and returns what it wrote (or, dry, would write) as an
+//! [`InitReport`].
 
 use std::fmt;
 
 use angzarr_cli_core::DescriptorSet;
 use angzarr_cli_core::lint::{Finding, Severity as LintSeverity};
 use angzarr_cli_core::model::ComponentModel;
+use angzarr_cli_core::project::{self, Config, Lock, ProjectError, SpecCommit, Target};
 use angzarr_cli_core::run::{self, Refused, Run, RunCommand, RunReport};
 use angzarr_fmt::{
     Block, Catalog, Diagnostics, Doc, Failure, FmtError, NONE, RenderCtx, Severity, Viewable,
@@ -29,17 +34,72 @@ pub trait DescriptorSource {
     fn load(&self) -> Result<DescriptorSet, Box<dyn Failure>>;
 }
 
-/// A use case could not finish its run.
+/// A project's `.angzarr/` directory: its settings read and, for a new
+/// project, written.
+pub trait Project {
+    /// The project directory as messages name it.
+    fn dir(&self) -> String;
+    /// Whether the project directory is there.
+    fn exists(&self) -> Result<bool, Box<dyn Failure>>;
+    /// Reads `config.yaml`.
+    fn read_config(&self) -> Result<Config, Box<dyn Failure>>;
+    /// Reads `lock.yaml`.
+    fn read_lock(&self) -> Result<Lock, Box<dyn Failure>>;
+    /// Creates the project directory with `config`, `lock` and the
+    /// `.gitignore` that keeps the cache out of version control. Refuses
+    /// with [`AppError::ProjectExists`] when the directory is there.
+    fn create(&self, config: &Config, lock: &Lock) -> Result<(), Box<dyn Failure>>;
+}
+
+/// Invalid project settings as a failure: the core's diagnostic, with its
+/// own code and remedy.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProjectInvalid(pub ProjectError);
+
+impl fmt::Display for ProjectInvalid {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::error::Error for ProjectInvalid {}
+
+impl Diagnostic for ProjectInvalid {
+    fn code(&self) -> &'static str {
+        self.0.code()
+    }
+
+    fn args(&self) -> Vec<(&'static str, Arg)> {
+        self.0.args()
+    }
+}
+
+impl Failure for ProjectInvalid {
+    fn remedy(&self) -> Option<Report> {
+        self.0.remedy()
+    }
+}
+
+impl From<ProjectError> for ProjectInvalid {
+    fn from(e: ProjectError) -> ProjectInvalid {
+        ProjectInvalid(e)
+    }
+}
+
+/// A use case could not finish.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AppError {
     /// The run refused one of its own steps: a bug in the use case.
     RunRefused { reason: Refused },
+    /// `init` found the project directory already there.
+    ProjectExists { dir: String },
 }
 
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AppError::RunRefused { reason } => write!(f, "the run refused a step: {reason}"),
+            AppError::ProjectExists { dir } => write!(f, "{dir} already exists"),
         }
     }
 }
@@ -50,23 +110,44 @@ impl Diagnostic for AppError {
     fn code(&self) -> &'static str {
         match self {
             AppError::RunRefused { .. } => "angzarr-cli-app-run-refused",
+            AppError::ProjectExists { .. } => "angzarr-cli-app-project-exists",
         }
     }
 
     fn args(&self) -> Vec<(&'static str, Arg)> {
         match self {
             AppError::RunRefused { reason } => vec![("reason", Arg::nested(reason))],
+            AppError::ProjectExists { dir } => vec![("dir", dir.as_str().into())],
         }
     }
 }
 
-impl Failure for AppError {}
+impl Failure for AppError {
+    fn remedy(&self) -> Option<Report> {
+        match self {
+            AppError::RunRefused { .. } => None,
+            AppError::ProjectExists { dir } => Some(
+                Report::new(
+                    "angzarr-cli-app-fix-project-exists",
+                    format!("edit the settings in {dir}, or remove it to start over"),
+                )
+                .arg("dir", dir.as_str()),
+            ),
+        }
+    }
+}
 
 /// One of every diagnostic this crate raises, for the catalog check.
 pub fn diagnostic_samples() -> Vec<Box<dyn Diagnostic>> {
-    vec![Box::new(AppError::RunRefused {
-        reason: Refused::NoModel,
-    })]
+    let exists = AppError::ProjectExists { dir: "x".into() };
+    let remedy = exists.remedy().expect("an existing project has a remedy");
+    vec![
+        Box::new(AppError::RunRefused {
+            reason: Refused::NoModel,
+        }),
+        Box::new(exists),
+        Box::new(remedy),
+    ]
 }
 
 /// Runs `commands` in a fresh in-memory run over `set`.
@@ -95,6 +176,56 @@ pub fn model(source: &dyn DescriptorSource) -> Result<ModelReport, Box<dyn Failu
     let set = source.load()?;
     let report = drive(set, &[RunCommand::ObserveModel])?;
     Ok(ModelReport(report.model.unwrap_or_default()))
+}
+
+/// What `angzarr init` is asked for, as the user typed it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct InitRequest {
+    /// Each `--target`.
+    pub targets: Vec<String>,
+    /// `--spec-commit`.
+    pub spec_commit: String,
+    /// Report what would be written, and write nothing.
+    pub dry_run: bool,
+}
+
+/// What `init` wrote, or with `dry_run` would write: the files, relative to
+/// the project root, and the settings in them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct InitReport {
+    pub dry_run: bool,
+    pub files: Vec<String>,
+    pub config: Config,
+    pub lock: Lock,
+}
+
+impl Viewable for InitReport {}
+
+/// Creates a new project's `.angzarr/`: a config enabling `targets` and a
+/// lock on `spec_commit`. Refuses when the directory is there, dry or not.
+pub fn init(project: &dyn Project, request: &InitRequest) -> Result<InitReport, Box<dyn Failure>> {
+    let targets = request
+        .targets
+        .iter()
+        .map(|t| Target::parse("--target", t))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ProjectInvalid)?;
+    let commit =
+        SpecCommit::parse("--spec-commit", &request.spec_commit).map_err(ProjectInvalid)?;
+    if project.exists()? {
+        return Err(AppError::ProjectExists { dir: project.dir() }.into());
+    }
+    let config = Config::new(targets);
+    let lock = Lock::new(commit);
+    if !request.dry_run {
+        project.create(&config, &lock)?;
+    }
+    Ok(InitReport {
+        dry_run: request.dry_run,
+        files: project::files(),
+        config,
+        lock,
+    })
 }
 
 /// A lint's findings. The machine shape is `{"diagnostics": [...]}`, a
@@ -457,6 +588,123 @@ mod tests {
             rendered(Format::Json, &report),
             "{\n  \"components\": []\n}\n"
         );
+    }
+
+    const SHA: &str = "b1f00d2710eb7bee60308f6df520893d782012a6";
+
+    /// A project directory in memory, holding the settings as data.
+    #[derive(Default)]
+    struct Memory {
+        created: std::cell::RefCell<Option<(Config, Lock)>>,
+    }
+
+    impl Project for Memory {
+        fn dir(&self) -> String {
+            "/p/.angzarr".into()
+        }
+        fn exists(&self) -> Result<bool, Box<dyn Failure>> {
+            Ok(self.created.borrow().is_some())
+        }
+        fn read_config(&self) -> Result<Config, Box<dyn Failure>> {
+            Ok(self.created.borrow().clone().unwrap().0)
+        }
+        fn read_lock(&self) -> Result<Lock, Box<dyn Failure>> {
+            Ok(self.created.borrow().clone().unwrap().1)
+        }
+        fn create(&self, config: &Config, lock: &Lock) -> Result<(), Box<dyn Failure>> {
+            if self.exists()? {
+                return Err(AppError::ProjectExists { dir: self.dir() }.into());
+            }
+            *self.created.borrow_mut() = Some((config.clone(), lock.clone()));
+            Ok(())
+        }
+    }
+
+    fn request(targets: &[&str], commit: &str, dry_run: bool) -> InitRequest {
+        InitRequest {
+            targets: targets.iter().map(|t| t.to_string()).collect(),
+            spec_commit: commit.into(),
+            dry_run,
+        }
+    }
+
+    #[test]
+    fn init_writes_a_config_with_the_targets_and_a_lock_on_the_commit() {
+        let project = Memory::default();
+        let report = init(&project, &request(&["python", "rust"], SHA, false)).unwrap();
+        assert!(!report.dry_run);
+        assert_eq!(
+            report.files,
+            [
+                ".angzarr/config.yaml",
+                ".angzarr/lock.yaml",
+                ".angzarr/.gitignore"
+            ]
+        );
+        assert_eq!(project.read_config().unwrap(), report.config);
+        assert_eq!(project.read_lock().unwrap(), report.lock);
+        assert_eq!(report.lock.spec.commit.as_str(), SHA);
+        let value: Value = serde_json::from_str(&rendered(Format::Json, &report)).unwrap();
+        assert_eq!(
+            value["config"],
+            json!({
+                "protos": "proto",
+                "targets": {"rust": {"out": "gen/rust"}, "python": {"out": "gen/python"}},
+                "output": {},
+            })
+        );
+        assert_eq!(
+            value["lock"],
+            json!({"spec": {"commit": SHA}, "targets": {}})
+        );
+    }
+
+    #[test]
+    fn init_with_no_target_enables_none() {
+        let project = Memory::default();
+        let report = init(&project, &request(&[], SHA, false)).unwrap();
+        assert!(report.config.targets.is_empty());
+    }
+
+    #[test]
+    fn a_dry_init_reports_the_same_and_writes_nothing() {
+        let project = Memory::default();
+        let dry = init(&project, &request(&["rust"], SHA, true)).unwrap();
+        assert!(dry.dry_run);
+        assert!(!project.exists().unwrap());
+        let wet = init(&project, &request(&["rust"], SHA, false)).unwrap();
+        assert_eq!((dry.config, dry.lock), (wet.config, wet.lock));
+    }
+
+    #[test]
+    fn init_refuses_an_existing_project_with_a_remedy_dry_or_not() {
+        let project = Memory::default();
+        init(&project, &request(&[], SHA, false)).unwrap();
+        for dry_run in [false, true] {
+            let err = init(&project, &request(&[], SHA, dry_run)).unwrap_err();
+            assert_eq!(err.code(), "angzarr-cli-app-project-exists");
+            let remedy = err.remedy().unwrap();
+            assert_eq!(remedy.code(), "angzarr-cli-app-fix-project-exists");
+            assert_eq!(
+                catalog().render(&remedy),
+                "edit the settings in /p/.angzarr, or remove it to start over"
+            );
+        }
+    }
+
+    #[test]
+    fn init_refuses_an_unknown_target_or_a_short_commit_before_writing() {
+        let project = Memory::default();
+        let err = init(&project, &request(&["rust", "go"], SHA, false)).unwrap_err();
+        assert_eq!(err.code(), "angzarr-cli-core-project-unknown-target");
+        assert_eq!(
+            catalog().render(&*err),
+            "--target: \"go\" is not a target angzarr generates for"
+        );
+        assert_eq!(err.remedy().unwrap().code(), "angzarr-cli-core-fix-target");
+        let err = init(&project, &request(&[], "b1f00d2", false)).unwrap_err();
+        assert_eq!(err.code(), "angzarr-cli-core-project-bad-commit");
+        assert!(!project.exists().unwrap());
     }
 
     #[test]
