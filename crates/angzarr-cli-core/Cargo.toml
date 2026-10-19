@@ -1,0 +1,26 @@
+[package]
+name = "angzarr-cli-core"
+version = "0.1.0"
+description = "The angzarr component model read from io.angzarr.v1 options, and its lint rules. Pure: no I/O."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[features]
+# Descriptor-set fixtures for other crates' tests.
+test-support = []
+
+[dependencies]
+angzarr-proto.workspace = true
+annals.workspace = true
+annals-diagnostic.workspace = true
+prost.workspace = true
+prost-reflect.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+angzarr-fmt.workspace = true
+
+[lints]
+workspace = true
