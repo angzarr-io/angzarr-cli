@@ -464,6 +464,8 @@ mod tests {
         assert_eq!(snake("HTTPGet"), "http_get");
         assert_eq!(snake("HttpGet"), "http_get");
         assert_eq!(snake("Increment"), "increment");
+        assert_eq!(snake("fooBAR"), "foo_bar");
+        assert_eq!(snake("getV"), "get_v");
         assert_eq!(lower_first("PlaceOrder"), "placeOrder");
     }
 

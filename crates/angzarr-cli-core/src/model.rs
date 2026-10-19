@@ -559,6 +559,62 @@ mod tests {
     }
 
     #[test]
+    fn every_resolution_has_its_own_token() {
+        for (r, token) in [
+            (ConflictResolution::Commutative, "commutative"),
+            (ConflictResolution::Strict, "strict"),
+            (ConflictResolution::AggregateHandles, "aggregate-handles"),
+            (ConflictResolution::Unspecified, "unspecified"),
+        ] {
+            assert_eq!(resolution_token(r as i32), token);
+        }
+        assert_eq!(resolution_token(9999), "unspecified");
+    }
+
+    /// `M0` descends into `M1`, ... into `M{last}`: a chain of distinct types.
+    fn chain(last: usize) -> DescriptorSet {
+        let mut file = File::new("chain.proto", "d.v1");
+        for i in 0..=last {
+            let mut m = Msg::new(&format!("M{i}"));
+            if i < last {
+                m = m.field(
+                    Fld::message("next", 1, &format!(".d.v1.M{}", i + 1)).conflict(ConflictUnit {
+                        descend: true,
+                        ..Default::default()
+                    }),
+                );
+            }
+            file = file.message(m);
+        }
+        Image::new().file(file).set()
+    }
+
+    #[test]
+    fn descend_counts_depth_from_the_state_message() {
+        let set = chain(2);
+        let root = set.pool.get_message_by_name("d.v1.M0").unwrap();
+        let reached: Vec<_> = descended(&root)
+            .into_iter()
+            .map(|(m, d)| (m.name().to_string(), d))
+            .collect();
+        assert_eq!(
+            reached,
+            vec![("M0".into(), 0), ("M1".into(), 1), ("M2".into(), 2)]
+        );
+    }
+
+    #[test]
+    fn a_message_at_the_depth_bound_is_reached_but_not_descended() {
+        let set = chain(DESCEND_DEPTH + 1);
+        let root = set.pool.get_message_by_name("d.v1.M0").unwrap();
+        let reached = descended(&root);
+        assert_eq!(reached.len(), DESCEND_DEPTH + 1);
+        let (last, depth) = reached.last().unwrap();
+        assert_eq!(last.name(), format!("M{DESCEND_DEPTH}"));
+        assert_eq!(*depth, DESCEND_DEPTH);
+    }
+
+    #[test]
     fn the_model_serializes_with_kebab_tokens_and_no_nulls() {
         let model = build(&Image::new().file(counter()).set());
         let value = serde_json::to_value(&model).unwrap();

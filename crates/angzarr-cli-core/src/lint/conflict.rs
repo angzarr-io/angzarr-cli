@@ -476,7 +476,8 @@ mod tests {
                 .component(agg())
                 .state(commutative())
                 .field(Fld::scalar("a", 1, ty::STRING).conflict(unit(false, "", true, false)))
-                .field(Fld::scalar("b", 2, ty::STRING).conflict(unit(false, "", true, true))),
+                .field(Fld::scalar("b", 2, ty::STRING).conflict(unit(false, "", true, true)))
+                .field(Fld::message("c", 3, ".s.v1.S").conflict(unit(true, "", false, true))),
         );
         assert_eq!(
             found(&lint(file)),
@@ -484,6 +485,7 @@ mod tests {
                 "ordered-without-key s.proto#s.v1.S.a",
                 "whole-state-combined s.proto#s.v1.S.b",
                 "ordered-without-key s.proto#s.v1.S.b",
+                "whole-state-combined s.proto#s.v1.S.c",
             ]
         );
     }
@@ -528,6 +530,13 @@ mod tests {
         assert_eq!(
             found(&lint(oneof(
                 Some(unit(true, "", false, false)),
+                Some(mark())
+            ))),
+            vec!["oneof-member-refined s.proto#s.v1.S.pay"]
+        );
+        assert_eq!(
+            found(&lint(oneof(
+                Some(unit(false, "", true, false)),
                 Some(mark())
             ))),
             vec!["oneof-member-refined s.proto#s.v1.S.pay"]

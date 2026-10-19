@@ -51,6 +51,25 @@ mod tests {
     }
 
     #[test]
+    fn the_catalog_selects_the_wrong_shape_by_its_token() {
+        let mut catalog = angzarr_fmt::Catalog::en_us();
+        catalog.add(EN_US).unwrap();
+        for (shape, text) in [
+            (project::Shape::Mapping, "c: targets must be a mapping"),
+            (project::Shape::Scalar, "c: targets must be a single value"),
+        ] {
+            let e = project::ProjectError::WrongShape {
+                file: "c".into(),
+                key: "targets".into(),
+                shape,
+            };
+            assert_eq!(catalog.render(&e), text);
+        }
+        assert_eq!(project::Shape::Mapping.token(), "mapping");
+        assert_eq!(project::Shape::Scalar.token(), "scalar");
+    }
+
+    #[test]
     fn the_catalog_renders_a_selected_kind() {
         let mut catalog = angzarr_fmt::Catalog::en_us();
         catalog.add(EN_US).unwrap();
