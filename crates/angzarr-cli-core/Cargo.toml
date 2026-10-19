@@ -21,6 +21,7 @@ serde.workspace = true
 
 [dev-dependencies]
 angzarr-fmt.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

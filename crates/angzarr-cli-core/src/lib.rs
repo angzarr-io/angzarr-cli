@@ -4,6 +4,7 @@
 //! Pure: no I/O, no argument parsing, no file system. A descriptor set comes
 //! in as a [`DescriptorSet`]; results go out as data.
 
+pub mod model;
 pub mod options;
 
 #[cfg(any(test, feature = "test-support"))]
