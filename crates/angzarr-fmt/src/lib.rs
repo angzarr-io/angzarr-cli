@@ -106,7 +106,7 @@ mod tests {
         );
         assert_eq!(
             rendered(Format::Yaml, &v),
-            "name: angzarr\nversion: 0.1.0\n"
+            "name: angzarr\nversion: \"0.1.0\"\n"
         );
         assert_eq!(
             rendered(Format::Toml, &v),

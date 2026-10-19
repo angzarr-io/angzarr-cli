@@ -15,26 +15,171 @@ pub fn write_json(w: &mut dyn Write, value: &Value) -> Result<(), FmtError> {
     writeln!(w, "{text}").map_err(FmtError::write)
 }
 
-/// YAML through annals-yaml's writer, which writes a scalar plain only when
-/// it reads back unchanged.
+/// YAML, block style. A string is written plain only when every YAML 1.1
+/// and 1.2 core-schema reader reads it back as that same string; anything
+/// else (a bool, null, number or timestamp look-alike, an indicator, edge
+/// space, a control character, the empty string) is double-quoted.
+/// Numbers, bools and null are written as themselves; an empty collection
+/// is `{}` or `[]`.
 pub fn write_yaml(w: &mut dyn Write, value: &Value) -> Result<(), FmtError> {
-    // Small collections of scalars go on one line once nested two levels.
-    const FLOW_DEPTH: usize = 2;
-    w.write_all(annals_yaml::write(&to_yaml(value), FLOW_DEPTH).as_bytes())
-        .map_err(FmtError::write)
+    let mut out = String::new();
+    if is_block(value) {
+        yaml_block(&mut out, value, 0);
+    } else {
+        out.push_str(&yaml_inline(value));
+        out.push('\n');
+    }
+    w.write_all(out.as_bytes()).map_err(FmtError::write)
 }
 
-fn to_yaml(value: &Value) -> annals_yaml::Value {
+/// A non-empty collection: written over several lines.
+fn is_block(value: &Value) -> bool {
     match value {
-        Value::Null => annals_yaml::Value::Null,
-        Value::Bool(b) => annals_yaml::Value::scalar(b.to_string()),
-        Value::Number(n) => annals_yaml::Value::scalar(n.to_string()),
-        Value::String(s) => annals_yaml::Value::scalar(s.clone()),
-        Value::Array(items) => annals_yaml::Value::Seq(items.iter().map(to_yaml).collect()),
+        Value::Array(items) => !items.is_empty(),
+        Value::Object(map) => !map.is_empty(),
+        _ => false,
+    }
+}
+
+/// Writes a non-empty collection, each line starting at `indent`.
+fn yaml_block(out: &mut String, value: &Value, indent: usize) {
+    let pad = " ".repeat(indent);
+    match value {
         Value::Object(map) => {
-            annals_yaml::Value::Map(map.iter().map(|(k, v)| (k.clone(), to_yaml(v))).collect())
+            for (key, v) in map {
+                out.push_str(&pad);
+                out.push_str(&yaml_string(key));
+                out.push(':');
+                yaml_child(out, v, indent + 2, false);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                out.push_str(&pad);
+                out.push('-');
+                yaml_child(out, item, indent + 2, true);
+            }
+        }
+        _ => unreachable!("only collections are written as blocks"),
+    }
+}
+
+/// The value after `key:` or `-`. A collection under a sequence item starts
+/// on the item's own line (`- a: 1`, `- - 1`).
+fn yaml_child(out: &mut String, value: &Value, indent: usize, compact: bool) {
+    if !is_block(value) {
+        out.push(' ');
+        out.push_str(&yaml_inline(value));
+        out.push('\n');
+    } else if compact {
+        let mut nested = String::new();
+        yaml_block(&mut nested, value, indent);
+        out.push(' ');
+        out.push_str(&nested[indent..]);
+    } else {
+        out.push('\n');
+        yaml_block(out, value, indent);
+    }
+}
+
+/// A scalar or an empty collection, on one line.
+fn yaml_inline(value: &Value) -> String {
+    match value {
+        Value::Null => "null".into(),
+        Value::Bool(b) => b.to_string(),
+        Value::Number(n) => yaml_number(n),
+        Value::String(s) => yaml_string(s),
+        Value::Array(_) => "[]".into(),
+        Value::Object(_) => "{}".into(),
+    }
+}
+
+/// A float exponent with a dot and a signed exponent (`1.0e+300`), the form
+/// YAML 1.1 reads as a float as well as 1.2.
+fn yaml_number(n: &serde_json::Number) -> String {
+    let text = n.to_string();
+    let Some(at) = text.find(['e', 'E']) else {
+        return text;
+    };
+    let (mantissa, exponent) = text.split_at(at);
+    let exponent = &exponent[1..];
+    let mantissa = if mantissa.contains('.') {
+        mantissa.to_string()
+    } else {
+        format!("{mantissa}.0")
+    };
+    let sign = if exponent.starts_with(['+', '-']) {
+        ""
+    } else {
+        "+"
+    };
+    format!("{mantissa}e{sign}{exponent}")
+}
+
+fn yaml_string(s: &str) -> String {
+    if plain_ok(s) {
+        return s.to_string();
+    }
+    let mut out = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            '\0' => out.push_str("\\0"),
+            c if needs_escape(c) => out.push_str(&format!("\\u{:04X}", c as u32)),
+            c => out.push(c),
         }
     }
+    out.push('"');
+    out
+}
+
+/// A character a double-quoted scalar writes as an escape: controls, the
+/// line and paragraph separators, and the byte order mark.
+fn needs_escape(c: char) -> bool {
+    c.is_control() || matches!(c, '\u{2028}' | '\u{2029}' | '\u{feff}')
+}
+
+/// Whether `s` reads back as itself when written plain, under the YAML 1.1
+/// types (bool, null, int, float, timestamp, merge, value) and the 1.2 core
+/// schema. Conservative: a string that only might be retyped is quoted.
+fn plain_ok(s: &str) -> bool {
+    let Some(first) = s.chars().next() else {
+        return false;
+    };
+    if s.starts_with([' ', '\t']) || s.ends_with([' ', '\t']) || s.chars().any(needs_escape) {
+        return false;
+    }
+    // Indicators that start some other node, quoted scalar or document marker.
+    if "-?:,[]{}#&*!|>'\"%@`".contains(first) || s.starts_with("...") {
+        return false;
+    }
+    if s.contains(": ") || s.contains(" #") || s.ends_with(':') {
+        return false;
+    }
+    // A quote after a space or flow indicator opens a quoted scalar for some
+    // readers.
+    if s.as_bytes()
+        .windows(2)
+        .any(|w| matches!(w[0], b' ' | b'[' | b'{' | b',') && matches!(w[1], b'"' | b'\''))
+    {
+        return false;
+    }
+    let lower = s.to_ascii_lowercase();
+    const WORDS: [&str; 13] = [
+        "y", "n", "yes", "no", "true", "false", "on", "off", "null", "~", "<<", "=", ".nan",
+    ];
+    if WORDS.contains(&lower.as_str()) {
+        return false;
+    }
+    // Every int, float, sexagesimal and timestamp form starts with a digit,
+    // or a sign or dot before a digit, or is a signed or unsigned `.inf`.
+    let unsigned = lower.strip_prefix(['+', '-']).unwrap_or(&lower);
+    let undotted = unsigned.strip_prefix('.').unwrap_or(unsigned);
+    !(undotted.starts_with(|c: char| c.is_ascii_digit()) || unsigned == ".inf")
 }
 
 /// TOML. A document must be a table, and TOML has no null: a null field is
@@ -131,6 +276,123 @@ mod tests {
             Some("angzarr")
         );
         assert_eq!(back.get("commit"), Some(&annals_yaml::Value::Null));
+    }
+
+    /// Every string a YAML 1.1 or 1.2 core-schema resolver would read as
+    /// something else (or as a different string) is double-quoted, and reads
+    /// back as the same string.
+    #[test]
+    fn yaml_quotes_every_string_a_typed_reader_would_retype() {
+        let tricky = [
+            "true",
+            "True",
+            "FALSE",
+            "yes",
+            "No",
+            "on",
+            "OFF",
+            "y",
+            "n",
+            "123",
+            "-7",
+            "+1",
+            "1.10",
+            "0.1.0",
+            "0123456",
+            "0x1f",
+            "0o17",
+            "0b101",
+            "1_000",
+            "1:20",
+            "1e3",
+            ".5",
+            ".inf",
+            "-.inf",
+            ".NaN",
+            "null",
+            "Null",
+            "~",
+            "",
+            "2026-10-18",
+            "2026-10-18T10:00:00Z",
+            " lead",
+            "trail ",
+            "a: b",
+            "a #b",
+            "end:",
+            "- x",
+            "? x",
+            "[x]",
+            "{x}",
+            "#x",
+            "&x",
+            "*x",
+            "!x",
+            "|x",
+            ">x",
+            "'x",
+            "\"x",
+            "%x",
+            "@x",
+            "`x",
+            ",x",
+            "...",
+            "<<",
+            "=",
+            "line\nbreak",
+            "tab\there",
+            "nul\u{0}",
+            "bell\u{7}",
+            "del\u{7f}",
+            "nel\u{85}",
+            "ls\u{2028}",
+            "bom\u{feff}",
+        ];
+        for s in tricky {
+            let out = run(write_yaml, &json!({ "k": s })).unwrap();
+            assert!(out.starts_with("k: \""), "{s:?} written plain: {out:?}");
+            let back = annals_yaml::parse(&out).unwrap();
+            assert_eq!(
+                back.get("k").and_then(annals_yaml::Value::as_str),
+                Some(s),
+                "{s:?} did not read back: {out:?}"
+            );
+        }
+        let out = run(write_yaml, &json!({ "yes": 1 })).unwrap();
+        assert_eq!(out, "\"yes\": 1\n");
+    }
+
+    #[test]
+    fn yaml_writes_ordinary_strings_plain_and_typed_values_typed() {
+        let out = run(
+            write_yaml,
+            &json!({"name": "angzarr", "path": "src/lib.rs", "count": 3, "f": 1.5, "ok": true,
+                    "none": null, "big": 1e300}),
+        )
+        .unwrap();
+        assert_eq!(
+            out,
+            "name: angzarr\npath: src/lib.rs\ncount: 3\nf: 1.5\nok: true\nnone: null\nbig: 1.0e+300\n"
+        );
+    }
+
+    #[test]
+    fn yaml_nests_block_collections_and_writes_empties_in_flow() {
+        let out = run(
+            write_yaml,
+            &json!({"build": {"commit": "abc"}, "langs": ["rust", "go"], "files": [
+                {"path": "a", "tags": []}, {"path": "b", "meta": {}}
+            ], "grid": [[1, 2], []], "empty": {}}),
+        )
+        .unwrap();
+        assert_eq!(
+            out,
+            "build:\n  commit: abc\nlangs:\n  - rust\n  - go\nfiles:\n  - path: a\n    tags: []\n  \
+             - path: b\n    meta: {}\ngrid:\n  - - 1\n    - 2\n  - []\nempty: {}\n"
+        );
+        annals_yaml::parse(&out).unwrap();
+        assert_eq!(run(write_yaml, &json!([])).unwrap(), "[]\n");
+        assert_eq!(run(write_yaml, &json!("yes")).unwrap(), "\"yes\"\n");
     }
 
     #[test]
