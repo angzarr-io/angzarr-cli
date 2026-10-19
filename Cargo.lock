@@ -23,6 +23,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "angzarr-cli-app"
+version = "0.1.0"
+dependencies = [
+ "angzarr-cli-core",
+ "angzarr-fmt",
+ "annals",
+ "annals-diagnostic",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "angzarr-cli-core"
 version = "0.1.0"
 dependencies = [

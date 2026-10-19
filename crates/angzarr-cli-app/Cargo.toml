@@ -1,0 +1,23 @@
+[package]
+name = "angzarr-cli-app"
+version = "0.1.0"
+description = "The angzarr CLI's use cases behind ports: lint and model a descriptor set."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+# No I/O: a descriptor set arrives through the DescriptorSource port.
+[dependencies]
+angzarr-cli-core.workspace = true
+angzarr-fmt.workspace = true
+annals.workspace = true
+annals-diagnostic.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+angzarr-cli-core = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true
