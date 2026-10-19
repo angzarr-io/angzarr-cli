@@ -75,7 +75,8 @@ just test     # cargo test --workspace
 just lint     # clippy -D warnings and the rustfmt check
 ```
 
-The toolchain is pinned in `rust-toolchain.toml`.
+The toolchain is pinned in `rust-toolchain.toml`. Building needs `protoc`
+on `PATH` (or `PROTOC` set): `angzarr-proto` generates its types with it.
 
 ## Licence
 
