@@ -182,8 +182,9 @@ fn plain_ok(s: &str) -> bool {
     !(undotted.starts_with(|c: char| c.is_ascii_digit()) || unsigned == ".inf")
 }
 
-/// TOML. A document must be a table, and TOML has no null: a null field is
-/// left out, a null inside a list is refused.
+/// TOML. A document must be a table, TOML has no null (a null field is left
+/// out, a null inside a list is refused), and its integers are 64-bit signed
+/// (a larger one is refused).
 pub fn write_toml(w: &mut dyn Write, value: &Value) -> Result<(), FmtError> {
     if !value.is_object() {
         return Err(FmtError::TomlNeedsTable { found: kind(value) });
@@ -218,6 +219,11 @@ fn strip_nulls(value: &Value, path: &str) -> Result<Value, FmtError> {
                 })
                 .collect::<Result<_, _>>()?,
         ),
+        Value::Number(n) if n.is_u64() && n.as_i64().is_none() => {
+            return Err(FmtError::TomlIntRange {
+                path: path.to_string(),
+            });
+        }
         scalar => scalar.clone(),
     })
 }
@@ -406,6 +412,15 @@ mod tests {
         let err = run(write_toml, &json!(["a"])).unwrap_err();
         assert_eq!(err, FmtError::TomlNeedsTable { found: "list" });
         assert_eq!(err.code(), "angzarr-fmt-toml-needs-table");
+    }
+
+    #[test]
+    fn toml_refuses_an_integer_beyond_its_range_and_names_where() {
+        let err = run(write_toml, &json!({"a": {"n": u64::MAX}})).unwrap_err();
+        assert_eq!(err, FmtError::TomlIntRange { path: "a.n".into() });
+        assert_eq!(err.code(), "angzarr-fmt-toml-int-range");
+        let ok = run(write_toml, &json!({"n": i64::MAX as u64})).unwrap();
+        assert_eq!(ok, format!("n = {}\n", i64::MAX));
     }
 
     #[test]

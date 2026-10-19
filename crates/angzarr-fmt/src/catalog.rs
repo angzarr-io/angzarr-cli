@@ -39,16 +39,18 @@ impl Catalog {
     /// Adds one crate's messages. A later message with an existing id is a
     /// catalog bug and is refused.
     pub fn add(&mut self, ftl: &str) -> Result<(), FmtError> {
-        let resource = FluentResource::try_new(ftl.to_string()).map_err(|(_, errors)| {
-            FmtError::CatalogParse {
-                detail: format!("{errors:?}"),
-            }
-        })?;
-        self.bundle
-            .add_resource(resource)
-            .map_err(|errors| FmtError::CatalogParse {
-                detail: format!("{errors:?}"),
-            })
+        let resource = FluentResource::try_new(ftl.to_string())
+            .map_err(|(_, errors)| parse_error(ftl, &errors))?;
+        self.bundle.add_resource(resource).map_err(|errors| {
+            let id = errors
+                .iter()
+                .find_map(|e| match e {
+                    fluent_bundle::FluentError::Overriding { id, .. } => Some(id.clone()),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            FmtError::CatalogDuplicate { id }
+        })
     }
 
     /// The diagnostic's message in this catalog's language.
@@ -77,6 +79,44 @@ impl Catalog {
             d.to_string()
         }
     }
+}
+
+/// The first syntax error, located by line and column.
+fn parse_error(ftl: &str, errors: &[fluent_syntax::parser::ParserError]) -> FmtError {
+    let Some(first) = errors.first() else {
+        return FmtError::CatalogParse {
+            line: 1,
+            column: 1,
+            kind: "unknown".into(),
+        };
+    };
+    let at = first.pos.start.min(ftl.len());
+    let before = ftl.get(..at).unwrap_or(ftl);
+    let line = before.matches('\n').count() + 1;
+    let column = before.rsplit('\n').next().unwrap_or("").chars().count() + 1;
+    FmtError::CatalogParse {
+        line: line as u64,
+        column: column as u64,
+        kind: kebab(&format!("{:?}", first.kind)),
+    }
+}
+
+/// A Rust variant name (`ExpectedToken('a')`) as a kebab-case token
+/// (`expected-token`).
+fn kebab(debug: &str) -> String {
+    let name = debug.split(['(', ' ', '{']).next().unwrap_or(debug);
+    let mut out = String::new();
+    for (i, c) in name.chars().enumerate() {
+        if c.is_ascii_uppercase() {
+            if i > 0 {
+                out.push('-');
+            }
+            out.push(c.to_ascii_lowercase());
+        } else if c.is_ascii_alphanumeric() {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// Problems with one crate's catalog against the diagnostics it must cover.

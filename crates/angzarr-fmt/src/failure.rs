@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn a_failure_without_a_remedy_has_no_remedy_key() {
         let err = FmtError::Write {
-            detail: "broken pipe".into(),
+            kind: "broken-pipe",
         };
         let value: Value = serde_json::from_str(&written(Format::Json, &err)).unwrap();
         assert!(value.get("remedy").is_none());
@@ -191,13 +191,13 @@ mod tests {
         assert_eq!(
             written(Format::Text, &err),
             "Error: TOML has no null: the value at files[1] is empty\n\
-             Fix: use --format json or --format yaml for this output\n"
+             Fix: write this output as json or yaml instead\n"
         );
     }
 
     #[test]
     fn warnings_are_json_lines_in_every_structured_format() {
-        let d = FmtError::Write { detail: "x".into() };
+        let d = FmtError::Write { kind: "other" };
         for format in [Format::Json, Format::Yaml, Format::Toml] {
             let mut out = Vec::new();
             let warning = Warning {
@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(
             String::from_utf8(out).unwrap(),
             "angzarr: warning: TOML output needs a table at the top level, not a list\n  \
-             fix: use --format json or --format yaml for this output\n"
+             fix: write this output as json or yaml instead\n"
         );
     }
 }
