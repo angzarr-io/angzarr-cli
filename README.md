@@ -8,6 +8,8 @@ plus the tooling to develop and operate them.
 |---|---|
 | [`angzarr-fmt`](crates/angzarr-fmt) | CLI output: one result rendered as json, yaml, toml, text or markdown; localizable failures and warnings |
 | [`angzarr-fmt-clap`](crates/angzarr-fmt-clap) | angzarr-fmt for clap: the global `--format`, format resolution, the process tail |
+| [`angzarr-codegen`](crates/angzarr-codegen) | the generator core: descriptors in, Rust source out (domain layer, markup scaffold, `register`) |
+| [`angzarr-build`](crates/angzarr-build) | `build.rs` helpers running protoc and writing what angzarr-codegen generates |
 | [`angzarr-cli`](crates/angzarr-cli) | the `angzarr` binary |
 
 ## Output
@@ -30,6 +32,25 @@ A failure goes to stderr in the same format: `{"error": {...}, "remedy":
 {...}}` in a structured format, `Error:` and `Fix:` lines in text. Each
 diagnostic has a stable code and named args (`annals-diagnostic`), rendered
 through the crate's en-US Fluent catalog.
+
+## Scaffold
+
+`angzarr scaffold rust` writes each component's markup (an aggregate,
+process manager or policy, with a `todo!()` stub per input and event) into
+the crate's `src`, one file per component, once: an existing file is the
+user's and is kept. `--missing` adds the stubs an existing file lacks and
+changes nothing else, refusing a `#[handles_cmd]` on a fact or a
+`#[handles_fact]` on a command. `--translate <policy>:<command>=<fact>` sets
+a policy's refusal switch to translate that command's refusals into a fact
+of its source, adding an `#[on_refused]` callback stub.
+
+```
+$ angzarr scaffold rust -I proto --src src buyin/v1/wallet.proto buyin/v1/buy_in.proto buyin/v1/policies.proto
+```
+
+The build script generates the rest into `OUT_DIR` with `angzarr-build`:
+`markup_domain` (the domain types and their `DomainMessage` impls) and
+`register` (one `register(&mut Registry)` for every component).
 
 ## Building
 
