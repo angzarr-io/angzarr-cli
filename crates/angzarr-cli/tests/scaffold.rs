@@ -139,3 +139,25 @@ fn scaffold_rust_refuses_a_malformed_translate() {
     );
     std::fs::remove_dir_all(&src).unwrap();
 }
+
+#[test]
+fn scaffold_rust_missing_refuses_a_marker_the_proto_contradicts() {
+    let src = empty_dir();
+    scaffold(&src, &[]);
+    let path = src.join("buy_in.rs");
+    let mine = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("handles_fact(HoldLost)", "handles_cmd(HoldLost)");
+    std::fs::write(&path, &mine).unwrap();
+    let out = scaffold(&src, &["--missing"]);
+    assert!(!out.status.success());
+    let failure: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
+    assert!(
+        failure
+            .to_string()
+            .contains("angzarr-codegen-marker-mismatch"),
+        "{failure}"
+    );
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), mine);
+    std::fs::remove_dir_all(&src).unwrap();
+}
