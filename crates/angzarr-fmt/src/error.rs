@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use annals_diagnostic::{Arg, Diagnostic, Report};
+use angzarr_embedded_diagnostic::{Arg, Diagnostic, Report};
 
 use crate::failure::Failure;
 

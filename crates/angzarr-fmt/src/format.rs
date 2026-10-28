@@ -3,7 +3,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use annals_diagnostic::{Arg, Diagnostic};
+use angzarr_embedded_diagnostic::{Arg, Diagnostic};
 
 /// How a result is written.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -10,7 +10,7 @@ use angzarr_fmt_clap::{FormatArgs, finish};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
 
-use annals_diagnostic::{Arg, Diagnostic, Report};
+use angzarr_embedded_diagnostic::{Arg, Diagnostic, Report};
 
 #[derive(Parser)]
 #[command(name = "angzarr", about = "The command line for angzarr projects.")]

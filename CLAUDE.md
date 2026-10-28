@@ -18,7 +18,7 @@ them.
 
 ## Errors are localizable: a code, args, and an en-US message
 
-Every error and diagnostic implements `annals_diagnostic::Diagnostic` and
+Every error and diagnostic implements `angzarr_embedded_diagnostic::Diagnostic` and
 keeps an English `Display` as the fallback.
 
 - Codes are stable and never reused: kebab-case, starting with the crate's

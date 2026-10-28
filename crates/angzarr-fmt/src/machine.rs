@@ -15,25 +15,27 @@ pub fn write_json(w: &mut dyn Write, value: &Value) -> Result<(), FmtError> {
     writeln!(w, "{text}").map_err(FmtError::write)
 }
 
-/// YAML through annals-yaml's writer, which writes a scalar plain only when
+/// YAML through angzarr-embedded-yaml's writer, which writes a scalar plain only when
 /// it reads back unchanged.
 pub fn write_yaml(w: &mut dyn Write, value: &Value) -> Result<(), FmtError> {
     // Small collections of scalars go on one line once nested two levels.
     const FLOW_DEPTH: usize = 2;
-    w.write_all(annals_yaml::write(&to_yaml(value), FLOW_DEPTH).as_bytes())
+    w.write_all(angzarr_embedded_yaml::write(&to_yaml(value), FLOW_DEPTH).as_bytes())
         .map_err(FmtError::write)
 }
 
-fn to_yaml(value: &Value) -> annals_yaml::Value {
+fn to_yaml(value: &Value) -> angzarr_embedded_yaml::Value {
     match value {
-        Value::Null => annals_yaml::Value::Null,
-        Value::Bool(b) => annals_yaml::Value::scalar(b.to_string()),
-        Value::Number(n) => annals_yaml::Value::scalar(n.to_string()),
-        Value::String(s) => annals_yaml::Value::scalar(s.clone()),
-        Value::Array(items) => annals_yaml::Value::Seq(items.iter().map(to_yaml).collect()),
-        Value::Object(map) => {
-            annals_yaml::Value::Map(map.iter().map(|(k, v)| (k.clone(), to_yaml(v))).collect())
+        Value::Null => angzarr_embedded_yaml::Value::Null,
+        Value::Bool(b) => angzarr_embedded_yaml::Value::scalar(b.to_string()),
+        Value::Number(n) => angzarr_embedded_yaml::Value::scalar(n.to_string()),
+        Value::String(s) => angzarr_embedded_yaml::Value::scalar(s.clone()),
+        Value::Array(items) => {
+            angzarr_embedded_yaml::Value::Seq(items.iter().map(to_yaml).collect())
         }
+        Value::Object(map) => angzarr_embedded_yaml::Value::Map(
+            map.iter().map(|(k, v)| (k.clone(), to_yaml(v))).collect(),
+        ),
     }
 }
 
@@ -99,7 +101,7 @@ fn kind(value: &Value) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use annals_diagnostic::Diagnostic;
+    use angzarr_embedded_diagnostic::Diagnostic;
     use serde_json::json;
 
     fn run(
@@ -125,12 +127,16 @@ mod tests {
             &json!({"name": "angzarr", "langs": ["rust", "python"], "commit": null}),
         )
         .unwrap();
-        let back = annals_yaml::parse(&out).unwrap();
+        let back = angzarr_embedded_yaml::parse(&out).unwrap();
         assert_eq!(
-            back.get("name").and_then(annals_yaml::Value::as_str),
+            back.get("name")
+                .and_then(angzarr_embedded_yaml::Value::as_str),
             Some("angzarr")
         );
-        assert_eq!(back.get("commit"), Some(&annals_yaml::Value::Null));
+        assert_eq!(
+            back.get("commit"),
+            Some(&angzarr_embedded_yaml::Value::Null)
+        );
     }
 
     #[test]
