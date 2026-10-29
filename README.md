@@ -126,6 +126,8 @@ scaffolded; a projector is never scaffolded.
 just build    # cargo build --workspace --all-targets
 just test     # cargo test --workspace
 just lint     # clippy -D warnings and the rustfmt check
+just test-pkg angzarr-codegen   # one package's tests
+just mutants-staged            # cargo-mutants over the staged Rust diff
 ```
 
 The toolchain is pinned in `rust-toolchain.toml`.
