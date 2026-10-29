@@ -48,6 +48,29 @@ of its source, adding an `#[on_refused]` callback stub.
 $ angzarr scaffold rust -I proto --src src buyin/v1/wallet.proto buyin/v1/buy_in.proto buyin/v1/policies.proto
 ```
 
+`angzarr scaffold python --domain <domain>` writes one domain's uv project,
+served to angzarr-embedded as a child process through angzarr-client-python's
+harness (`angzarr_client.child`). The user's files are written once and
+completed with `--missing`: `pyproject.toml` (angzarr-client pinned by
+commit, `CLIENT_PYTHON_REV`) and, per component, an interface (a
+`typing.Protocol` over the domain's messages) and its implementation (each
+method a TODO), neither naming the harness. The CLI's files are rewritten on
+every run: `buf.gen.yaml`, `main.py`, `__main__.py`, `_version.py` and each
+component's dispatch under `_gen`, which adapts the router binding to the
+interface. `--proto-gen` runs `buf generate` and reroots the message types'
+imports (angzarr's own under `angzarr_client.proto`); `--lock` runs `uv
+lock`, for angzarr-embedded's `uv run --locked angzarr-<domain>`.
+
+```
+$ angzarr scaffold python -I proto --src player --domain player \
+    --proto-git https://github.com/angzarr-io/angzarr-project --proto-ref <sha> \
+    io/angzarr/examples/v1/player.proto
+```
+
+Every scaffold reads the other protos of its protos' directories too, so a
+policy or a projector a scaffolded message names is found without being
+scaffolded; a projector is never scaffolded.
+
 The build script generates the rest into `OUT_DIR` with `angzarr-build`:
 `markup_domain` (the domain types and their `DomainMessage` impls) and
 `register` (one `register(&mut Registry)` for every component).

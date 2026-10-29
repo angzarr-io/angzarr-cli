@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use angzarr_build::{BuildError, Existing, Scaffolded, Translate};
+use angzarr_build::{BuildError, Existing, ProtoInput, PythonApp, Scaffolded, Translate};
 use angzarr_fmt::{Catalog, Failure, Format, Viewable};
 use angzarr_fmt_clap::{FormatArgs, finish};
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -27,7 +27,7 @@ enum Command {
     Version,
     /// Write each component's markup scaffold, once: the user's file, never
     /// overwritten.
-    Scaffold(ScaffoldArgs),
+    Scaffold(Box<ScaffoldArgs>),
 }
 
 #[derive(Args)]
@@ -42,7 +42,8 @@ struct ScaffoldArgs {
     /// Where the protos' imports are found; angzarr's own are always found.
     #[arg(short = 'I', long = "include", value_name = "DIR")]
     includes: Vec<String>,
-    /// The crate's source directory, where each component's file goes.
+    /// Where the files go: a Rust crate's source directory, or a Python
+    /// project's root.
     #[arg(long, default_value = "src")]
     src: PathBuf,
     /// The refusal switch, set to translate for one command of one policy:
@@ -53,11 +54,41 @@ struct ScaffoldArgs {
     /// Add the stubs an existing file lacks, changing nothing else.
     #[arg(long)]
     missing: bool,
+    #[command(flatten)]
+    python: PythonArgs,
+}
+
+/// What `scaffold python` alone takes.
+#[derive(Args)]
+struct PythonArgs {
+    /// Python: the domain the project serves, e.g. `player`.
+    #[arg(long)]
+    domain: Option<String>,
+    /// Python: the git repository `buf generate` reads the protos from;
+    /// unset, it reads them from the first `--include`.
+    #[arg(long, value_name = "URL", requires = "proto_ref")]
+    proto_git: Option<String>,
+    /// Python: the revision of `--proto-git`.
+    #[arg(long, value_name = "REV")]
+    proto_ref: Option<String>,
+    /// Python: the protos' directory within `--proto-git`.
+    #[arg(long, value_name = "DIR", default_value = "proto")]
+    proto_subdir: String,
+    /// Python: the build version the domain reports as its rules_version.
+    #[arg(long, default_value = "0.1.0")]
+    rules_version: String,
+    /// Python: run `buf generate` and reroot the message types' imports.
+    #[arg(long)]
+    proto_gen: bool,
+    /// Python: run `uv lock`.
+    #[arg(long)]
+    lock: bool,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
 enum Lang {
     Rust,
+    Python,
 }
 
 /// What a scaffold run did, one entry per component file.
@@ -69,20 +100,13 @@ struct ScaffoldReport {
 #[derive(Serialize)]
 struct ScaffoldEntry {
     path: String,
-    /// `created`, `completed` or `kept`.
+    /// `created`, `completed`, `regenerated` or `kept`.
     action: &'static str,
 }
 
 impl Viewable for ScaffoldReport {}
 
 fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
-    let Lang::Rust = args.lang;
-    let translate = args
-        .translate
-        .iter()
-        .map(String::as_str)
-        .map(translate)
-        .collect::<Result<Vec<_>, _>>()?;
     let protos: Vec<&str> = args.protos.iter().map(String::as_str).collect();
     let includes: Vec<&str> = args.includes.iter().map(String::as_str).collect();
     let existing = if args.missing {
@@ -90,14 +114,57 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
     } else {
         Existing::Keep
     };
-    let done = angzarr_build::scaffold_into(&args.src, &protos, &includes, &translate, existing)
-        .map_err(CliError::Build)?;
+    let done = match args.lang {
+        Lang::Rust => {
+            let translate = args
+                .translate
+                .iter()
+                .map(String::as_str)
+                .map(translate)
+                .collect::<Result<Vec<_>, _>>()?;
+            angzarr_build::scaffold_into(&args.src, &protos, &includes, &translate, existing)
+                .map_err(CliError::Build)?
+        }
+        Lang::Python => {
+            let python = &args.python;
+            let domain = python.domain.clone().ok_or(CliError::DomainRequired)?;
+            let protos_input = match (&python.proto_git, &python.proto_ref) {
+                (Some(url), Some(rev)) => ProtoInput::Git {
+                    url: url.clone(),
+                    rev: rev.clone(),
+                    subdir: python.proto_subdir.clone(),
+                },
+                _ => ProtoInput::Directory(includes.first().copied().unwrap_or(".").to_string()),
+            };
+            let app = PythonApp {
+                domain,
+                protos: protos_input,
+                rules_version: python.rules_version.clone(),
+            };
+            let done =
+                angzarr_build::scaffold_python_into(&args.src, &protos, &includes, &app, existing)
+                    .map_err(CliError::Build)?;
+            if python.proto_gen {
+                angzarr_build::proto_gen_python(&args.src, &app).map_err(CliError::Build)?;
+            }
+            if python.lock {
+                angzarr_build::lock_python(&args.src).map_err(CliError::Build)?;
+            }
+            done
+        }
+    };
+    Ok(report(done))
+}
+
+/// One entry per file, by what was done with it.
+fn report(done: Vec<Scaffolded>) -> ScaffoldReport {
     let files = done
         .into_iter()
         .map(|d| {
             let (path, action) = match d {
                 Scaffolded::Created(path) => (path, "created"),
                 Scaffolded::Completed(path) => (path, "completed"),
+                Scaffolded::Regenerated(path) => (path, "regenerated"),
                 Scaffolded::Kept(path) => (path, "kept"),
             };
             ScaffoldEntry {
@@ -106,7 +173,7 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
             }
         })
         .collect();
-    Ok(ScaffoldReport { files })
+    ScaffoldReport { files }
 }
 
 /// `<policy>:<command>=<fact>` as a translate selection.
@@ -131,6 +198,8 @@ fn translate(value: &str) -> Result<Translate, CliError> {
 enum CliError {
     /// A `--translate` value not of the form `<policy>:<command>=<fact>`.
     TranslateMalformed { value: String },
+    /// `scaffold python` without `--domain`.
+    DomainRequired,
     /// Generation failed; reported as the build error itself.
     Build(BuildError),
 }
@@ -141,6 +210,7 @@ impl fmt::Display for CliError {
             CliError::TranslateMalformed { value } => {
                 write!(f, "--translate {value} is not <policy>:<command>=<fact>")
             }
+            CliError::DomainRequired => f.write_str("scaffold python needs --domain"),
             CliError::Build(error) => error.fmt(f),
         }
     }
@@ -152,6 +222,7 @@ impl Diagnostic for CliError {
     fn code(&self) -> &'static str {
         match self {
             CliError::TranslateMalformed { .. } => "angzarr-cli-translate-malformed",
+            CliError::DomainRequired => "angzarr-cli-domain-required",
             CliError::Build(error) => error.code(),
         }
     }
@@ -159,6 +230,7 @@ impl Diagnostic for CliError {
     fn args(&self) -> Vec<(&'static str, Arg)> {
         match self {
             CliError::TranslateMalformed { value } => vec![("value", value.as_str().into())],
+            CliError::DomainRequired => Vec::new(),
             CliError::Build(error) => error.args(),
         }
     }
@@ -171,6 +243,10 @@ impl Failure for CliError {
                 "angzarr-cli-translate-form",
                 "write --translate as <policy>:<command>=<fact>, each a fully qualified \
                  message name, e.g. buyin.v1.BuyInWalletPolicy:buyin.v1.Hold=buyin.v1.HoldLost",
+            )),
+            CliError::DomainRequired => Some(Report::new(
+                "angzarr-cli-domain-name",
+                "name the domain the project serves, e.g. --domain player",
             )),
             CliError::Build(_) => None,
         }
@@ -227,7 +303,7 @@ fn main() -> ExitCode {
     let catalog = catalog();
     match cli.command {
         Command::Version => finish(format, &catalog, Ok::<_, Box<dyn Failure>>(version())),
-        Command::Scaffold(args) => finish(format, &catalog, scaffold(args)),
+        Command::Scaffold(args) => finish(format, &catalog, scaffold(*args)),
     }
 }
 
@@ -241,7 +317,14 @@ mod tests {
             value: "x".to_string(),
         };
         let remedy = malformed.remedy().expect("a remedy");
-        vec![Box::new(malformed), Box::new(remedy)]
+        let domain = CliError::DomainRequired;
+        let domain_remedy = domain.remedy().expect("a remedy");
+        vec![
+            Box::new(malformed),
+            Box::new(remedy),
+            Box::new(domain),
+            Box::new(domain_remedy),
+        ]
     }
 
     #[test]

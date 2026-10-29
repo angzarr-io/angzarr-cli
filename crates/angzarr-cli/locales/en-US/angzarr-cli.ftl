@@ -2,7 +2,9 @@
 # variables are its args.
 
 angzarr-cli-translate-malformed = --translate { $value } is not <policy>:<command>=<fact>
+angzarr-cli-domain-required = scaffold python needs --domain
 
 ## Remedies.
 
 angzarr-cli-translate-form = write --translate as <policy>:<command>=<fact>, each a fully qualified message name, e.g. buyin.v1.BuyInWalletPolicy:buyin.v1.Hold=buyin.v1.HoldLost
+angzarr-cli-domain-name = name the domain the project serves, e.g. --domain player
