@@ -6,6 +6,11 @@
 //! that sends one DecideMove through `App::handle`, then the same command
 //! straight to the child's handler.
 //!
+//! A total of 99 makes the decision raise the generated `domain.Bug(
+//! "some-bug-key", amount=7)` instead: it must arrive as a bug, the
+//! router's INTERNAL UNHANDLED_HANDLER_ERROR with the key and args as its
+//! cause (`cause`, `cause.amount`), recovery Bug.
+//!
 //! The refusal must arrive as a business refusal: the kernel's
 //! `Failure::Rejected` (recovery Business, neither retryable nor a bug,
 //! never REMOTE_HANDLER_UNAVAILABLE or an internal error), FAILED_PRECONDITION
@@ -85,6 +90,7 @@ fn a_python_rejection_reaches_the_host_as_a_business_refusal_with_its_key_and_ar
         [
             "handle: rejected some-reason-key amount=13 recovery Business",
             "dispatch: FailedPrecondition some-reason-key amount=13 retryable false",
+            "bug: Internal UNHANDLED_HANDLER_ERROR cause=some-bug-key cause.amount=7 recovery Bug",
             "player events: 0",
             "",
         ]
