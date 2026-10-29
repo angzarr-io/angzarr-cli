@@ -43,7 +43,9 @@ and returning the commands to send, each with its target root, or its
 `Error`), and `wallet_impl.rs`, its implementation (every body `todo!()`,
 the state the wire type). Each command takes its `Context` too (the instant
 its events are recorded at, and the router's context of the input as
-`ctx.command`). Neither file imports anything from angzarr-embedded
+`ctx.command`), and so does each fact, which returns its event with no
+`Result`: a fact is recorded, never refused. Appliers stay folds of the
+state and the event. Neither file imports anything from angzarr-embedded
 directly: the context types and `Error` are `crate::domain`'s, which
 re-exports them. An existing file is the user's and is kept. `--missing` adds
 the methods an existing file lacks and changes nothing else, refusing an
@@ -61,6 +63,12 @@ diagnostic key and its args) or, refusing one typed refusal, `Result<_, R>`.
 Its `Ok` is its one event, which may be changed to any shape
 angzarr-embedded takes (`Option<E>`, `Vec<E>`), or, for a command declaring
 several, `Vec<<Component>Event>`: any number of any of its events.
+
+A message named `Context`, `PolicyContext`, `CommandContext`, `Error` or
+`Rejection` (the names the generated domain layer gives the runtime's types)
+fails generation, naming the message; rename it. Files scaffolded before the
+handlers took their context are not migrated by `--missing`, which takes a
+method taking the same message as present: edit their signatures by hand.
 
 ```
 $ angzarr scaffold rust -I proto --src src buyin/v1/wallet.proto buyin/v1/buy_in.proto buyin/v1/policies.proto
@@ -87,7 +95,9 @@ state and the event and returning the next state) and `logic_impl.py`, its
 implementation (each method a TODO). Both take and return the domain's plain
 types, each decision its `CommandContext` too, and import nothing of angzarr
 or protobuf directly: `domain.py` re-exports the context from
-`angzarr_client.router`. The CLI's files are rewritten
+`angzarr_client.router`, and gives a decision `Rejection`, which it raises to
+refuse its command (`raise Rejection("key", name=value)`: a diagnostic key and
+its args, the harness's coded error as a business refusal). The CLI's files are rewritten
 on every run: `domain.py` (the domain's messages as frozen dataclasses and
 integer enums), `buf.gen.yaml`, `main.py`, `__main__.py`, `_version.py` and
 the dispatch under `_gen`, which converts the wire's messages to the plain
