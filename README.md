@@ -133,4 +133,6 @@ The toolchain is pinned in `rust-toolchain.toml`.
 ## Licence
 
 AGPL-3.0-only ([LICENSE](LICENSE)), except `angzarr-build`, which build
-scripts depend on: BSD-3-Clause ([crates/angzarr-build/LICENSE](crates/angzarr-build/LICENSE)).
+scripts depend on, and `angzarr-codegen`, which it depends on: BSD-3-Clause
+([crates/angzarr-build/LICENSE](crates/angzarr-build/LICENSE),
+[crates/angzarr-codegen/LICENSE](crates/angzarr-codegen/LICENSE)).
