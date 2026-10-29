@@ -102,7 +102,9 @@ or protobuf directly: `domain.py` re-exports the context from
 `angzarr_client.router`, with the two classes a decision fails with, both
 angzarr-client-python's and each a diagnostic key and its args: `Rejection`,
 raised to refuse its command (`raise Rejection("key", name=value)`, a
-business "no", FAILED_PRECONDITION), and `Bug`, raised for a defect (`raise
+business "no" under a business status: FAILED_PRECONDITION unless given
+second, or INVALID_ARGUMENT, NOT_FOUND, ALREADY_EXISTS, OUT_OF_RANGE or
+PERMISSION_DENIED), and `Bug`, raised for a defect (`raise
 Bug("key", name=value)`, answered UNHANDLED_HANDLER_ERROR with the key and
 args as its cause; angzarr-embedded alerts it and dead-letters the command). The CLI's files are rewritten
 on every run: `domain.py` (the domain's messages as frozen dataclasses and
