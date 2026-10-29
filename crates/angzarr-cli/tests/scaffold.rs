@@ -1,5 +1,6 @@
-//! `angzarr scaffold rust`: each component's file written once into the
-//! crate's `src`, never overwritten, and completed with `--missing`.
+//! `angzarr scaffold rust`: each component's interface and implementation
+//! written once into the crate's `src`, never overwritten, and completed
+//! with `--missing`.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -65,36 +66,38 @@ fn actions(out: &Output, src: &Path) -> Vec<(String, String)> {
     actions
 }
 
-fn pairs(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
-    pairs
-        .iter()
-        .map(|(a, b)| (a.to_string(), b.to_string()))
-        .collect()
+/// Every component file with `action`, but those in `completed`, which
+/// were completed.
+fn all(action: &str, completed: &[&str]) -> Vec<(String, String)> {
+    [
+        "buy_in.rs",
+        "buy_in_impl.rs",
+        "buy_in_wallet.rs",
+        "buy_in_wallet_impl.rs",
+        "wallet.rs",
+        "wallet_buy_in.rs",
+        "wallet_buy_in_impl.rs",
+        "wallet_impl.rs",
+    ]
+    .iter()
+    .map(|f| {
+        let action = if completed.contains(f) {
+            "completed"
+        } else {
+            action
+        };
+        (f.to_string(), action.to_string())
+    })
+    .collect()
 }
 
 #[test]
 fn scaffold_rust_writes_each_component_once_and_never_overwrites() {
     let src = empty_dir();
-    assert_eq!(
-        actions(&scaffold(&src, &[]), &src),
-        pairs(&[
-            ("buy_in.rs", "created"),
-            ("buy_in_wallet.rs", "created"),
-            ("wallet.rs", "created"),
-            ("wallet_buy_in.rs", "created"),
-        ])
-    );
+    assert_eq!(actions(&scaffold(&src, &[]), &src), all("created", &[]));
     let mine = "//! Mine now.\n";
     std::fs::write(src.join("wallet.rs"), mine).unwrap();
-    assert_eq!(
-        actions(&scaffold(&src, &[]), &src),
-        pairs(&[
-            ("buy_in.rs", "kept"),
-            ("buy_in_wallet.rs", "kept"),
-            ("wallet.rs", "kept"),
-            ("wallet_buy_in.rs", "kept"),
-        ])
-    );
+    assert_eq!(actions(&scaffold(&src, &[]), &src), all("kept", &[]));
     assert_eq!(
         std::fs::read_to_string(src.join("wallet.rs")).unwrap(),
         mine
@@ -116,15 +119,10 @@ fn scaffold_rust_missing_with_translate_adds_the_policys_callback_stub() {
     );
     assert_eq!(
         actions(&out, &src),
-        pairs(&[
-            ("buy_in.rs", "kept"),
-            ("buy_in_wallet.rs", "completed"),
-            ("wallet.rs", "kept"),
-            ("wallet_buy_in.rs", "kept"),
-        ])
+        all("kept", &["buy_in_wallet.rs", "buy_in_wallet_impl.rs"])
     );
     let policy = std::fs::read_to_string(src.join("buy_in_wallet.rs")).unwrap();
-    assert!(policy.contains("#[on_refused(Hold)]"), "{policy}");
+    assert!(policy.contains("fn hold_refused("), "{policy}");
     std::fs::remove_dir_all(&src).unwrap();
 }
 
@@ -141,13 +139,13 @@ fn scaffold_rust_refuses_a_malformed_translate() {
 }
 
 #[test]
-fn scaffold_rust_missing_refuses_a_marker_the_proto_contradicts() {
+fn scaffold_rust_missing_refuses_an_input_the_proto_contradicts() {
     let src = empty_dir();
     scaffold(&src, &[]);
     let path = src.join("buy_in.rs");
     let mine = std::fs::read_to_string(&path)
         .unwrap()
-        .replace("handles_fact(HoldLost)", "handles_cmd(HoldLost)");
+        .replace("fact: &HoldLost", "cmd: &HoldLost");
     std::fs::write(&path, &mine).unwrap();
     let out = scaffold(&src, &["--missing"]);
     assert!(!out.status.success());
@@ -155,7 +153,7 @@ fn scaffold_rust_missing_refuses_a_marker_the_proto_contradicts() {
     assert!(
         failure
             .to_string()
-            .contains("angzarr-codegen-marker-mismatch"),
+            .contains("angzarr-codegen-input-mismatch"),
         "{failure}"
     );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), mine);

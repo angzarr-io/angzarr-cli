@@ -8,7 +8,7 @@ plus the tooling to develop and operate them.
 |---|---|
 | [`angzarr-fmt`](crates/angzarr-fmt) | CLI output: one result rendered as json, yaml, toml, text or markdown; localizable failures and warnings |
 | [`angzarr-fmt-clap`](crates/angzarr-fmt-clap) | angzarr-fmt for clap: the global `--format`, format resolution, the process tail |
-| [`angzarr-codegen`](crates/angzarr-codegen) | the generator core: descriptors in, Rust source out (domain layer, markup scaffold, `register`) |
+| [`angzarr-codegen`](crates/angzarr-codegen) | the generator core: descriptors in, source out (domain layer, Rust and Python scaffolds, adapters, `register`, the startup) |
 | [`angzarr-build`](crates/angzarr-build) | `build.rs` helpers running protoc and writing what angzarr-codegen generates |
 | [`angzarr-cli`](crates/angzarr-cli) | the `angzarr` binary |
 
@@ -35,18 +35,37 @@ through the crate's en-US Fluent catalog.
 
 ## Scaffold
 
-`angzarr scaffold rust` writes each component's markup (an aggregate,
-process manager or policy, with a `todo!()` stub per input and event) into
-the crate's `src`, one file per component, once: an existing file is the
-user's and is kept. `--missing` adds the stubs an existing file lacks and
-changes nothing else, refusing a `#[handles_cmd]` on a fact or a
-`#[handles_fact]` on a command. `--translate <policy>:<command>=<fact>` sets
-a policy's refusal switch to translate that command's refusals into a fact
-of its source, adding an `#[on_refused]` callback stub.
+`angzarr scaffold rust` writes each component's interface and
+implementation into the crate's `src`, once: `wallet.rs`, a trait over the
+domain types (one method per command, fact and event; a policy's per event it
+reacts to, taking the source stream's root and returning the commands to
+send, each with its target root), and `wallet_impl.rs`, its implementation
+(every body `todo!()`, the state the wire type). Neither names angzarr-embedded
+or its markup. An existing file is the user's and is kept. `--missing` adds
+the methods an existing file lacks and changes nothing else, refusing an
+input taken as `cmd` where the proto declares a fact, or as `fact` where it
+declares a command. `--translate <policy>:<command>=<fact>` sets a policy's
+refusal switch to translate that command's refusals into a fact of its
+source, adding a `<command>_refused` method.
+
+A command returns `Result<_, Rejection>` (the domain's untyped rejection, a
+diagnostic key and its args) or, refusing one typed refusal, `Result<_, R>`.
+Its `Ok` is its one event, a tuple of its two to four, or else
+`Vec<<Component>Event>`, any of its events; the first two may be changed to
+any shape angzarr-embedded takes (`Option<E>`, `Vec<E>`).
 
 ```
 $ angzarr scaffold rust -I proto --src src buyin/v1/wallet.proto buyin/v1/buy_in.proto buyin/v1/policies.proto
 ```
+
+The build script generates the rest into `OUT_DIR` with `angzarr-build`, the
+CLI's and regenerated every build: `markup_domain` (the domain types, their
+`DomainMessage` impls, `Rejection`, each component's `<Component>Command` and
+`<Component>Event` enums), `adapters` (each component's angzarr-embedded
+markup, named `policy-<input>-<output>` for a policy, delegating to its
+interface; a domain served by a child process gets a contract instead) and
+`register` (one `register(&mut Registry)` for every adapter). `app` does all
+of it from an application's host config.
 
 `angzarr scaffold python --domain <domain>` writes one domain's uv project,
 served to angzarr-embedded as a child process through angzarr-client-python's
@@ -89,10 +108,6 @@ $ angzarr lint startup -I proto io/angzarr/examples/v1/table.proto ...
 Every scaffold reads the other protos of its protos' directories too, so a
 policy or a projector a scaffolded message names is found without being
 scaffolded; a projector is never scaffolded.
-
-The build script generates the rest into `OUT_DIR` with `angzarr-build`:
-`markup_domain` (the domain types and their `DomainMessage` impls) and
-`register` (one `register(&mut Registry)` for every component).
 
 ## Building
 
