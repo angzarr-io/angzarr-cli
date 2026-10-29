@@ -126,12 +126,13 @@ struct PythonArgs {
     /// Python: the build version the domain reports as its rules_version.
     #[arg(long, default_value = "0.1.0")]
     rules_version: String,
-    /// Python: run `buf generate` and reroot the message types' imports.
+    /// Python: skip `buf generate` (and the rerooting of the message types'
+    /// imports), which otherwise ends every run.
     #[arg(long)]
-    proto_gen: bool,
-    /// Python: run `uv lock`.
+    no_proto_gen: bool,
+    /// Python: skip `uv lock`, which otherwise ends every run.
     #[arg(long)]
-    lock: bool,
+    no_lock: bool,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -195,10 +196,10 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
             let done =
                 angzarr_build::scaffold_python_into(&args.src, &protos, &includes, &app, existing)
                     .map_err(CliError::Build)?;
-            if python.proto_gen {
+            if !python.no_proto_gen {
                 angzarr_build::proto_gen_python(&args.src, &app).map_err(CliError::Build)?;
             }
-            if python.lock {
+            if !python.no_lock {
                 angzarr_build::lock_python(&args.src).map_err(CliError::Build)?;
             }
             done

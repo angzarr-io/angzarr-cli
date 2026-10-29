@@ -7,7 +7,7 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 const PLAYER: &str = "io/angzarr/examples/v1/player.proto";
-const IMPL: &str = "src/angzarr_player/player_aggregate_impl.py";
+const IMPL: &str = "src/angzarr_player/logic_impl.py";
 const MAIN: &str = "src/angzarr_player/main.py";
 
 fn fixtures() -> String {
@@ -35,8 +35,15 @@ fn empty_dir() -> PathBuf {
     dir
 }
 
-/// `angzarr scaffold python` for the player into `root`, with `extra`.
+/// `angzarr scaffold python` for the player into `root`, offline (no buf,
+/// no uv), with `extra`.
 fn scaffold(root: &Path, extra: &[&str]) -> Output {
+    online(root, &[&["--no-proto-gen", "--no-lock"], extra].concat())
+}
+
+/// `angzarr scaffold python` for the player into `root` as a user runs it,
+/// with `extra`.
+fn online(root: &Path, extra: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_angzarr"))
         .args(["scaffold", "python", "--format", "json", "-I", &fixtures()])
         .args(["--domain", "player"])
@@ -101,7 +108,7 @@ fn scaffold_python_writes_the_golden_project() {
             "{path}"
         );
     }
-    assert_eq!(done.len(), 15, "{done:?}");
+    assert_eq!(done.len(), 16, "{done:?}");
     std::fs::remove_dir_all(root.parent().unwrap()).unwrap();
 }
 
@@ -109,7 +116,7 @@ fn scaffold_python_writes_the_golden_project() {
 fn scaffold_python_rewrites_its_own_files_and_never_the_users() {
     let root = empty_dir();
     scaffold(&root, &[]);
-    let mine = "\"\"\"Mine now.\"\"\"\n\n\nclass PlayerAggregateImpl:\n    pass\n";
+    let mine = "\"\"\"Mine now.\"\"\"\n\n\nclass PlayerLogicImpl:\n    pass\n";
     std::fs::write(root.join(IMPL), mine).unwrap();
     std::fs::write(root.join(MAIN), "# edited by hand\n").unwrap();
     let done = actions(&scaffold(&root, &[]), &root);
@@ -128,7 +135,7 @@ fn scaffold_python_missing_adds_the_absent_methods_only() {
     let root = empty_dir();
     scaffold(&root, &[]);
     let fresh = std::fs::read_to_string(root.join(IMPL)).unwrap();
-    let applier = "\n    def apply_move_decided(self, event: MoveDecided, state: PlayerState) -> None:\n        raise NotImplementedError  # TODO: fold MoveDecided into the state\n";
+    let applier = "\n    def apply_move_decided(self, state: PlayerState, event: MoveDecided) -> PlayerState:\n        raise NotImplementedError  # TODO: fold MoveDecided into the state\n";
     let mine = fresh.replace(applier, "").replace(
         "raise NotImplementedError  # TODO: decide DecideMove",
         "return MoveDecided()  # mine",
@@ -185,15 +192,16 @@ fn scaffold_python_needs_a_domain() {
     std::fs::remove_dir_all(&root).unwrap();
 }
 
-/// The project runs: its message types generated (buf's remote plugins),
-/// its environment locked and synced (uv), and the child imports and builds
+/// The default run, as a user runs it, ends with the project ready for
+/// `uv run --locked`: its message types generated (buf's remote plugins)
+/// and rerooted, its `uv.lock` written, and the child importable, building
 /// its host.
 #[test]
-#[ignore = "needs the network (buf.build, GitHub) and a client-python revision with \
-            angzarr_client.child pushed: re-pin CLIENT_PYTHON_REV to the harness's commit"]
-fn scaffold_python_with_proto_gen_and_lock_runs_under_uv() {
+#[ignore = "needs the network (buf.build, GitHub) and cargo (angzarr-client builds its \
+            router library): run with --ignored"]
+fn scaffold_python_by_default_generates_the_wire_types_and_the_lock_and_runs_under_uv() {
     let root = empty_dir();
-    let done = actions(&scaffold(&root, &["--proto-gen", "--lock"]), &root);
+    let done = actions(&online(&root, &[]), &root);
     assert_eq!(action_of(&done, MAIN), "created");
     let pb2 = std::fs::read_to_string(
         root.join("src/angzarr_player/_gen/io/angzarr/examples/v1/player_pb2.py"),
@@ -204,6 +212,7 @@ fn scaffold_python_with_proto_gen_and_lock_runs_under_uv() {
         "{pb2}"
     );
     assert!(root.join("uv.lock").exists());
+    assert!(root.join("src/angzarr_player/_version.py").exists());
     let out = Command::new("uv")
         .args(["run", "--locked", "python", "-c"])
         .arg("from angzarr_player.main import host; host()")

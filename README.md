@@ -71,14 +71,20 @@ of it from an application's host config.
 served to angzarr-embedded as a child process through angzarr-client-python's
 harness (`angzarr_client.child`). The user's files are written once and
 completed with `--missing`: `pyproject.toml` (angzarr-client pinned by
-commit, `CLIENT_PYTHON_REV`) and, per component, an interface (a
-`typing.Protocol` over the domain's messages) and its implementation (each
-method a TODO), neither naming the harness. The CLI's files are rewritten on
-every run: `buf.gen.yaml`, `main.py`, `__main__.py`, `_version.py` and each
-component's dispatch under `_gen`, which adapts the router binding to the
-interface. `--proto-gen` runs `buf generate` and reroots the message types'
-imports (angzarr's own under `angzarr_client.proto`); `--lock` runs `uv
-lock`, for angzarr-embedded's `uv run --locked angzarr-<domain>`.
+commit, `CLIENT_PYTHON_REV`), `logic.py`, the domain's logic interface
+(`<Domain>Logic`, a `typing.Protocol`: per command a decision taking the
+command and the state and returning its events, per event a fold taking the
+state and the event and returning the next state) and `logic_impl.py`, its
+implementation (each method a TODO). Both take and return the domain's plain
+types and name nothing of angzarr or protobuf. The CLI's files are rewritten
+on every run: `domain.py` (the domain's messages as frozen dataclasses and
+integer enums), `buf.gen.yaml`, `main.py`, `__main__.py`, `_version.py` and
+the dispatch under `_gen`, which converts the wire's messages to the plain
+types and back around each call. Every run ends with `buf generate` (the
+message types, their imports rerooted, angzarr's own under
+`angzarr_client.proto`) and `uv lock`, so the project is ready for
+angzarr-embedded's `uv run --locked angzarr-<domain>`, the lock and the
+message types on disk to commit; `--no-proto-gen` and `--no-lock` skip them.
 
 ```
 $ angzarr scaffold python -I proto --src player --domain player \
