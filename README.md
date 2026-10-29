@@ -85,7 +85,9 @@ commit, `CLIENT_PYTHON_REV`), `logic.py`, the domain's logic interface
 command and the state and returning its events, per event a fold taking the
 state and the event and returning the next state) and `logic_impl.py`, its
 implementation (each method a TODO). Both take and return the domain's plain
-types and name nothing of angzarr or protobuf. The CLI's files are rewritten
+types, each decision its `CommandContext` too, and import nothing of angzarr
+or protobuf directly: `domain.py` re-exports the context from
+`angzarr_client.router`. The CLI's files are rewritten
 on every run: `domain.py` (the domain's messages as frozen dataclasses and
 integer enums), `buf.gen.yaml`, `main.py`, `__main__.py`, `_version.py` and
 the dispatch under `_gen`, which converts the wire's messages to the plain

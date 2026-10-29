@@ -6,6 +6,7 @@ from __future__ import annotations
 import dataclasses
 
 from angzarr_player.domain import (
+    CommandContext,
     DecideMove,
     MoveAction,
     MoveDecided,
@@ -30,7 +31,9 @@ def _move(cmd: DecideMove) -> MoveAction:
 
 
 class PlayerLogicImpl(PlayerLogic):
-    def decide_move(self, cmd: DecideMove, state: PlayerState) -> MoveDecided:
+    def decide_move(
+        self, cmd: DecideMove, state: PlayerState, ctx: CommandContext
+    ) -> MoveDecided:
         return MoveDecided(
             table_root=cmd.table_root,
             round=cmd.round,
