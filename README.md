@@ -58,14 +58,18 @@ command, its typed refusal if it has one, and the refused command's
 diagnostic key and its args, is a bug (a policy reacts to events the
 application's own domains recorded): angzarr-embedded dead-letters it.
 
-A command returns `Result<_, Rejection>` (the domain's untyped rejection, a
-diagnostic key and its args) or, refusing one typed refusal, `Result<_, R>`.
+A handler fails in one of two classes: a business rejection, a "no" the
+command's issuer is told of, or a bug, a defect angzarr-embedded alerts and
+dead-letters. A command returns `Result<_, Rejection>` (the domain's untyped
+rejection, a diagnostic key and its args) or, refusing one typed refusal,
+`Result<_, R>`; a policy's bug is its `Error`.
 Its `Ok` is its one event, which may be changed to any shape
 angzarr-embedded takes (`Option<E>`, `Vec<E>`), or, for a command declaring
 several, `Vec<<Component>Event>`: any number of any of its events.
 
-A message named `Context`, `PolicyContext`, `CommandContext`, `Error` or
-`Rejection` (the names the generated domain layer gives the runtime's types)
+A message named `Context`, `PolicyContext`, `CommandContext`, `Error`,
+`Rejection` or `Bug` (the names the generated domain layers give the
+runtime's types)
 fails generation, naming the message; rename it. Files scaffolded before the
 handlers took their context are not migrated by `--missing`, which takes a
 method taking the same message as present: edit their signatures by hand.
@@ -95,9 +99,12 @@ state and the event and returning the next state) and `logic_impl.py`, its
 implementation (each method a TODO). Both take and return the domain's plain
 types, each decision its `CommandContext` too, and import nothing of angzarr
 or protobuf directly: `domain.py` re-exports the context from
-`angzarr_client.router`, and gives a decision `Rejection`, which it raises to
-refuse its command (`raise Rejection("key", name=value)`: a diagnostic key and
-its args, the harness's coded error as a business refusal). The CLI's files are rewritten
+`angzarr_client.router`, with the two classes a decision fails with, both
+angzarr-client-python's and each a diagnostic key and its args: `Rejection`,
+raised to refuse its command (`raise Rejection("key", name=value)`, a
+business "no", FAILED_PRECONDITION), and `Bug`, raised for a defect (`raise
+Bug("key", name=value)`, answered UNHANDLED_HANDLER_ERROR with the key and
+args as its cause; angzarr-embedded alerts it and dead-letters the command). The CLI's files are rewritten
 on every run: `domain.py` (the domain's messages as frozen dataclasses and
 integer enums), `buf.gen.yaml`, `main.py`, `__main__.py`, `_version.py` and
 the dispatch under `_gen`, which converts the wire's messages to the plain
