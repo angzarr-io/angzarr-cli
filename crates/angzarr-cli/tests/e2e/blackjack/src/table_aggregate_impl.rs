@@ -37,13 +37,16 @@ fn rejected(rejection: agg_table::Rejection) -> Rejection {
 
 impl TableAggregateImpl {
     /// `events` folded into a copy of the table, and the step after an
-    /// action decided on it.
-    fn after(&self, mut events: Vec<TableAggregateEvent>) -> Vec<TableAggregateEvent> {
+    /// action decided on it; the dealer running the shoe out is a bug.
+    fn after(&self, mut events: Vec<TableAggregateEvent>) -> Result<Vec<TableAggregateEvent>, Bug> {
         let mut working = self.clone();
         for event in &events {
             working.fold(event);
         }
-        match working.table.after_action() {
+        let after = working.table.after_action().map_err(|ran_out| {
+            Bug::new("examples-table-shoe-ran-out").arg("round", ran_out.round)
+        })?;
+        match after {
             AfterAction::Turn(turn) => {
                 events.push(TableAggregateEvent::TurnStarted(ours!(turn, TurnStarted)))
             }
@@ -59,7 +62,7 @@ impl TableAggregateImpl {
             }
             AfterAction::Nothing => {}
         }
-        events
+        Ok(events)
     }
 
     fn fold(&mut self, event: &TableAggregateEvent) {
@@ -146,19 +149,19 @@ impl TableAggregate for TableAggregateImpl {
         if let Some(dealt) = working.table.deal().map_err(rejected)? {
             events.push(TableAggregateEvent::RoundDealt(ours!(dealt, RoundDealt)));
         }
-        Ok(self.after(events))
+        Ok(self.after(events)?)
     }
 
     fn hit(&self, cmd: &Hit, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
         let card = self.table.hit(&theirs!(cmd, Hit)).map_err(rejected)?;
-        Ok(self.after(vec![TableAggregateEvent::CardDealt(ours!(card, CardDealt))]))
+        Ok(self.after(vec![TableAggregateEvent::CardDealt(ours!(card, CardDealt))])?)
     }
 
     fn stand(&self, cmd: &Stand, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
         let stood = self.table.stand(&theirs!(cmd, Stand)).map_err(rejected)?;
         Ok(self.after(vec![TableAggregateEvent::HandStood(ours!(
             stood, HandStood
-        ))]))
+        ))])?)
     }
 
     fn double_down(&self, cmd: &DoubleDown, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
@@ -169,7 +172,7 @@ impl TableAggregate for TableAggregateImpl {
         Ok(self.after(vec![TableAggregateEvent::HandDoubled(ours!(
             doubled,
             HandDoubled
-        ))]))
+        ))])?)
     }
 
     fn confirm_seat(&self, cmd: &ConfirmSeat, _ctx: &Context) -> Result<Option<PlayerSeated>, Failed<SeatNotConfirmable>> {
