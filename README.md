@@ -40,35 +40,39 @@ implementation into the crate's `src`, once: `wallet.rs`, a trait over the
 domain types (one method per command, fact and event; a policy's per event it
 reacts to, taking the source stream's root, the event and its `PolicyContext`
 and returning the commands to send, each with its target root, or its
-`Error`), and `wallet_impl.rs`, its implementation (every body `todo!()`,
+`Bug`), and `wallet_impl.rs`, its implementation (every body `todo!()`,
 the state the wire type). Each command takes its `Context` too (the instant
 its events are recorded at, and the router's context of the input as
 `ctx.command`), and so does each fact, which returns its event with no
 `Result`: a fact is recorded, never refused. Appliers stay folds of the
 state and the event. Neither file imports anything from angzarr-embedded
-directly: the context types and `Error` are `crate::domain`'s, which
-re-exports them. An existing file is the user's and is kept. `--missing` adds
+directly: the context types, `Failed`, `BusinessStatus` and `Bug` are
+`crate::domain`'s, which re-exports or defines them. An existing file is the user's and is kept. `--missing` adds
 the methods an existing file lacks and changes nothing else, refusing an
 input taken as `cmd` where the proto declares a fact, or as `fact` where it
 declares a command. `--translate <policy>:<command>=<fact>` sets a policy's
 refusal switch to translate that command's refusals into a fact of its
 source, adding a `<command>_refused` method, which takes the refused
 command, its typed refusal if it has one, and the refused command's
-`CommandContext`, and returns `Result<Fact, Error>`. A policy's `Error`, a
-diagnostic key and its args, is a bug (a policy reacts to events the
+`CommandContext`, and returns `Result<Fact, Bug>`. A policy's `Bug`, a
+diagnostic key and its args, is a defect (a policy reacts to events the
 application's own domains recorded): angzarr-embedded dead-letters it.
 
 A handler fails in one of two classes: a business rejection, a "no" the
 command's issuer is told of, or a bug, a defect angzarr-embedded alerts and
-dead-letters. A command returns `Result<_, Rejection>` (the domain's untyped
-rejection, a diagnostic key and its args) or, refusing one typed refusal,
-`Result<_, R>`; a policy's bug is its `Error`.
+dead-letters. A command returns `Result<_, Failed<Rejection>>` (the
+domain's untyped rejection, a diagnostic key and its args) or, refusing one
+typed refusal, `Result<_, Failed<R>>`: `Err(rejection)?` refuses under
+FAILED_PRECONDITION, `Failed::from(rejection).with_status(..)` under another
+`BusinessStatus`, and `Err(Bug::new("key").arg(..))?` fails with a bug,
+dead-lettered as UNHANDLED_HANDLER_ERROR with its key as the cause; a
+policy's bug is its `Bug`.
 Its `Ok` is its one event, which may be changed to any shape
 angzarr-embedded takes (`Option<E>`, `Vec<E>`), or, for a command declaring
 several, `Vec<<Component>Event>`: any number of any of its events.
 
-A message named `Context`, `PolicyContext`, `CommandContext`, `Error`,
-`Rejection` or `Bug` (the names the generated domain layers give the
+A message named `Context`, `PolicyContext`, `CommandContext`, `Rejection`,
+`Bug`, `Failed` or `BusinessStatus` (the names the generated domain layers give the
 runtime's types)
 fails generation, naming the message; rename it. Files scaffolded before the
 handlers took their context are not migrated by `--missing`, which takes a
@@ -80,8 +84,8 @@ $ angzarr scaffold rust -I proto --src src buyin/v1/wallet.proto buyin/v1/buy_in
 
 The build script generates the rest into `OUT_DIR` with `angzarr-build`, the
 CLI's and regenerated every build: `markup_domain` (the domain types, their
-`DomainMessage` impls, `Rejection`, `Error`, the re-exported `Context`,
-`PolicyContext` and `CommandContext`, each component's `<Component>Command`
+`DomainMessage` impls, `Rejection`, `Bug`, the re-exported `Context`,
+`PolicyContext`, `CommandContext`, `Failed` and `BusinessStatus`, each component's `<Component>Command`
 and `<Component>Event` enums), `adapters` (each component's angzarr-embedded
 markup, named `policy-<input>-<output>` for a policy, delegating to its
 interface; a domain served by a child process gets a contract instead) and

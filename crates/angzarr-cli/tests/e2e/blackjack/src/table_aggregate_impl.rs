@@ -83,7 +83,7 @@ impl TableAggregateImpl {
 }
 
 impl TableAggregate for TableAggregateImpl {
-    fn create_table(&self, cmd: &CreateTable, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection> {
+    fn create_table(&self, cmd: &CreateTable, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
         let (created, shuffled) = self
             .table
             .create_table(&theirs!(cmd, CreateTable))
@@ -94,7 +94,7 @@ impl TableAggregate for TableAggregateImpl {
         ])
     }
 
-    fn request_seat(&self, cmd: &RequestSeat, _ctx: &Context) -> Result<Option<SeatHeld>, Rejection> {
+    fn request_seat(&self, cmd: &RequestSeat, _ctx: &Context) -> Result<Option<SeatHeld>, Failed<Rejection>> {
         let held = self
             .table
             .request_seat(&theirs!(cmd, RequestSeat))
@@ -102,7 +102,7 @@ impl TableAggregate for TableAggregateImpl {
         Ok(held.map(|h| ours!(h, SeatHeld)))
     }
 
-    fn leave_table(&self, cmd: &LeaveTable, ctx: &Context) -> Result<PlayerCashedOut, Rejection> {
+    fn leave_table(&self, cmd: &LeaveTable, ctx: &Context) -> Result<PlayerCashedOut, Failed<Rejection>> {
         // agg-table's leave_table needs the table's stream root: the
         // context's cover names it.
         let root: [u8; 16] = ctx
@@ -119,7 +119,7 @@ impl TableAggregate for TableAggregateImpl {
         Ok(ours!(out, PlayerCashedOut))
     }
 
-    fn place_bet(&self, cmd: &PlaceBet, _ctx: &Context) -> Result<BetPlaced, Rejection> {
+    fn place_bet(&self, cmd: &PlaceBet, _ctx: &Context) -> Result<BetPlaced, Failed<Rejection>> {
         let bet = self
             .table
             .place_bet(&theirs!(cmd, PlaceBet))
@@ -127,7 +127,7 @@ impl TableAggregate for TableAggregateImpl {
         Ok(ours!(bet, BetPlaced))
     }
 
-    fn deal_round(&self, cmd: &DealRound, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection> {
+    fn deal_round(&self, cmd: &DealRound, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
         let mut events = Vec::new();
         if let Some(shuffled) = self
             .table
@@ -149,19 +149,19 @@ impl TableAggregate for TableAggregateImpl {
         Ok(self.after(events))
     }
 
-    fn hit(&self, cmd: &Hit, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection> {
+    fn hit(&self, cmd: &Hit, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
         let card = self.table.hit(&theirs!(cmd, Hit)).map_err(rejected)?;
         Ok(self.after(vec![TableAggregateEvent::CardDealt(ours!(card, CardDealt))]))
     }
 
-    fn stand(&self, cmd: &Stand, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection> {
+    fn stand(&self, cmd: &Stand, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
         let stood = self.table.stand(&theirs!(cmd, Stand)).map_err(rejected)?;
         Ok(self.after(vec![TableAggregateEvent::HandStood(ours!(
             stood, HandStood
         ))]))
     }
 
-    fn double_down(&self, cmd: &DoubleDown, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection> {
+    fn double_down(&self, cmd: &DoubleDown, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
         let doubled = self
             .table
             .double_down(&theirs!(cmd, DoubleDown))
@@ -172,14 +172,14 @@ impl TableAggregate for TableAggregateImpl {
         ))]))
     }
 
-    fn confirm_seat(&self, cmd: &ConfirmSeat, _ctx: &Context) -> Result<Option<PlayerSeated>, SeatNotConfirmable> {
+    fn confirm_seat(&self, cmd: &ConfirmSeat, _ctx: &Context) -> Result<Option<PlayerSeated>, Failed<SeatNotConfirmable>> {
         match self.table.confirm_seat(&theirs!(cmd, ConfirmSeat)) {
             Ok(seated) => Ok(seated.map(|s| ours!(s, PlayerSeated))),
-            Err(refusal) => Err(ours!(refusal, SeatNotConfirmable)),
+            Err(refusal) => Err(ours!(refusal, SeatNotConfirmable).into()),
         }
     }
 
-    fn release_seat(&self, cmd: &ReleaseSeat, _ctx: &Context) -> Result<Option<SeatReleased>, Rejection> {
+    fn release_seat(&self, cmd: &ReleaseSeat, _ctx: &Context) -> Result<Option<SeatReleased>, Failed<Rejection>> {
         Ok(self
             .table
             .release_seat(&theirs!(cmd, ReleaseSeat))

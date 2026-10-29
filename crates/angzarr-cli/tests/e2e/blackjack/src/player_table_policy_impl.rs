@@ -17,7 +17,7 @@ impl PlayerTablePolicy for PlayerTablePolicyImpl {
         _source: &[u8],
         event: &MoveDecided,
         _ctx: &PolicyContext,
-    ) -> Result<Vec<(Vec<u8>, TableAggregateCommand)>, Error> {
+    ) -> Result<Vec<(Vec<u8>, TableAggregateCommand)>, Bug> {
         let event = v1::MoveDecided::decode(
             &*crate::wire::MoveDecided::from(event.clone()).encode_to_vec(),
         )
@@ -27,7 +27,7 @@ impl PlayerTablePolicy for PlayerTablePolicyImpl {
         let to = Policies
             .move_decided(&event)
             .map_err(|NoMove::UnknownAction(action)| {
-                Error::new("policy-player-table-unknown-action").arg("action", action)
+                Bug::new("policy-player-table-unknown-action").arg("action", action)
             })?;
         let command = match to.command {
             TableMove::Hit(c) => TableAggregateCommand::Hit(Hit { seat: c.seat }),

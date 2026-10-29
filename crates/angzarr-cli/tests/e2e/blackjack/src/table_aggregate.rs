@@ -10,25 +10,25 @@
 use crate::domain::*;
 
 pub trait TableAggregate {
-    fn create_table(&self, cmd: &CreateTable, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection>;
+    fn create_table(&self, cmd: &CreateTable, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>>;
 
-    fn request_seat(&self, cmd: &RequestSeat, ctx: &Context) -> Result<Option<SeatHeld>, Rejection>;
+    fn request_seat(&self, cmd: &RequestSeat, ctx: &Context) -> Result<Option<SeatHeld>, Failed<Rejection>>;
 
-    fn leave_table(&self, cmd: &LeaveTable, ctx: &Context) -> Result<PlayerCashedOut, Rejection>;
+    fn leave_table(&self, cmd: &LeaveTable, ctx: &Context) -> Result<PlayerCashedOut, Failed<Rejection>>;
 
-    fn place_bet(&self, cmd: &PlaceBet, ctx: &Context) -> Result<BetPlaced, Rejection>;
+    fn place_bet(&self, cmd: &PlaceBet, ctx: &Context) -> Result<BetPlaced, Failed<Rejection>>;
 
-    fn deal_round(&self, cmd: &DealRound, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection>;
+    fn deal_round(&self, cmd: &DealRound, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>>;
 
-    fn hit(&self, cmd: &Hit, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection>;
+    fn hit(&self, cmd: &Hit, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>>;
 
-    fn stand(&self, cmd: &Stand, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection>;
+    fn stand(&self, cmd: &Stand, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>>;
 
-    fn double_down(&self, cmd: &DoubleDown, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection>;
+    fn double_down(&self, cmd: &DoubleDown, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>>;
 
-    fn confirm_seat(&self, cmd: &ConfirmSeat, ctx: &Context) -> Result<Option<PlayerSeated>, SeatNotConfirmable>;
+    fn confirm_seat(&self, cmd: &ConfirmSeat, ctx: &Context) -> Result<Option<PlayerSeated>, Failed<SeatNotConfirmable>>;
 
-    fn release_seat(&self, cmd: &ReleaseSeat, ctx: &Context) -> Result<Option<SeatReleased>, Rejection>;
+    fn release_seat(&self, cmd: &ReleaseSeat, ctx: &Context) -> Result<Option<SeatReleased>, Failed<Rejection>>;
 
     fn apply_table_created(&mut self, event: &TableCreated);
 

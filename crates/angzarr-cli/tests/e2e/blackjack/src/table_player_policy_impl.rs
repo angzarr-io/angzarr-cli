@@ -17,7 +17,7 @@ impl TablePlayerPolicy for TablePlayerPolicyImpl {
         source: &[u8],
         event: &TurnStarted,
         _ctx: &PolicyContext,
-    ) -> Result<Vec<(Vec<u8>, PlayerAggregateCommand)>, Error> {
+    ) -> Result<Vec<(Vec<u8>, PlayerAggregateCommand)>, Bug> {
         let event = v1::TurnStarted::decode(
             &*crate::wire::TurnStarted::from(event.clone()).encode_to_vec(),
         )
