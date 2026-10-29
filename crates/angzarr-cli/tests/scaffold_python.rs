@@ -51,7 +51,7 @@ fn online(root: &Path, extra: &[&str]) -> Output {
             "--proto-git",
             "https://github.com/angzarr-io/angzarr-project",
             "--proto-ref",
-            "a91b88262921786c246e63e2e694509fe8060a86",
+            "b9b87bfc30acbb90b089515761186ceb5aa6d52d",
         ])
         .arg("--src")
         .arg(root)

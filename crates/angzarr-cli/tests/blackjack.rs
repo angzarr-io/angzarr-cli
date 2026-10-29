@@ -126,7 +126,7 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
             "--proto-git",
             "https://github.com/angzarr-io/angzarr-project",
             "--proto-ref",
-            "a91b88262921786c246e63e2e694509fe8060a86",
+            "b9b87bfc30acbb90b089515761186ceb5aa6d52d",
             PROTOS[1],
         ],
     );

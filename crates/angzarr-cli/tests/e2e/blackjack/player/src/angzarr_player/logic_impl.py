@@ -1,5 +1,5 @@
 """PlayerLogicImpl: a simplified basic strategy, and a count of the
-decisions made."""
+decisions made and of those made on a two-card hand."""
 
 from __future__ import annotations
 
@@ -32,8 +32,19 @@ def _move(cmd: DecideMove) -> MoveAction:
 class PlayerLogicImpl(PlayerLogic):
     def decide_move(self, cmd: DecideMove, state: PlayerState) -> MoveDecided:
         return MoveDecided(
-            table_root=cmd.table_root, round=cmd.round, seat=cmd.seat, action=_move(cmd)
+            table_root=cmd.table_root,
+            round=cmd.round,
+            seat=cmd.seat,
+            action=_move(cmd),
+            cards=cmd.cards,
+            total=cmd.total,
+            soft=cmd.soft,
+            dealer_up=cmd.dealer_up,
         )
 
     def apply_move_decided(self, state: PlayerState, event: MoveDecided) -> PlayerState:
-        return dataclasses.replace(state, decisions=state.decisions + 1)
+        return dataclasses.replace(
+            state,
+            decisions=state.decisions + 1,
+            hands_seen=state.hands_seen + (1 if len(event.cards) == 2 else 0),
+        )
