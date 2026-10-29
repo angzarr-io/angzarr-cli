@@ -70,7 +70,7 @@ pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
         command_id: Uuid::from_bytes([0xe1; 16]),
     };
     match app.handle(book(), &sampled) {
-        Ok(handled) => println!("handle: accepted {handled:?}"),
+        Ok(_) => println!("handle: accepted"),
         Err(Failure::Rejected(rejected)) => println!(
             "handle: rejected {} {} recovery {:?}",
             rejected.code(),
