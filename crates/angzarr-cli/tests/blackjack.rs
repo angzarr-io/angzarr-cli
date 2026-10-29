@@ -14,8 +14,11 @@
 //! `$ANGZARR_EXAMPLES_RUST` (by default
 //! `~/workspace/worktrees/examples-rust--blackjack-embedded`).
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+mod common;
+
+use std::path::PathBuf;
+
+use common::{angzarr, copy_dir, here, overlay};
 
 const PROTOS: &[&str] = &[
     "io/angzarr/examples/v1/table.proto",
@@ -23,57 +26,11 @@ const PROTOS: &[&str] = &[
     "io/angzarr/examples/v1/policies.proto",
 ];
 
-fn here() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
 fn examples_rust() -> PathBuf {
     match std::env::var_os("ANGZARR_EXAMPLES_RUST") {
         Some(dir) => PathBuf::from(dir),
         None => PathBuf::from(std::env::var_os("HOME").expect("HOME is set"))
             .join("workspace/worktrees/examples-rust--blackjack-embedded"),
-    }
-}
-
-/// `angzarr <args>` in `dir`, which must succeed.
-fn angzarr(dir: &Path, args: &[&str]) {
-    let out = Command::new(env!("CARGO_BIN_EXE_angzarr"))
-        .args(args)
-        .args(["--format", "text"])
-        .current_dir(dir)
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "angzarr {args:?}:\n{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
-
-/// The user's files over the scaffold's: every file under `from`, at the
-/// same path under `to`.
-fn overlay(from: &Path, to: &Path) {
-    for entry in std::fs::read_dir(from).unwrap() {
-        let path = entry.unwrap().path();
-        let target = to.join(path.file_name().unwrap());
-        if path.is_dir() {
-            overlay(&path, &target);
-        } else {
-            std::fs::copy(&path, &target).unwrap();
-        }
-    }
-}
-
-fn copy_dir(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap() {
-        let path = entry.unwrap().path();
-        let target = to.join(path.file_name().unwrap());
-        if path.is_dir() {
-            copy_dir(&path, &target);
-        } else {
-            std::fs::copy(&path, &target).unwrap();
-        }
     }
 }
 
@@ -146,17 +103,8 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
     // A workspace of its own, wherever the temporary directory is.
     let manifest = manifest.replace("prost = \"0.14\"\n", &crates) + "\n[workspace]\n";
     std::fs::write(app.join("Cargo.toml"), manifest).unwrap();
-    let config = std::fs::read_to_string(app.join("angzarr.toml"))
-        .unwrap()
-        .replace("path = \"angzarr.db\"", "in_memory = true");
-    std::fs::write(app.join("angzarr.toml"), config).unwrap();
 
-    let out = Command::new(env!("CARGO"))
-        .args(["run", "--quiet"])
-        .current_dir(&app)
-        .env("CARGO_TARGET_DIR", here().join("../../target/e2e"))
-        .output()
-        .expect("cargo runs");
+    let out = common::run(&app);
     assert!(
         out.status.success(),
         "the app runs:\n{}",
