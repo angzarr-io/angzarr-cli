@@ -162,7 +162,15 @@ just test     # cargo test --workspace
 just lint     # clippy -D warnings and the rustfmt check
 just test-pkg angzarr-codegen   # one package's tests
 just mutants-staged            # cargo-mutants over the staged Rust diff
+just mutants-all               # cargo-mutants over the workspace, judged per crate
+just hooks-install             # once per clone: lefthook's git hooks
 ```
+
+The git hooks (`lefthook.yml`): pre-commit formats the staged Rust, lints
+and runs every test; pre-push (`just push-check`) runs every test of each
+pushed commit, in a tree of its own, then mutation-tests what the push adds
+against each crate's `mutation_thresholds` (justfile). Failing tests may be
+pushed to a branch, with a warning, but not to main.
 
 The toolchain is pinned in `rust-toolchain.toml`.
 
