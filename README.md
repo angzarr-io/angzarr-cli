@@ -67,6 +67,25 @@ $ angzarr scaffold python -I proto --src player --domain player \
     io/angzarr/examples/v1/player.proto
 ```
 
+`angzarr scaffold startup --python <domain>` writes an angzarr-embedded
+application's startup, once, as the user's: `angzarr.toml`, the host config
+(angzarr-embedded-host's `HostConfig`: each domain, its language, and for a
+domain served by a child process its `dir` and `entry` after the language's
+default launch, `uv run --locked` for Python; `launch` replaces both),
+`build.rs` and a thin `src/main.rs`. Every domain not named `--python` is
+Rust, in process, and so is every policy between two of the application's
+domains. `angzarr lint startup` checks a host config against the protos: a
+language with no default launch and no `launch`, an empty `launch`, a domain
+no aggregate or process manager owns, one listed twice, and one of the protos
+left out; each is a warning, and any fails the run.
+
+```
+$ angzarr scaffold startup -I proto --src . --name blackjack --python player \
+    io/angzarr/examples/v1/table.proto io/angzarr/examples/v1/player.proto \
+    io/angzarr/examples/v1/policies.proto
+$ angzarr lint startup -I proto io/angzarr/examples/v1/table.proto ...
+```
+
 Every scaffold reads the other protos of its protos' directories too, so a
 policy or a projector a scaffolded message names is found without being
 scaffolded; a projector is never scaffolded.

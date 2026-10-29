@@ -3,6 +3,7 @@
 
 angzarr-cli-translate-malformed = --translate { $value } is not <policy>:<command>=<fact>
 angzarr-cli-domain-required = scaffold python needs --domain
+angzarr-cli-lints = { $config } has { $count } lints
 
 ## Remedies.
 

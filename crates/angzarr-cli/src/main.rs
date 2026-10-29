@@ -4,7 +4,9 @@ use std::fmt;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use angzarr_build::{BuildError, Existing, ProtoInput, PythonApp, Scaffolded, Translate};
+use angzarr_build::{
+    BuildError, Existing, ProtoInput, PythonApp, Scaffolded, StartupApp, Translate,
+};
 use angzarr_fmt::{Catalog, Failure, Format, Viewable};
 use angzarr_fmt_clap::{FormatArgs, finish};
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -28,7 +30,40 @@ enum Command {
     /// Write each component's markup scaffold, once: the user's file, never
     /// overwritten.
     Scaffold(Box<ScaffoldArgs>),
+    /// Check a project's files against its protos.
+    Lint(LintArgs),
 }
+
+#[derive(Args)]
+struct LintArgs {
+    /// What to check: `startup`, the host config.
+    #[arg(value_enum)]
+    what: LintWhat,
+    /// The protos declaring the components, as import names under an
+    /// include.
+    #[arg(required = true)]
+    protos: Vec<String>,
+    /// Where the protos' imports are found; angzarr's own are always found.
+    #[arg(short = 'I', long = "include", value_name = "DIR")]
+    includes: Vec<String>,
+    /// The host config.
+    #[arg(long, default_value = "angzarr.toml")]
+    config: PathBuf,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum LintWhat {
+    Startup,
+}
+
+/// A lint run that found nothing.
+#[derive(Serialize)]
+struct LintReport {
+    config: String,
+    lints: usize,
+}
+
+impl Viewable for LintReport {}
 
 #[derive(Args)]
 struct ScaffoldArgs {
@@ -56,6 +91,20 @@ struct ScaffoldArgs {
     missing: bool,
     #[command(flatten)]
     python: PythonArgs,
+    #[command(flatten)]
+    startup: StartupArgs,
+}
+
+/// What `scaffold startup` alone takes.
+#[derive(Args)]
+struct StartupArgs {
+    /// Startup: the application's name, for the generated prose.
+    #[arg(long, default_value = "the application")]
+    name: String,
+    /// Startup: a domain served by a Python child process; every other
+    /// domain is Rust, in process. Repeatable.
+    #[arg(long = "python", value_name = "DOMAIN")]
+    python: Vec<String>,
 }
 
 /// What `scaffold python` alone takes.
@@ -89,6 +138,8 @@ struct PythonArgs {
 enum Lang {
     Rust,
     Python,
+    /// The application's startup: its host config, build.rs and main.rs.
+    Startup,
 }
 
 /// What a scaffold run did, one entry per component file.
@@ -152,6 +203,15 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
             }
             done
         }
+        Lang::Startup => {
+            let app = StartupApp {
+                name: args.startup.name.clone(),
+                python: args.startup.python.clone(),
+                includes: args.includes.clone(),
+            };
+            angzarr_build::startup_into(&args.src, &protos, &includes, &app)
+                .map_err(CliError::Build)?
+        }
     };
     Ok(report(done))
 }
@@ -174,6 +234,36 @@ fn report(done: Vec<Scaffolded>) -> ScaffoldReport {
         })
         .collect();
     ScaffoldReport { files }
+}
+
+/// `angzarr lint startup`: each lint a warning on stderr, and a failure
+/// when there is any.
+fn lint(args: LintArgs, format: Format, catalog: &Catalog) -> Result<LintReport, Box<dyn Failure>> {
+    let LintWhat::Startup = args.what;
+    let protos: Vec<&str> = args.protos.iter().map(String::as_str).collect();
+    let includes: Vec<&str> = args.includes.iter().map(String::as_str).collect();
+    let lints =
+        angzarr_build::lint_startup(&args.config, &protos, &includes).map_err(CliError::Build)?;
+    let mut stderr = std::io::stderr().lock();
+    for lint in &lints {
+        let warning = angzarr_fmt::Warning {
+            prog: "angzarr",
+            diagnostic: lint,
+            remedy: None,
+        };
+        let _ = angzarr_fmt::write_warning(&mut stderr, format, catalog, &warning);
+    }
+    if !lints.is_empty() {
+        return Err(CliError::Lints {
+            config: args.config.display().to_string(),
+            count: lints.len(),
+        }
+        .into());
+    }
+    Ok(LintReport {
+        config: args.config.display().to_string(),
+        lints: 0,
+    })
 }
 
 /// `<policy>:<command>=<fact>` as a translate selection.
@@ -200,6 +290,8 @@ enum CliError {
     TranslateMalformed { value: String },
     /// `scaffold python` without `--domain`.
     DomainRequired,
+    /// `lint` found `count` problems in `config`.
+    Lints { config: String, count: usize },
     /// Generation failed; reported as the build error itself.
     Build(BuildError),
 }
@@ -211,6 +303,7 @@ impl fmt::Display for CliError {
                 write!(f, "--translate {value} is not <policy>:<command>=<fact>")
             }
             CliError::DomainRequired => f.write_str("scaffold python needs --domain"),
+            CliError::Lints { config, count } => write!(f, "{config} has {count} lints"),
             CliError::Build(error) => error.fmt(f),
         }
     }
@@ -223,6 +316,7 @@ impl Diagnostic for CliError {
         match self {
             CliError::TranslateMalformed { .. } => "angzarr-cli-translate-malformed",
             CliError::DomainRequired => "angzarr-cli-domain-required",
+            CliError::Lints { .. } => "angzarr-cli-lints",
             CliError::Build(error) => error.code(),
         }
     }
@@ -231,6 +325,10 @@ impl Diagnostic for CliError {
         match self {
             CliError::TranslateMalformed { value } => vec![("value", value.as_str().into())],
             CliError::DomainRequired => Vec::new(),
+            CliError::Lints { config, count } => vec![
+                ("config", config.as_str().into()),
+                ("count", (*count as i64).into()),
+            ],
             CliError::Build(error) => error.args(),
         }
     }
@@ -248,7 +346,7 @@ impl Failure for CliError {
                 "angzarr-cli-domain-name",
                 "name the domain the project serves, e.g. --domain player",
             )),
-            CliError::Build(_) => None,
+            CliError::Lints { .. } | CliError::Build(_) => None,
         }
     }
 }
@@ -304,6 +402,10 @@ fn main() -> ExitCode {
     match cli.command {
         Command::Version => finish(format, &catalog, Ok::<_, Box<dyn Failure>>(version())),
         Command::Scaffold(args) => finish(format, &catalog, scaffold(*args)),
+        Command::Lint(args) => {
+            let result = lint(args, format, &catalog);
+            finish(format, &catalog, result)
+        }
     }
 }
 
@@ -324,6 +426,10 @@ mod tests {
             Box::new(remedy),
             Box::new(domain),
             Box::new(domain_remedy),
+            Box::new(CliError::Lints {
+                config: "x".to_string(),
+                count: 2,
+            }),
         ]
     }
 
