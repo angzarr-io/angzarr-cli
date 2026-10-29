@@ -47,7 +47,9 @@ impl Catalog {
             })
     }
 
-    /// The diagnostic's message in this catalog's language.
+    /// The diagnostic's message in this catalog's language; for a code the
+    /// catalog has no message for, or one that fails to render, its code
+    /// and args (its `Display`), never English of its own.
     pub fn render(&self, d: &dyn Diagnostic) -> String {
         let Some(pattern) = self.bundle.get_message(d.code()).and_then(|m| m.value()) else {
             return d.to_string();
@@ -167,16 +169,16 @@ mod tests {
         catalog
             .add("greet = hello { $who }, { $n } times\n")
             .unwrap();
-        let d = Report::new("greet", "english fallback")
-            .arg("who", "world")
-            .arg("n", 3u32);
+        let d = Report::new("greet").arg("who", "world").arg("n", 3u32);
         assert_eq!(catalog.render(&d), "hello world, 3 times");
     }
 
+    /// A code no catalog holds renders as its code and args (decision
+    /// 14.37): a diagnostic carries no English to fall back to.
     #[test]
-    fn an_unknown_code_falls_back_to_the_english() {
-        let d = Report::new("not-in-catalog", "english fallback");
-        assert_eq!(Catalog::en_us().render(&d), "english fallback");
+    fn an_unknown_code_falls_back_to_its_code_and_args() {
+        let d = Report::new("not-in-catalog").arg("n", 3u32);
+        assert_eq!(Catalog::en_us().render(&d), "not-in-catalog n=3");
     }
 
     #[test]
@@ -185,8 +187,8 @@ mod tests {
         catalog
             .add("outer = could not load: { $cause }\ninner = no file { $path }\n")
             .unwrap();
-        let inner = Report::new("inner", "no file").arg("path", "a.yaml");
-        let outer = Report::new("outer", "outer").arg("cause", Arg::nested(&inner));
+        let inner = Report::new("inner").arg("path", "a.yaml");
+        let outer = Report::new("outer").arg("cause", Arg::nested(&inner));
         assert_eq!(catalog.render(&outer), "could not load: no file a.yaml");
     }
 
@@ -200,8 +202,8 @@ mod tests {
     #[test]
     fn check_names_a_missing_message_and_mismatched_args() {
         let samples: Vec<Box<dyn Diagnostic>> = vec![
-            Box::new(Report::new("missing", "m")),
-            Box::new(Report::new("wrong-args", "w").arg("expected", "x")),
+            Box::new(Report::new("missing")),
+            Box::new(Report::new("wrong-args").arg("expected", "x")),
         ];
         let problems = check("wrong-args = uses { $other }\n", &samples);
         assert_eq!(problems.len(), 2);

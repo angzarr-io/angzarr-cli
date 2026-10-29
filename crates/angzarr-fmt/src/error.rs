@@ -87,10 +87,9 @@ impl Diagnostic for FmtError {
 impl Failure for FmtError {
     fn remedy(&self) -> Option<Report> {
         match self {
-            FmtError::TomlNeedsTable { .. } | FmtError::TomlNull { .. } => Some(Report::new(
-                "angzarr-fmt-use-json-or-yaml",
-                "use --format json or --format yaml for this output",
-            )),
+            FmtError::TomlNeedsTable { .. } | FmtError::TomlNull { .. } => {
+                Some(Report::new("angzarr-fmt-use-json-or-yaml"))
+            }
             _ => None,
         }
     }

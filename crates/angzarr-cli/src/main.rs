@@ -348,15 +348,8 @@ impl Diagnostic for CliError {
 impl Failure for CliError {
     fn remedy(&self) -> Option<Report> {
         match self {
-            CliError::TranslateMalformed { .. } => Some(Report::new(
-                "angzarr-cli-translate-form",
-                "write --translate as <policy>:<command>=<fact>, each a fully qualified \
-                 message name, e.g. buyin.v1.BuyInWalletPolicy:buyin.v1.Hold=buyin.v1.HoldLost",
-            )),
-            CliError::DomainRequired => Some(Report::new(
-                "angzarr-cli-domain-name",
-                "name the domain the project serves, e.g. --domain player",
-            )),
+            CliError::TranslateMalformed { .. } => Some(Report::new("angzarr-cli-translate-form")),
+            CliError::DomainRequired => Some(Report::new("angzarr-cli-domain-name")),
             CliError::Lints { .. } | CliError::Build(_) => None,
         }
     }
