@@ -38,15 +38,23 @@ through the crate's en-US Fluent catalog.
 `angzarr scaffold rust` writes each component's interface and
 implementation into the crate's `src`, once: `wallet.rs`, a trait over the
 domain types (one method per command, fact and event; a policy's per event it
-reacts to, taking the source stream's root and returning the commands to
-send, each with its target root), and `wallet_impl.rs`, its implementation
-(every body `todo!()`, the state the wire type). Neither names angzarr-embedded
-or its markup. An existing file is the user's and is kept. `--missing` adds
+reacts to, taking the source stream's root, the event and its `PolicyContext`
+and returning the commands to send, each with its target root, or its
+`Error`), and `wallet_impl.rs`, its implementation (every body `todo!()`,
+the state the wire type). Each command takes its `Context` too (the instant
+its events are recorded at, and the router's context of the input as
+`ctx.command`). Neither file imports anything from angzarr-embedded
+directly: the context types and `Error` are `crate::domain`'s, which
+re-exports them. An existing file is the user's and is kept. `--missing` adds
 the methods an existing file lacks and changes nothing else, refusing an
 input taken as `cmd` where the proto declares a fact, or as `fact` where it
 declares a command. `--translate <policy>:<command>=<fact>` sets a policy's
 refusal switch to translate that command's refusals into a fact of its
-source, adding a `<command>_refused` method.
+source, adding a `<command>_refused` method, which takes the refused
+command, its typed refusal if it has one, and the refused command's
+`CommandContext`, and returns `Result<Fact, Error>`. A policy's `Error`, a
+diagnostic key and its args, is a bug (a policy reacts to events the
+application's own domains recorded): angzarr-embedded dead-letters it.
 
 A command returns `Result<_, Rejection>` (the domain's untyped rejection, a
 diagnostic key and its args) or, refusing one typed refusal, `Result<_, R>`.
@@ -60,8 +68,9 @@ $ angzarr scaffold rust -I proto --src src buyin/v1/wallet.proto buyin/v1/buy_in
 
 The build script generates the rest into `OUT_DIR` with `angzarr-build`, the
 CLI's and regenerated every build: `markup_domain` (the domain types, their
-`DomainMessage` impls, `Rejection`, each component's `<Component>Command` and
-`<Component>Event` enums), `adapters` (each component's angzarr-embedded
+`DomainMessage` impls, `Rejection`, `Error`, the re-exported `Context`,
+`PolicyContext` and `CommandContext`, each component's `<Component>Command`
+and `<Component>Event` enums), `adapters` (each component's angzarr-embedded
 markup, named `policy-<input>-<output>` for a policy, delegating to its
 interface; a domain served by a child process gets a contract instead) and
 `register` (one `register(&mut Registry)` for every adapter). `app` does all

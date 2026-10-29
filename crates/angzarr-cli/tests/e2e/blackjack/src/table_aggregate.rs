@@ -1,7 +1,8 @@
 //! TableAggregate: the interface of `io.angzarr.examples.v1.TableState`, written once by
 //! `angzarr scaffold rust` and yours from then on: `--missing` adds the
-//! methods it lacks. It names only the domain types; the generated adapter
-//! (`crate::adapters::TableAggregate`) carries the markup and calls it.
+//! methods it lacks. It names only `crate::domain`'s types, its handlers'
+//! `Context` among them; the generated adapter (`crate::adapters::TableAggregate`)
+//! carries the markup and calls it.
 //!
 //! Edited: RequestSeat, ConfirmSeat and ReleaseSeat emit nothing when
 //! repeated, so each returns an `Option`.
@@ -9,25 +10,25 @@
 use crate::domain::*;
 
 pub trait TableAggregate {
-    fn create_table(&self, cmd: &CreateTable) -> Result<Vec<TableAggregateEvent>, Rejection>;
+    fn create_table(&self, cmd: &CreateTable, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection>;
 
-    fn request_seat(&self, cmd: &RequestSeat) -> Result<Option<SeatHeld>, Rejection>;
+    fn request_seat(&self, cmd: &RequestSeat, ctx: &Context) -> Result<Option<SeatHeld>, Rejection>;
 
-    fn leave_table(&self, cmd: &LeaveTable) -> Result<PlayerCashedOut, Rejection>;
+    fn leave_table(&self, cmd: &LeaveTable, ctx: &Context) -> Result<PlayerCashedOut, Rejection>;
 
-    fn place_bet(&self, cmd: &PlaceBet) -> Result<BetPlaced, Rejection>;
+    fn place_bet(&self, cmd: &PlaceBet, ctx: &Context) -> Result<BetPlaced, Rejection>;
 
-    fn deal_round(&self, cmd: &DealRound) -> Result<Vec<TableAggregateEvent>, Rejection>;
+    fn deal_round(&self, cmd: &DealRound, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection>;
 
-    fn hit(&self, cmd: &Hit) -> Result<Vec<TableAggregateEvent>, Rejection>;
+    fn hit(&self, cmd: &Hit, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection>;
 
-    fn stand(&self, cmd: &Stand) -> Result<Vec<TableAggregateEvent>, Rejection>;
+    fn stand(&self, cmd: &Stand, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection>;
 
-    fn double_down(&self, cmd: &DoubleDown) -> Result<Vec<TableAggregateEvent>, Rejection>;
+    fn double_down(&self, cmd: &DoubleDown, ctx: &Context) -> Result<Vec<TableAggregateEvent>, Rejection>;
 
-    fn confirm_seat(&self, cmd: &ConfirmSeat) -> Result<Option<PlayerSeated>, SeatNotConfirmable>;
+    fn confirm_seat(&self, cmd: &ConfirmSeat, ctx: &Context) -> Result<Option<PlayerSeated>, SeatNotConfirmable>;
 
-    fn release_seat(&self, cmd: &ReleaseSeat) -> Result<Option<SeatReleased>, Rejection>;
+    fn release_seat(&self, cmd: &ReleaseSeat, ctx: &Context) -> Result<Option<SeatReleased>, Rejection>;
 
     fn apply_table_created(&mut self, event: &TableCreated);
 

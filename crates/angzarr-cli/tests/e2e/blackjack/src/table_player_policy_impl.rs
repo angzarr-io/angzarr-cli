@@ -16,7 +16,8 @@ impl TablePlayerPolicy for TablePlayerPolicyImpl {
         &self,
         source: &[u8],
         event: &TurnStarted,
-    ) -> Vec<(Vec<u8>, PlayerAggregateCommand)> {
+        _ctx: &PolicyContext,
+    ) -> Result<Vec<(Vec<u8>, PlayerAggregateCommand)>, Error> {
         let event = v1::TurnStarted::decode(
             &*crate::wire::TurnStarted::from(event.clone()).encode_to_vec(),
         )
@@ -26,6 +27,6 @@ impl TablePlayerPolicy for TablePlayerPolicyImpl {
             crate::wire::DecideMove::decode(&*ask.command.encode_to_vec()).expect("one proto"),
         )
         .expect("a domain value");
-        vec![(ask.root, PlayerAggregateCommand::DecideMove(command))]
+        Ok(vec![(ask.root, PlayerAggregateCommand::DecideMove(command))])
     }
 }
