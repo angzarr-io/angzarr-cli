@@ -96,12 +96,17 @@ $ angzarr scaffold python -I proto --src player --domain player \
 application's startup, once, as the user's: `angzarr.toml`, the host config
 (angzarr-embedded-host's `HostConfig`: each domain, its language, and for a
 domain served by a child process its `dir` and `entry` after the language's
-default launch, `uv run --locked` for Python; `launch` replaces both),
-`build.rs` and a thin `src/main.rs`. Every domain not named `--python` is
-Rust, in process, and so is every policy between two of the application's
-domains. `angzarr lint startup` checks a host config against the protos: a
-language with no default launch and no `launch`, an empty `launch`, a domain
-no aggregate or process manager owns, one listed twice, and one of the protos
+default launch, `uv run --locked` for Python, `launch` replacing both; and
+the `[store]`, SQLite at `angzarr.db`), `Cargo.toml` (angzarr-embedded and its
+host pinned by `ANGZARR_EMBEDDED_REV`, angzarr-build at this CLI's commit or
+`--angzarr-build`), `build.rs`, a thin `src/main.rs` (it builds the
+application with `angzarr_embedded_host::run("angzarr.toml", register)` and
+hands it to the driver) and `src/driver.rs`, where the application's commands
+are sent (`App::handle`). Every domain not named `--python` is Rust, in
+process, and so is every policy between two of the application's domains.
+`angzarr lint startup` checks a host config against the protos: a language
+with no default launch and no `launch`, an empty `launch`, a domain no
+aggregate or process manager owns, one listed twice, and one of the protos
 left out; each is a warning, and any fails the run.
 
 ```

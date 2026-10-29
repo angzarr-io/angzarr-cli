@@ -105,6 +105,10 @@ struct StartupArgs {
     /// domain is Rust, in process. Repeatable.
     #[arg(long = "python", value_name = "DOMAIN")]
     python: Vec<String>,
+    /// Startup: the application's build dependency on angzarr-build, a TOML
+    /// value; unset, the angzarr-cli commit this CLI was built from.
+    #[arg(long, value_name = "TOML")]
+    angzarr_build: Option<String>,
 }
 
 /// What `scaffold python` alone takes.
@@ -209,6 +213,12 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
                 name: args.startup.name.clone(),
                 python: args.startup.python.clone(),
                 includes: args.includes.clone(),
+                angzarr_build: args.startup.angzarr_build.clone().unwrap_or_else(|| {
+                    format!(
+                        "{{ git = \"https://github.com/angzarr-io/angzarr-cli\", rev = \"{}\" }}",
+                        option_env!("ANGZARR_REV").unwrap_or("main")
+                    )
+                }),
             };
             angzarr_build::startup_into(&args.src, &protos, &includes, &app)
                 .map_err(CliError::Build)?
