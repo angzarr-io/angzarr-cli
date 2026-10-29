@@ -50,9 +50,9 @@ source, adding a `<command>_refused` method.
 
 A command returns `Result<_, Rejection>` (the domain's untyped rejection, a
 diagnostic key and its args) or, refusing one typed refusal, `Result<_, R>`.
-Its `Ok` is its one event, a tuple of its two to four, or else
-`Vec<<Component>Event>`, any of its events; the first two may be changed to
-any shape angzarr-embedded takes (`Option<E>`, `Vec<E>`).
+Its `Ok` is its one event, which may be changed to any shape
+angzarr-embedded takes (`Option<E>`, `Vec<E>`), or, for a command declaring
+several, `Vec<<Component>Event>`: any number of any of its events.
 
 ```
 $ angzarr scaffold rust -I proto --src src buyin/v1/wallet.proto buyin/v1/buy_in.proto buyin/v1/policies.proto
