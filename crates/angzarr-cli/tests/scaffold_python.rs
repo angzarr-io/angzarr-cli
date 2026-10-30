@@ -10,9 +10,10 @@ const PLAYER: &str = "io/angzarr/examples/v1/player.proto";
 const IMPL: &str = "src/angzarr_player/logic_impl.py";
 const MAIN: &str = "src/angzarr_player/main.py";
 
-fn fixtures() -> String {
+/// The spec's protos: the angzarr-project submodule's `proto`.
+fn spec() -> String {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../angzarr-codegen/tests/fixtures")
+        .join("../../angzarr-project/proto")
         .display()
         .to_string()
 }
@@ -35,17 +36,46 @@ fn empty_dir() -> PathBuf {
     dir
 }
 
-/// `angzarr scaffold python` for the player into `root`, offline (no buf,
-/// no uv), with `extra`.
+/// A directory holding a `buf` that generates nothing, for a run offline:
+/// first on the PATH, it stands in for buf's remote plugins.
+fn offline_buf() -> PathBuf {
+    let dir = empty_dir();
+    let buf = dir.join("buf");
+    std::fs::write(&buf, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&buf, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    dir
+}
+
+/// `command` offline: buf generating nothing ([`offline_buf`]) and no uv
+/// (`--no-lock`).
+fn offline(command: &mut Command) -> Output {
+    let buf = offline_buf();
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let path =
+        std::env::join_paths(std::iter::once(buf.clone()).chain(std::env::split_paths(&path)))
+            .unwrap();
+    let out = command.arg("--no-lock").env("PATH", path).output().unwrap();
+    std::fs::remove_dir_all(&buf).unwrap();
+    out
+}
+
+/// `angzarr scaffold python` for the player into `root`, offline, with
+/// `extra`.
 fn scaffold(root: &Path, extra: &[&str]) -> Output {
-    online(root, &[&["--no-proto-gen", "--no-lock"], extra].concat())
+    offline(&mut player(root, extra))
 }
 
 /// `angzarr scaffold python` for the player into `root` as a user runs it,
 /// with `extra`.
 fn online(root: &Path, extra: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_angzarr"))
-        .args(["scaffold", "python", "--format", "json", "-I", &fixtures()])
+    player(root, extra).output().unwrap()
+}
+
+/// The command scaffolding the player into `root`, with `extra`.
+fn player(root: &Path, extra: &[&str]) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_angzarr"));
+    command
+        .args(["scaffold", "python", "--format", "json", "-I", &spec()])
         .args(["--domain", "player"])
         .args([
             "--proto-git",
@@ -56,9 +86,8 @@ fn online(root: &Path, extra: &[&str]) -> Output {
         .arg("--src")
         .arg(root)
         .args(extra)
-        .arg(PLAYER)
-        .output()
-        .unwrap()
+        .arg(PLAYER);
+    command
 }
 
 /// The action taken on each file, by its path relative to `root`.
@@ -176,7 +205,7 @@ fn scaffold_python_missing_refuses_a_command_taken_as_a_fact() {
 fn scaffold_python_needs_a_domain() {
     let root = empty_dir();
     let out = Command::new(env!("CARGO_BIN_EXE_angzarr"))
-        .args(["scaffold", "python", "--format", "json", "-I", &fixtures()])
+        .args(["scaffold", "python", "--format", "json", "-I", &spec()])
         .arg("--src")
         .arg(&root)
         .arg(PLAYER)
@@ -228,13 +257,13 @@ fn scaffold_python_by_default_generates_the_wire_types_and_the_lock_and_runs_und
 }
 
 /// A protos directory of its own, outside any project: the blackjack
-/// protos (the fixtures') and angzarr's, as a user's checkout of the spec's
+/// protos (the spec's) and angzarr's, as a user's checkout of the spec's
 /// `proto` holds them.
 fn proto_dir() -> PathBuf {
     let dir = empty_dir();
     let examples = "io/angzarr/examples/v1";
     std::fs::create_dir_all(dir.join(examples)).unwrap();
-    for entry in std::fs::read_dir(Path::new(&fixtures()).join(examples)).unwrap() {
+    for entry in std::fs::read_dir(Path::new(&spec()).join(examples)).unwrap() {
         let path = entry.unwrap().path();
         std::fs::copy(&path, dir.join(examples).join(path.file_name().unwrap())).unwrap();
     }
@@ -244,16 +273,16 @@ fn proto_dir() -> PathBuf {
 
 /// `angzarr scaffold python` reading the protos from the directory `-I`
 /// names (no `--proto-git`), run in `cwd`, with `extra`.
-fn from_directory(cwd: &Path, include: &str, root: &Path, extra: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_angzarr"))
+fn from_directory(cwd: &Path, include: &str, root: &Path, extra: &[&str]) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_angzarr"));
+    command
         .args(["scaffold", "python", "--format", "json", "-I", include])
         .args(["--domain", "player", "--src"])
         .arg(root)
         .args(extra)
         .arg(PLAYER)
-        .current_dir(cwd)
-        .output()
-        .unwrap()
+        .current_dir(cwd);
+    command
 }
 
 /// A relative `-I` is relative to where the CLI runs, and buf runs in the
@@ -271,7 +300,7 @@ fn scaffold_python_names_a_relative_directory_from_the_project_root() {
         std::fs::create_dir_all(cwd.join("spec/x")).unwrap();
         std::fs::rename(proto_dir(), cwd.join("spec/proto")).unwrap();
         let root = cwd.join(src);
-        let out = from_directory(&cwd, include, &root, &["--no-proto-gen", "--no-lock"]);
+        let out = offline(&mut from_directory(&cwd, include, &root, &[]));
         actions(&out, &root);
         let buf = std::fs::read_to_string(root.join("buf.gen.yaml")).unwrap();
         assert!(
@@ -291,7 +320,7 @@ fn scaffold_python_names_an_absolute_directory_as_given() {
     let protos = proto_dir();
     let root = empty_dir();
     let include = protos.display().to_string();
-    let out = from_directory(&root, &include, &root, &["--no-proto-gen", "--no-lock"]);
+    let out = offline(&mut from_directory(&root, &include, &root, &[]));
     actions(&out, &root);
     let buf = std::fs::read_to_string(root.join("buf.gen.yaml")).unwrap();
     assert!(
@@ -315,7 +344,9 @@ fn scaffold_python_generates_the_wire_types_from_a_directory_outside_the_project
     std::fs::rename(proto_dir(), base.join("spec")).unwrap();
     for include in [protos.display().to_string(), "spec".to_string()] {
         let root = base.join("apps/player");
-        let out = from_directory(&base, &include, &root, &["--no-lock"]);
+        let out = from_directory(&base, &include, &root, &["--no-lock"])
+            .output()
+            .unwrap();
         actions(&out, &root);
         let pb2 = std::fs::read_to_string(
             root.join("src/angzarr_player/_gen/io/angzarr/examples/v1/player_pb2.py"),

@@ -39,8 +39,8 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
     let app = std::env::temp_dir().join(format!("angzarr-cli-blackjack-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&app);
     copy_dir(
-        &here().join("../angzarr-codegen/tests/fixtures/io"),
-        &app.join("proto/io"),
+        &here().join("../../angzarr-project/proto/io/angzarr/examples"),
+        &app.join("proto/io/angzarr/examples"),
     );
     angzarr(
         &app,

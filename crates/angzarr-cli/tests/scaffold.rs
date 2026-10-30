@@ -106,6 +106,24 @@ fn scaffold_rust_writes_each_component_once_and_never_overwrites() {
 }
 
 #[test]
+fn scaffold_rust_with_translate_writes_the_policys_callback_stub() {
+    let src = empty_dir();
+    let out = scaffold(
+        &src,
+        &[
+            "--translate",
+            "buyin.v1.BuyInWalletPolicy:buyin.v1.Hold=buyin.v1.HoldLost",
+        ],
+    );
+    assert_eq!(actions(&out, &src), all("created", &[]));
+    let policy = std::fs::read_to_string(src.join("buy_in_wallet.rs")).unwrap();
+    assert!(policy.contains("fn hold_refused("), "{policy}");
+    let other = std::fs::read_to_string(src.join("wallet_buy_in.rs")).unwrap();
+    assert!(!other.contains("_refused("), "{other}");
+    std::fs::remove_dir_all(&src).unwrap();
+}
+
+#[test]
 fn scaffold_rust_missing_with_translate_adds_the_policys_callback_stub() {
     let src = empty_dir();
     scaffold(&src, &[]);

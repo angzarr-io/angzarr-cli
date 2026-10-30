@@ -139,7 +139,9 @@ types and back around each call. Every run ends with `buf generate` (the
 message types, their imports rerooted, angzarr's own under
 `angzarr_client.proto`) and `uv lock`, so the project is ready for
 angzarr-embedded's `uv run --locked angzarr-<domain>`, the lock and the
-message types on disk to commit; `--no-proto-gen` and `--no-lock` skip them.
+message types on disk to commit; `--no-lock` skips the lock. `buf generate`
+reads the protos from `--proto-git` at `--proto-ref` (under its `proto`, as
+angzarr-project lays them out), else from the first `-I`.
 
 ```
 $ angzarr scaffold python -I proto --src player --domain player \
@@ -152,6 +154,10 @@ policy or a projector a scaffolded message names is found without being
 scaffolded; a projector is never scaffolded.
 
 ## Building
+
+The spec's protos, the blackjack example's among them, are the
+`angzarr-project` submodule's, pinned by commit: run `git submodule update
+--init` once per clone.
 
 ```
 just build    # cargo build --workspace --all-targets

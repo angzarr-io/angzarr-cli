@@ -32,8 +32,8 @@ fn a_python_rejection_reaches_the_host_as_a_business_refusal_with_its_key_and_ar
     let app = std::env::temp_dir().join(format!("angzarr-cli-rejection-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&app);
     copy_dir(
-        &here().join("../angzarr-codegen/tests/fixtures/io"),
-        &app.join("proto/io"),
+        &here().join("../../angzarr-project/proto/io/angzarr/examples"),
+        &app.join("proto/io/angzarr/examples"),
     );
     angzarr(
         &app,

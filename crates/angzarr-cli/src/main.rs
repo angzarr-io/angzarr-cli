@@ -67,23 +67,16 @@ struct PythonArgs {
     /// Python: the domain the project serves, e.g. `player`.
     #[arg(long)]
     domain: Option<String>,
-    /// Python: the git repository `buf generate` reads the protos from;
-    /// unset, it reads them from the first `--include`.
+    /// Python: the git repository `buf generate` reads the protos from,
+    /// under its `proto`; unset, it reads them from the first `--include`.
     #[arg(long, value_name = "URL", requires = "proto_ref")]
     proto_git: Option<String>,
     /// Python: the revision of `--proto-git`.
     #[arg(long, value_name = "REV")]
     proto_ref: Option<String>,
-    /// Python: the protos' directory within `--proto-git`.
-    #[arg(long, value_name = "DIR", default_value = "proto")]
-    proto_subdir: String,
     /// Python: the build version the domain reports as its rules_version.
     #[arg(long, default_value = "0.1.0")]
     rules_version: String,
-    /// Python: skip `buf generate` (and the rerooting of the message types'
-    /// imports), which otherwise ends every run.
-    #[arg(long)]
-    no_proto_gen: bool,
     /// Python: skip `uv lock`, which otherwise ends every run.
     #[arg(long)]
     no_lock: bool,
@@ -136,7 +129,6 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
                 (Some(url), Some(rev)) => ProtoInput::Git {
                     url: url.clone(),
                     rev: rev.clone(),
-                    subdir: python.proto_subdir.clone(),
                 },
                 _ => ProtoInput::Directory(from_root(
                     &args.src,
@@ -151,9 +143,7 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
             let done =
                 angzarr_build::scaffold_python_into(&args.src, &protos, &includes, &app, existing)
                     .map_err(CliError::Build)?;
-            if !python.no_proto_gen {
-                angzarr_build::proto_gen_python(&args.src, &app).map_err(CliError::Build)?;
-            }
+            angzarr_build::proto_gen_python(&args.src, &app).map_err(CliError::Build)?;
             if !python.no_lock {
                 angzarr_build::lock_python(&args.src).map_err(CliError::Build)?;
             }
