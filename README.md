@@ -172,9 +172,10 @@ just hooks-install             # once per clone: lefthook's git hooks
 The git hooks (`lefthook.yml`): pre-commit formats the staged Rust, lints
 and runs every test (failing tests may be committed off main, with a
 warning); pre-push (`just push-check`) runs every test of each
-pushed commit, in a tree of its own, then mutation-tests what the push adds
-against each crate's `mutation_thresholds` (justfile). Failing tests may be
-pushed to a branch, with a warning, but not to main.
+pushed commit, in a tree of its own. Failing tests may be pushed to a
+branch, with a warning, but not to main. No hook runs mutation testing:
+`just mutants-staged` runs it by hand, and `just mutants-all` (weekly in
+CI) judges each crate against its `mutation_thresholds` (justfile).
 
 The toolchain is pinned in `rust-toolchain.toml`.
 
