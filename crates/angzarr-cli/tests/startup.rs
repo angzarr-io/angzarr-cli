@@ -114,9 +114,9 @@ fn lint_startup_reports_each_lint_and_fails() {
     let root = empty_dir();
     std::fs::write(
         root.join("angzarr.toml"),
-        "[[domain]]\nname = \"table\"\nlanguage = \"rust\"\n\n\
-         [[domain]]\nname = \"player\"\nlanguage = \"python\"\nlaunch = []\n\n\
-         [[domain]]\nname = \"dealer\"\nlanguage = \"cobol\"\n",
+        "[[component]]\nname = \"table\"\nlanguage = \"rust\"\n\n\
+         [[component]]\nname = \"player\"\nlanguage = \"python\"\nlaunch = []\n\n\
+         [[component]]\nname = \"dealer\"\nlanguage = \"cobol\"\n",
     )
     .unwrap();
     let out = angzarr(&["lint", "startup"], &root);
