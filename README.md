@@ -46,8 +46,8 @@ its events are recorded at, and the router's context of the input as
 `ctx.command`), and so does each fact, which returns its event with no
 `Result`: a fact is recorded, never refused. Appliers stay folds of the
 state and the event. Neither file imports anything from angzarr-embedded
-directly: the context types, `Failed`, `BusinessStatus` and `Bug` are
-`crate::domain`'s, which re-exports or defines them. An existing file is the user's and is kept. `--missing` adds
+directly: the context types, `Failed`, `BusinessStatus`,
+`RetryableStatus` and `Bug` are `crate::domain`'s, which re-exports or defines them. An existing file is the user's and is kept. `--missing` adds
 the methods an existing file lacks and changes nothing else, refusing an
 input taken as `cmd` where the proto declares a fact, or as `fact` where it
 declares a command. `--translate <policy>:<command>=<fact>` sets a policy's
@@ -58,21 +58,33 @@ command, its typed refusal if it has one, and the refused command's
 diagnostic key and its args, is a defect (a policy reacts to events the
 application's own domains recorded): angzarr-embedded dead-letters it.
 
-A handler fails in one of two classes: a business rejection, a "no" the
-command's issuer is told of, or a bug, a defect angzarr-embedded alerts and
-dead-letters. A command returns `Result<_, Failed<Rejection>>` (the
-domain's untyped rejection, a diagnostic key and its args) or, refusing one
-typed refusal, `Result<_, Failed<R>>`: `Err(rejection)?` refuses under
+A handler fails in one of four classes: a business rejection, a "no" the
+command's issuer is told of; an immediate return, "re-read and re-decide";
+a fatal bug, a defect angzarr-embedded alerts and dead-letters; or a
+retryable bug, a defect outside the handler that may clear. A command
+returns `Result<_, Failed<Rejection>>` (the domain's untyped rejection, a
+diagnostic key and its args) or, refusing one typed refusal,
+`Result<_, Failed<R>>`: `Err(rejection)?` refuses under
 FAILED_PRECONDITION, `Failed::from(rejection).with_status(..)` under another
-`BusinessStatus`, and `Err(Bug::new("key").arg(..))?` fails with a bug,
-dead-lettered as UNHANDLED_HANDLER_ERROR with its key as the cause; a
-policy's bug is its `Bug`.
+`BusinessStatus`; `Err(Failed::immediate(&Bug::new("key")))` returns
+ABORTED under its key, back to a caller at once, a policy's step reloaded
+and run again under the capped backoff, then dead-lettered;
+`Err(Bug::new("key").arg(..))?` fails with a fatal bug, dead-lettered as
+UNHANDLED_HANDLER_ERROR with its key as the cause; and
+`Err(Failed::retryable_bug(RetryableStatus::Unavailable, &bug))` fails with
+a retryable bug under the status it picks, retried with capped backoff,
+then dead-lettered with its retry count. The statuses are not
+interchangeable: `Unavailable` means resend, the dependency is down for
+now; `DeadlineExceeded` means resend only if the call is idempotent, since
+the work may have happened (a command is, by its `command_id`);
+`ResourceExhausted` means wait longer before resending, a quota or a
+capacity limit was hit. A policy's bug is its `Bug`.
 Its `Ok` is its one event, which may be changed to any shape
 angzarr-embedded takes (`Option<E>`, `Vec<E>`), or, for a command declaring
 several, `Vec<<Component>Event>`: any number of any of its events.
 
 A message named `Context`, `PolicyContext`, `CommandContext`, `Rejection`,
-`Bug`, `Failed` or `BusinessStatus` (the names the generated domain layers give the
+`Bug`, `Failed`, `BusinessStatus` or `RetryableStatus` (the names the generated domain layers give the
 runtime's types)
 fails generation, naming the message; rename it. Files scaffolded before the
 handlers took their context are not migrated by `--missing`, which takes a
@@ -85,7 +97,7 @@ $ angzarr scaffold rust -I proto --src src buyin/v1/wallet.proto buyin/v1/buy_in
 The build script generates the rest into `OUT_DIR` with `angzarr-build`, the
 CLI's and regenerated every build: `markup_domain` (the domain types, their
 `DomainMessage` impls, `Rejection`, `Bug`, the re-exported `Context`,
-`PolicyContext`, `CommandContext`, `Failed` and `BusinessStatus`, each component's `<Component>Command`
+`PolicyContext`, `CommandContext`, `Failed`, `BusinessStatus` and `RetryableStatus`, each component's `<Component>Command`
 and `<Component>Event` enums), `adapters` (each component's angzarr-embedded
 markup, named `policy-<input>-<output>` for a policy, delegating to its
 interface; a domain served by a child process gets a contract instead) and
