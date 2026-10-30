@@ -31,8 +31,16 @@ pub struct TableAggregateImpl {
     pub table: Table,
 }
 
+/// agg-table's rejection as the domain's: its reason code and its args.
 fn rejected(rejection: agg_table::Rejection) -> Rejection {
-    Rejection::new(rejection.code.reason()).arg("message", rejection.message)
+    let key = Rejection::new(rejection.code.reason());
+    rejection
+        .args
+        .into_iter()
+        .fold(key, |r, (name, value)| match value {
+            agg_table::RejectionArg::Int(n) => r.arg(name, n),
+            agg_table::RejectionArg::Str(s) => r.arg(name, s),
+        })
 }
 
 impl TableAggregateImpl {
