@@ -34,16 +34,7 @@ class PlayerLogicImpl(PlayerLogic):
     def decide_move(
         self, cmd: DecideMove, state: PlayerState, ctx: CommandContext
     ) -> MoveDecided:
-        return MoveDecided(
-            table_root=cmd.table_root,
-            round=cmd.round,
-            seat=cmd.seat,
-            action=_move(cmd),
-            cards=cmd.cards,
-            total=cmd.total,
-            soft=cmd.soft,
-            dealer_up=cmd.dealer_up,
-        )
+        return MoveDecided.from_command(cmd, action=_move(cmd))
 
     def apply_move_decided(self, state: PlayerState, event: MoveDecided) -> PlayerState:
         return dataclasses.replace(

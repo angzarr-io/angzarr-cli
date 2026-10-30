@@ -100,7 +100,10 @@ CLI's and regenerated every build: `markup_domain` (the domain types, their
 `PolicyContext`, `CommandContext`, `Failed`, `BusinessStatus` and `RetryableStatus`, each component's `<Component>Command`
 and `<Component>Event` enums), `adapters` (each component's angzarr-embedded
 markup, named `policy-<input>-<output>` for a policy, delegating to its
-interface; a domain served by a child process gets a contract instead) and
+interface; a domain served by a child process gets a contract instead),
+`descriptors` (`DESCRIPTORS`: each component's `ComponentDescriptor`,
+generated from its protos and encoded, the crate's version its
+`rules_version`; a domain served by a child process has its own) and
 `register` (one `register(&mut Registry)` for every adapter). `app` does all
 of it from an application's host config.
 
@@ -124,7 +127,13 @@ PERMISSION_DENIED), and `Bug`, raised for a defect (`raise
 Bug("key", name=value)`, answered UNHANDLED_HANDLER_ERROR with the key and
 args as its cause; angzarr-embedded alerts it and dead-letters the command). The CLI's files are rewritten
 on every run: `domain.py` (the domain's messages as frozen dataclasses and
-integer enums), `buf.gen.yaml`, `main.py`, `__main__.py`, `_version.py` and
+integer enums; each event a command emits gets a classmethod building it
+from that command, `MoveDecided.from_command(cmd, action=...)`, copying
+every field the two share by name and type and taking the rest as keywords,
+or `from_<command>` per command when several emit it), `_descriptor.py`
+(the domain's `ComponentDescriptor`, generated from its protos with
+`--rules-version`, for the child to answer `Describe` with unchanged),
+`buf.gen.yaml`, `main.py`, `__main__.py`, `_version.py` and
 the dispatch under `_gen`, which converts the wire's messages to the plain
 types and back around each call. Every run ends with `buf generate` (the
 message types, their imports rerooted, angzarr's own under
@@ -165,6 +174,18 @@ $ angzarr lint startup -I proto io/angzarr/examples/v1/table.proto ...
 Every scaffold reads the other protos of its protos' directories too, so a
 policy or a projector a scaffolded message names is found without being
 scaffolded; a projector is never scaffolded.
+
+## Reason keys
+
+`angzarr reasons <rust|python> <catalog> --out <file>` renders
+angzarr-project's reason-key catalog (`catalog/reasons.toml`) as constants,
+one per key, each documented with who answers it, its status and its args;
+a retired key is never rendered. They are for the code that answers the
+keys, the routers and the coordinators, not for an application.
+
+```
+$ angzarr reasons rust catalog/reasons.toml --out src/reasons.rs
+```
 
 ## Building
 
