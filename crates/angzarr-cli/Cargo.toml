@@ -15,7 +15,6 @@ path = "src/main.rs"
 angzarr-build.workspace = true
 angzarr-codegen.workspace = true
 angzarr-fmt.workspace = true
-angzarr-fmt-clap.workspace = true
 angzarr-embedded-diagnostic.workspace = true
 clap.workspace = true
 serde.workspace = true

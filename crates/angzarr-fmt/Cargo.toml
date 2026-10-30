@@ -1,7 +1,7 @@
 [package]
 name = "angzarr-fmt"
 version = "0.1.0"
-description = "CLI output: one result, rendered as json, yaml, toml, text or markdown; localizable failures and warnings."
+description = "CLI output: one result, rendered as json or text; localizable failures."
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -10,12 +10,10 @@ rust-version.workspace = true
 # Knows nothing about angzarr and nothing about any argument parser.
 [dependencies]
 angzarr-embedded-diagnostic.workspace = true
-angzarr-embedded-yaml.workspace = true
 fluent-bundle.workspace = true
 fluent-syntax.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-toml.workspace = true
 unic-langid.workspace = true
 
 [lints]

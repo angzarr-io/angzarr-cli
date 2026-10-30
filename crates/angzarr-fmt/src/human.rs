@@ -1,5 +1,4 @@
-//! The text and markdown writers. Both lay out the same [`Doc`]; neither
-//! bends to the other's shape.
+//! The text writer: it lays out a [`Doc`].
 
 use std::io::{self, Write};
 
@@ -88,79 +87,6 @@ fn text_table(
     Ok(())
 }
 
-/// Writes a document as markdown: fields as a bullet list of `**Label:**
-/// value`, sections as headings one level deeper per nesting, tables as pipe
-/// tables.
-pub fn write_markdown(w: &mut dyn Write, doc: &Doc) -> io::Result<()> {
-    markdown_blocks(w, doc, 1)
-}
-
-fn markdown_blocks(w: &mut dyn Write, doc: &Doc, level: usize) -> io::Result<()> {
-    let mut in_fields = false;
-    for block in doc {
-        let is_field = matches!(block, Block::Field { .. });
-        if in_fields && !is_field {
-            writeln!(w)?;
-        }
-        in_fields = is_field;
-        match block {
-            Block::Field { label, value } => writeln!(w, "- **{label}:** {value}")?,
-            Block::Section { title, body } => {
-                writeln!(w, "{} {title}\n", "#".repeat(level))?;
-                markdown_blocks(w, body, level + 1)?;
-            }
-            Block::Table {
-                title,
-                columns,
-                rows,
-            } => {
-                if let Some(t) = title {
-                    writeln!(w, "{} {t}\n", "#".repeat(level))?;
-                }
-                writeln!(
-                    w,
-                    "| {} |",
-                    columns
-                        .iter()
-                        .map(|c| escape_cell(c))
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                )?;
-                writeln!(w, "|{}|", vec!["---"; columns.len()].join("|"))?;
-                for row in rows {
-                    writeln!(
-                        w,
-                        "| {} |",
-                        row.iter()
-                            .map(|c| escape_cell(c))
-                            .collect::<Vec<_>>()
-                            .join(" | ")
-                    )?;
-                }
-                writeln!(w)?;
-            }
-            Block::List { title, items } => {
-                if let Some(t) = title {
-                    writeln!(w, "{} {t}\n", "#".repeat(level))?;
-                }
-                for item in items {
-                    writeln!(w, "- {item}")?;
-                }
-                writeln!(w)?;
-            }
-            Block::Para(text) => writeln!(w, "{text}\n")?,
-        }
-    }
-    if in_fields {
-        writeln!(w)?;
-    }
-    Ok(())
-}
-
-fn escape_cell(cell: &str) -> String {
-    cell.replace('|', "\\|").replace('\n', " ")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,12 +94,6 @@ mod tests {
     fn text(doc: &Doc) -> String {
         let mut out = Vec::new();
         write_text(&mut out, doc).unwrap();
-        String::from_utf8(out).unwrap()
-    }
-
-    fn markdown(doc: &Doc) -> String {
-        let mut out = Vec::new();
-        write_markdown(&mut out, doc).unwrap();
         String::from_utf8(out).unwrap()
     }
 
@@ -209,28 +129,6 @@ mod tests {
              Build:\n  Commit: abc\n\
              Files:\n  Path        Policy\n  src/lib.rs  regenerate\n  a|b         once\n"
         );
-    }
-
-    #[test]
-    fn markdown_bullets_fields_heads_sections_and_escapes_cells() {
-        assert_eq!(
-            markdown(&sample()),
-            "- **Name:** angzarr\n\n\
-             # Build\n\n- **Commit:** abc\n\n\
-             # Files\n\n| Path | Policy |\n|---|---|\n| src/lib.rs | regenerate |\n| a\\|b | once |\n\n"
-        );
-    }
-
-    #[test]
-    fn nested_sections_go_one_heading_level_deeper() {
-        let doc = vec![Block::Section {
-            title: "A".into(),
-            body: vec![Block::Section {
-                title: "B".into(),
-                body: vec![Block::Para("x".into())],
-            }],
-        }];
-        assert_eq!(markdown(&doc), "# A\n\n## B\n\nx\n\n");
     }
 
     #[test]

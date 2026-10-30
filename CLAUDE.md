@@ -13,8 +13,8 @@ The core is pure: no I/O, no clap, no tonic, no file system. Use cases sit
 behind ports (traits); adapters implement them. Results are data: a command
 returns one value and `angzarr-fmt` decides how it is written, so the output
 format is never a branch in business logic. `angzarr-fmt` knows nothing
-about angzarr or about clap; `angzarr-fmt-clap` is the only crate joining
-them.
+about angzarr or about clap; angzarr-cli's `output` module is the only place
+joining them.
 
 ## Errors are localizable: a code, args, and an en-US message
 
@@ -22,7 +22,7 @@ Every error and diagnostic implements `angzarr_embedded_diagnostic::Diagnostic` 
 keeps an English `Display` as the fallback.
 
 - Codes are stable and never reused: kebab-case, starting with the crate's
-  name (`angzarr-fmt-toml-null`). A code whose meaning changes gets a new
+  name (`angzarr-fmt-unknown-format`). A code whose meaning changes gets a new
   code.
 - Args carry data, never pre-formatted English.
 - A new code needs an en-US message in `crates/<crate>/locales/en-US/<crate>.ftl`

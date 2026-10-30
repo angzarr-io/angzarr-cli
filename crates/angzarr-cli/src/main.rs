@@ -6,11 +6,14 @@ use std::process::ExitCode;
 
 use angzarr_build::{BuildError, Existing, ProtoInput, PythonApp, Scaffolded, Translate};
 use angzarr_fmt::{Catalog, Failure, Format, Viewable};
-use angzarr_fmt_clap::{FormatArgs, finish};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
 
 use angzarr_embedded_diagnostic::{Arg, Diagnostic, Report};
+
+mod output;
+
+use output::{FormatArgs, finish};
 
 #[derive(Parser)]
 #[command(name = "angzarr", about = "The command line for angzarr projects.")]

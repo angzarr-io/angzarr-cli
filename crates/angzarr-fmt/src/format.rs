@@ -9,37 +9,19 @@ use angzarr_embedded_diagnostic::{Arg, Diagnostic};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Format {
     Json,
-    Yaml,
-    Toml,
     Text,
-    Markdown,
 }
 
 impl Format {
     /// Every format, in the order help and completion list them.
-    pub const ALL: [Format; 5] = [
-        Format::Json,
-        Format::Yaml,
-        Format::Toml,
-        Format::Text,
-        Format::Markdown,
-    ];
+    pub const ALL: [Format; 2] = [Format::Json, Format::Text];
 
     /// The name a user types.
     pub fn name(self) -> &'static str {
         match self {
             Format::Json => "json",
-            Format::Yaml => "yaml",
-            Format::Toml => "toml",
             Format::Text => "text",
-            Format::Markdown => "markdown",
         }
-    }
-
-    /// Whether a program reads this format: the machine shape is the serde
-    /// shape, and warnings go out as JSON Lines.
-    pub fn is_structured(self) -> bool {
-        matches!(self, Format::Json | Format::Yaml | Format::Toml)
     }
 }
 
@@ -80,11 +62,7 @@ pub struct UnknownFormat {
 
 impl fmt::Display for UnknownFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "unknown format {}: use json, yaml, toml, text or markdown",
-            self.name
-        )
+        write!(f, "unknown format {}: use json or text", self.name)
     }
 }
 
@@ -108,8 +86,8 @@ mod tests {
     fn an_explicit_format_wins_on_and_off_a_terminal() {
         for terminal in [true, false] {
             assert_eq!(
-                resolve(Some(Format::Yaml), terminal, Format::Json),
-                Format::Yaml
+                resolve(Some(Format::Json), terminal, Format::Text),
+                Format::Json
             );
         }
     }
@@ -122,7 +100,7 @@ mod tests {
     #[test]
     fn unset_off_a_terminal_is_the_configured_default() {
         assert_eq!(resolve(None, false, Format::Json), Format::Json);
-        assert_eq!(resolve(None, false, Format::Toml), Format::Toml);
+        assert_eq!(resolve(None, false, Format::Text), Format::Text);
     }
 
     #[test]
@@ -137,14 +115,5 @@ mod tests {
         let err = "xml".parse::<Format>().unwrap_err();
         assert_eq!(err.code(), "angzarr-fmt-unknown-format");
         assert!(matches!(&err.args()[0], ("name", Arg::Str(s)) if s == "xml"));
-    }
-
-    #[test]
-    fn json_yaml_and_toml_are_structured() {
-        let structured: Vec<_> = Format::ALL
-            .into_iter()
-            .filter(|f| f.is_structured())
-            .collect();
-        assert_eq!(structured, [Format::Json, Format::Yaml, Format::Toml]);
     }
 }

@@ -6,17 +6,16 @@ plus the tooling to develop and operate them.
 
 | Crate | What it is |
 |---|---|
-| [`angzarr-fmt`](crates/angzarr-fmt) | CLI output: one result rendered as json, yaml, toml, text or markdown; localizable failures and warnings |
-| [`angzarr-fmt-clap`](crates/angzarr-fmt-clap) | angzarr-fmt for clap: the global `--format`, format resolution, the process tail |
+| [`angzarr-fmt`](crates/angzarr-fmt) | CLI output: one result rendered as json or text; localizable failures |
 | [`angzarr-codegen`](crates/angzarr-codegen) | the generator core: descriptors in, source out (domain layer, Rust and Python scaffolds, adapters, `register`) |
 | [`angzarr-build`](crates/angzarr-build) | `build.rs` helpers running protoc and writing what angzarr-codegen generates |
-| [`angzarr-cli`](crates/angzarr-cli) | the `angzarr` binary |
+| [`angzarr-cli`](crates/angzarr-cli) | the `angzarr` binary, with angzarr-fmt's clap side: the global `--format` and the process tail |
 
 ## Output
 
 Every command builds one result. `--format` picks how it is written:
-`json`, `yaml`, `toml`, `text` or `markdown`. Unset, a terminal gets `text`
-and anything else (a pipe, a file, CI) gets `json`.
+`json` or `text`. Unset, a terminal gets `text` and anything else (a pipe,
+a file, CI) gets `json`.
 
 ```
 $ angzarr version
@@ -29,7 +28,7 @@ $ angzarr version | jq .version
 ```
 
 A failure goes to stderr in the same format: `{"error": {...}, "remedy":
-{...}}` in a structured format, `Error:` and `Fix:` lines in text. Each
+{...}}` in json, `Error:` and `Fix:` lines in text. Each
 diagnostic has a stable code and named args (`angzarr-embedded-diagnostic`), rendered
 through the crate's en-US Fluent catalog.
 

@@ -29,12 +29,12 @@ fn an_explicit_format_wins_off_a_terminal() {
 
 #[test]
 fn the_format_flag_works_before_the_subcommand_too() {
-    let out = angzarr(&["--format", "yaml", "version"]);
+    let out = angzarr(&["--format", "text", "version"]);
     assert!(out.status.success());
     assert!(
         String::from_utf8(out.stdout)
             .unwrap()
-            .starts_with("name: angzarr\n")
+            .starts_with("Name: angzarr\n")
     );
 }
 

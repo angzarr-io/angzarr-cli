@@ -1,5 +1,5 @@
-//! The human view of a result: a document of blocks that the text and
-//! markdown writers lay out. Derivation builds one from the serde shape; a
+//! The human view of a result: a document of blocks that the text writer
+//! lays out. Derivation builds one from the serde shape; a
 //! result type may replace or decorate it (see [`crate::Viewable`]).
 
 use serde_json::{Map, Value};

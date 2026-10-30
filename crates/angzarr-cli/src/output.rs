@@ -1,7 +1,7 @@
-//! angzarr-fmt for clap. A program flattens [`FormatArgs`] into its root
-//! command, resolves the format once, and ends every command through
-//! [`finish`], which writes the result to stdout or the failure to stderr and
-//! picks the exit status.
+//! angzarr-fmt for clap, the one place the two meet. The root command
+//! flattens [`FormatArgs`], resolves the format once, and ends every command
+//! through [`finish`], which writes the result to stdout or the failure to
+//! stderr and picks the exit status.
 
 use std::io::{self, IsTerminal};
 use std::process::ExitCode;
@@ -11,20 +11,15 @@ use clap::builder::PossibleValue;
 use clap::{Args, ValueEnum};
 
 /// The help text for `--format`.
-pub const FORMAT_HELP: &str = "Output format: json, yaml, toml, text or markdown [default: text on a terminal, json otherwise]";
+const FORMAT_HELP: &str =
+    "Output format: json or text [default: text on a terminal, json otherwise]";
 
 /// A [`Format`] as a clap value, completed and validated against exactly
 /// [`Format::ALL`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FormatChoice(pub Format);
 
-const CHOICES: [FormatChoice; 5] = [
-    FormatChoice(Format::Json),
-    FormatChoice(Format::Yaml),
-    FormatChoice(Format::Toml),
-    FormatChoice(Format::Text),
-    FormatChoice(Format::Markdown),
-];
+const CHOICES: [FormatChoice; 2] = [FormatChoice(Format::Json), FormatChoice(Format::Text)];
 
 impl ValueEnum for FormatChoice {
     fn value_variants<'a>() -> &'a [Self] {
@@ -109,13 +104,13 @@ mod tests {
             .iter()
             .map(|v| v.get_name().to_string())
             .collect();
-        assert_eq!(offered, ["json", "yaml", "toml", "text", "markdown"]);
+        assert_eq!(offered, ["json", "text"]);
     }
 
     #[test]
     fn the_flag_is_accepted_after_a_subcommand() {
-        let prog = Prog::try_parse_from(["prog", "child", "--format", "yaml"]).unwrap();
-        assert_eq!(prog.format.format, Some(FormatChoice(Format::Yaml)));
+        let prog = Prog::try_parse_from(["prog", "child", "--format", "text"]).unwrap();
+        assert_eq!(prog.format.format, Some(FormatChoice(Format::Text)));
     }
 
     #[test]
@@ -126,8 +121,8 @@ mod tests {
     #[test]
     fn an_explicit_flag_resolves_regardless_of_the_terminal() {
         let args = FormatArgs {
-            format: Some(FormatChoice(Format::Toml)),
+            format: Some(FormatChoice(Format::Text)),
         };
-        assert_eq!(args.resolve(Format::Json), Format::Toml);
+        assert_eq!(args.resolve(Format::Json), Format::Text);
     }
 }
