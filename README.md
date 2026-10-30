@@ -70,7 +70,7 @@ FAILED_PRECONDITION, `Failed::from(rejection).with_status(..)` under another
 ABORTED under its key, back to a caller at once, a policy's step reloaded
 and run again under the capped backoff, then dead-lettered;
 `Err(Bug::new("key").arg(..))?` fails with a fatal bug, dead-lettered as
-UNHANDLED_HANDLER_ERROR with its key as the cause; and
+ROUTER_REASON_UNHANDLED_HANDLER_ERROR with its key as the cause; and
 `Err(Failed::retryable_bug(RetryableStatus::Unavailable, &bug))` fails with
 a retryable bug under the status it picks, retried with capped backoff,
 then dead-lettered with its retry count. The statuses are not
@@ -124,7 +124,7 @@ raised to refuse its command (`raise Rejection("key", name=value)`, a
 business "no" under a business status: FAILED_PRECONDITION unless given
 second, or INVALID_ARGUMENT, NOT_FOUND, ALREADY_EXISTS, OUT_OF_RANGE or
 PERMISSION_DENIED), and `Bug`, raised for a defect (`raise
-Bug("key", name=value)`, answered UNHANDLED_HANDLER_ERROR with the key and
+Bug("key", name=value)`, answered ROUTER_REASON_UNHANDLED_HANDLER_ERROR with the key and
 args as its cause; angzarr-embedded alerts it and dead-letters the command). The CLI's files are rewritten
 on every run: `domain.py` (the domain's messages as frozen dataclasses and
 integer enums; each event a command emits gets a classmethod building it
@@ -174,18 +174,6 @@ $ angzarr lint startup -I proto io/angzarr/examples/v1/table.proto ...
 Every scaffold reads the other protos of its protos' directories too, so a
 policy or a projector a scaffolded message names is found without being
 scaffolded; a projector is never scaffolded.
-
-## Reason keys
-
-`angzarr reasons <rust|python> <catalog> --out <file>` renders
-angzarr-project's reason-key catalog (`catalog/reasons.toml`) as constants,
-one per key, each documented with who answers it, its status and its args;
-a retired key is never rendered. They are for the code that answers the
-keys, the routers and the coordinators, not for an application.
-
-```
-$ angzarr reasons rust catalog/reasons.toml --out src/reasons.rs
-```
 
 ## Building
 

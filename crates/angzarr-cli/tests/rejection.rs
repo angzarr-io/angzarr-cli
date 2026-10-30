@@ -8,8 +8,8 @@
 //!
 //! A total of 99 makes the decision raise the generated `domain.Bug(
 //! "some-bug-key", amount=7)` instead: it must arrive as a bug, the
-//! router's INTERNAL UNHANDLED_HANDLER_ERROR with the key and args as its
-//! cause (`cause`, `cause.amount`), recovery Bug.
+//! router's INTERNAL ROUTER_REASON_UNHANDLED_HANDLER_ERROR with the key and
+//! args as its cause (`cause`, `cause.amount`), recovery Bug.
 //!
 //! The refusal must arrive as a business refusal: the kernel's
 //! `Failure::Rejected` (recovery Business, neither retryable nor a bug,
@@ -70,7 +70,7 @@ fn a_python_rejection_reaches_the_host_as_a_business_refusal_with_its_key_and_ar
             "--proto-git",
             "https://github.com/angzarr-io/angzarr-project",
             "--proto-ref",
-            "b9b87bfc30acbb90b089515761186ceb5aa6d52d",
+            "47c8e09b1d034391f3cf24beb47aa47994722a5a",
             PLAYER,
         ],
     );
@@ -90,7 +90,7 @@ fn a_python_rejection_reaches_the_host_as_a_business_refusal_with_its_key_and_ar
         [
             "handle: rejected some-reason-key amount=13 recovery Business",
             "dispatch: FailedPrecondition some-reason-key amount=13 retryable false",
-            "bug: Internal UNHANDLED_HANDLER_ERROR cause=some-bug-key cause.amount=7 recovery Bug",
+            "bug: Internal ROUTER_REASON_UNHANDLED_HANDLER_ERROR cause=some-bug-key cause.amount=7 recovery Bug",
             "player events: 0",
             "",
         ]

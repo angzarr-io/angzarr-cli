@@ -44,37 +44,3 @@ fn an_unknown_format_fails_before_running_anything() {
     assert!(!out.status.success());
     assert!(out.stdout.is_empty());
 }
-
-#[test]
-fn reasons_renders_the_catalog_into_the_file_named() {
-    let catalog = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../angzarr-codegen/tests/fixtures/catalog/reasons.toml"
-    );
-    let dir = std::env::temp_dir().join(format!("angzarr-cli-reasons-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    for (lang, file, constant) in [
-        ("rust", "reasons.rs", "pub const COMMAND_REFUSED: &str"),
-        (
-            "python",
-            "reasons.py",
-            "\nCOMMAND_REFUSED = \"COMMAND_REFUSED\"\n",
-        ),
-    ] {
-        let path = dir.join(file);
-        let out = angzarr(&["reasons", lang, catalog, "--out", path.to_str().unwrap()]);
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let value: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-        assert_eq!(value["path"], path.display().to_string());
-        assert_eq!(value["keys"], 33);
-        assert!(
-            std::fs::read_to_string(&path).unwrap().contains(constant),
-            "{lang}"
-        );
-    }
-    std::fs::remove_dir_all(&dir).unwrap();
-}

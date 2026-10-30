@@ -32,48 +32,6 @@ enum Command {
     Scaffold(Box<ScaffoldArgs>),
     /// Check a project's files against its protos.
     Lint(LintArgs),
-    /// Render angzarr-project's reason-key catalog (`catalog/reasons.toml`)
-    /// as constants, for the code that answers the keys.
-    Reasons(ReasonsArgs),
-}
-
-#[derive(Args)]
-struct ReasonsArgs {
-    /// The language to render.
-    #[arg(value_enum)]
-    lang: ReasonsLang,
-    /// The catalog.
-    catalog: PathBuf,
-    /// The file to write.
-    #[arg(long)]
-    out: PathBuf,
-}
-
-#[derive(Clone, Copy, ValueEnum)]
-enum ReasonsLang {
-    Rust,
-    Python,
-}
-
-/// What a reasons run wrote.
-#[derive(Serialize)]
-struct ReasonsReport {
-    path: String,
-    keys: usize,
-}
-
-impl Viewable for ReasonsReport {}
-
-fn reasons(args: ReasonsArgs) -> Result<ReasonsReport, Box<dyn Failure>> {
-    let render = match args.lang {
-        ReasonsLang::Rust => angzarr_build::reasons_rust_into,
-        ReasonsLang::Python => angzarr_build::reasons_python_into,
-    };
-    let keys = render(&args.catalog, &args.out).map_err(CliError::Build)?;
-    Ok(ReasonsReport {
-        path: args.out.display().to_string(),
-        keys,
-    })
 }
 
 #[derive(Args)]
@@ -486,7 +444,6 @@ fn main() -> ExitCode {
     match cli.command {
         Command::Version => finish(format, &catalog, Ok::<_, Box<dyn Failure>>(version())),
         Command::Scaffold(args) => finish(format, &catalog, scaffold(*args)),
-        Command::Reasons(args) => finish(format, &catalog, reasons(args)),
         Command::Lint(args) => {
             let result = lint(args, format, &catalog);
             finish(format, &catalog, result)
