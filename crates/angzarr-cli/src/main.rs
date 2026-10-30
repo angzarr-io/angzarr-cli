@@ -359,6 +359,28 @@ mod tests {
     }
 
     #[test]
+    fn every_errors_english_is_its_catalog_message() {
+        let catalog = catalog();
+        let errors = [
+            CliError::TranslateMalformed {
+                value: "x".to_string(),
+            },
+            CliError::DomainRequired,
+            CliError::Build(BuildError::Uv {
+                detail: "x".to_string(),
+            }),
+        ];
+        for sample in errors {
+            let rendered: String = catalog
+                .render(&sample)
+                .chars()
+                .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
+                .collect();
+            assert_eq!(sample.to_string(), rendered, "{}", sample.code());
+        }
+    }
+
+    #[test]
     fn the_catalogs_of_every_crate_combine() {
         catalog();
     }

@@ -72,3 +72,41 @@ pub fn diagnostic_samples() -> Vec<Box<dyn Diagnostic>> {
         Box::new(crate::format::UnknownFormat { name: s() }),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::catalog::{Catalog, EN_US};
+
+    /// The message ids of this crate's catalog.
+    fn messages() -> Vec<&'static str> {
+        let mut ids: Vec<&str> = EN_US
+            .lines()
+            .filter_map(|line| line.split_once(" = ").map(|(id, _)| id))
+            .filter(|id| id.starts_with("angzarr-fmt-"))
+            .collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    #[test]
+    fn every_catalog_message_is_the_code_of_a_sample() {
+        let mut codes: Vec<&str> = diagnostic_samples().iter().map(|d| d.code()).collect();
+        codes.sort_unstable();
+        assert_eq!(codes, messages());
+    }
+
+    #[test]
+    fn every_errors_english_is_its_catalog_message() {
+        let mut catalog = Catalog::en_us();
+        catalog.add(EN_US).unwrap();
+        for sample in diagnostic_samples() {
+            let rendered: String = catalog
+                .render(&*sample)
+                .chars()
+                .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
+                .collect();
+            assert_eq!(sample.to_string(), rendered, "{}", sample.code());
+        }
+    }
+}
