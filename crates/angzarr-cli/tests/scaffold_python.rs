@@ -226,3 +226,100 @@ fn scaffold_python_by_default_generates_the_wire_types_and_the_lock_and_runs_und
     );
     std::fs::remove_dir_all(&root).unwrap();
 }
+
+/// A protos directory of its own, outside any project: the blackjack
+/// protos (the fixtures') and angzarr's, as a user's checkout of the spec's
+/// `proto` holds them.
+fn proto_dir() -> PathBuf {
+    let dir = empty_dir();
+    let examples = "io/angzarr/examples/v1";
+    std::fs::create_dir_all(dir.join(examples)).unwrap();
+    for entry in std::fs::read_dir(Path::new(&fixtures()).join(examples)).unwrap() {
+        let path = entry.unwrap().path();
+        std::fs::copy(&path, dir.join(examples).join(path.file_name().unwrap())).unwrap();
+    }
+    angzarr_proto::protos::write_include_dir(&dir).unwrap();
+    dir
+}
+
+/// `angzarr scaffold python` reading the protos from the directory `-I`
+/// names (no `--proto-git`), run in `cwd`, with `extra`.
+fn from_directory(cwd: &Path, include: &str, root: &Path, extra: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_angzarr"))
+        .args(["scaffold", "python", "--format", "json", "-I", include])
+        .args(["--domain", "player", "--src"])
+        .arg(root)
+        .args(extra)
+        .arg(PLAYER)
+        .current_dir(cwd)
+        .output()
+        .unwrap()
+}
+
+/// A relative `-I` is relative to where the CLI runs, and buf runs in the
+/// project: buf.gen.yaml names the directory, and the protos under it, from
+/// the project root.
+#[test]
+fn scaffold_python_names_a_relative_directory_from_the_project_root() {
+    let cwd = empty_dir();
+    std::fs::create_dir_all(cwd.join("spec")).unwrap();
+    std::fs::rename(proto_dir(), cwd.join("spec/proto")).unwrap();
+    let root = cwd.join("apps/player");
+    let out = from_directory(&cwd, "spec/proto", &root, &["--no-proto-gen", "--no-lock"]);
+    actions(&out, &root);
+    let buf = std::fs::read_to_string(root.join("buf.gen.yaml")).unwrap();
+    assert!(
+        buf.contains(
+            "  - directory: ../../spec/proto\n    paths:\n      \
+             - ../../spec/proto/io/angzarr/examples/v1/cards.proto\n"
+        ),
+        "{buf}"
+    );
+    std::fs::remove_dir_all(&cwd).unwrap();
+}
+
+/// An absolute `-I` is named as it is.
+#[test]
+fn scaffold_python_names_an_absolute_directory_as_given() {
+    let protos = proto_dir();
+    let root = empty_dir();
+    let include = protos.display().to_string();
+    let out = from_directory(&root, &include, &root, &["--no-proto-gen", "--no-lock"]);
+    actions(&out, &root);
+    let buf = std::fs::read_to_string(root.join("buf.gen.yaml")).unwrap();
+    assert!(
+        buf.contains(&format!(
+            "  - directory: {include}\n    paths:\n      \
+             - {include}/io/angzarr/examples/v1/cards.proto\n"
+        )),
+        "{buf}"
+    );
+    std::fs::remove_dir_all(&protos).unwrap();
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// buf generates the message types from a protos directory outside the
+/// project, absolute or relative, its paths resolved under that directory.
+#[test]
+#[ignore = "needs the network (buf.build's remote plugins): run with --ignored"]
+fn scaffold_python_generates_the_wire_types_from_a_directory_outside_the_project() {
+    let protos = proto_dir();
+    let base = empty_dir();
+    std::fs::rename(proto_dir(), base.join("spec")).unwrap();
+    for include in [protos.display().to_string(), "spec".to_string()] {
+        let root = base.join("apps/player");
+        let out = from_directory(&base, &include, &root, &["--no-lock"]);
+        actions(&out, &root);
+        let pb2 = std::fs::read_to_string(
+            root.join("src/angzarr_player/_gen/io/angzarr/examples/v1/player_pb2.py"),
+        )
+        .unwrap_or_else(|e| panic!("-I {include}: {e}"));
+        assert!(
+            pb2.contains("from angzarr_player._gen.io.angzarr.examples.v1 import cards_pb2"),
+            "{pb2}"
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+    std::fs::remove_dir_all(&protos).unwrap();
+    std::fs::remove_dir_all(&base).unwrap();
+}
