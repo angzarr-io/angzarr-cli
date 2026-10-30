@@ -126,3 +126,15 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
     );
     std::fs::remove_dir_all(&app).unwrap();
 }
+
+#[test]
+fn the_e2e_players_decision_builds_its_event_with_from_command() {
+    let logic = std::fs::read_to_string(
+        here().join("tests/e2e/blackjack/player/src/angzarr_player/logic_impl.py"),
+    )
+    .unwrap();
+    assert!(
+        logic.contains("return MoveDecided.from_command(cmd, action=_move(cmd))"),
+        "{logic}"
+    );
+}
