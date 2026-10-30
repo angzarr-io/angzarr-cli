@@ -108,7 +108,7 @@ fn scaffold_python_writes_the_golden_project() {
             "{path}"
         );
     }
-    assert_eq!(done.len(), 16, "{done:?}");
+    assert_eq!(done.len(), 17, "{done:?}");
     std::fs::remove_dir_all(root.parent().unwrap()).unwrap();
 }
 
