@@ -1,7 +1,7 @@
 //! `angzarr`: the command line for angzarr projects.
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
 use angzarr_build::{
@@ -232,7 +232,10 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
                     rev: rev.clone(),
                     subdir: python.proto_subdir.clone(),
                 },
-                _ => ProtoInput::Directory(includes.first().copied().unwrap_or(".").to_string()),
+                _ => ProtoInput::Directory(from_root(
+                    &args.src,
+                    includes.first().copied().unwrap_or("."),
+                )),
             };
             let app = PythonApp {
                 domain,
@@ -267,6 +270,41 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
         }
     };
     Ok(report(done))
+}
+
+/// The directory `dir`, which a relative `-I` names from where the CLI
+/// runs, as buf reads it in the project `root`: an absolute one as it is, a
+/// relative one from `root`.
+fn from_root(root: &Path, dir: &str) -> String {
+    if Path::new(dir).is_absolute() {
+        return dir.to_string();
+    }
+    let (Ok(from), Ok(to)) = (std::path::absolute(root), std::path::absolute(dir)) else {
+        return dir.to_string();
+    };
+    let (from, to) = (lexical(&from), lexical(&to));
+    let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
+    let parts: Vec<&str> = std::iter::repeat_n("..", from.len() - common)
+        .chain(to[common..].iter().map(String::as_str))
+        .collect();
+    if parts.is_empty() {
+        ".".to_string()
+    } else {
+        parts.join("/")
+    }
+}
+
+/// An absolute `path`'s components, each `..` taking away the one before.
+fn lexical(path: &Path) -> Vec<String> {
+    let mut parts = Vec::new();
+    for component in path.components() {
+        if component == Component::ParentDir {
+            parts.pop();
+        } else {
+            parts.push(component.as_os_str().to_string_lossy().into_owned());
+        }
+    }
+    parts
 }
 
 /// One entry per file, by what was done with it.

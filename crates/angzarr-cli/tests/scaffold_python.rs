@@ -261,21 +261,28 @@ fn from_directory(cwd: &Path, include: &str, root: &Path, extra: &[&str]) -> Out
 /// the project root.
 #[test]
 fn scaffold_python_names_a_relative_directory_from_the_project_root() {
-    let cwd = empty_dir();
-    std::fs::create_dir_all(cwd.join("spec")).unwrap();
-    std::fs::rename(proto_dir(), cwd.join("spec/proto")).unwrap();
-    let root = cwd.join("apps/player");
-    let out = from_directory(&cwd, "spec/proto", &root, &["--no-proto-gen", "--no-lock"]);
-    actions(&out, &root);
-    let buf = std::fs::read_to_string(root.join("buf.gen.yaml")).unwrap();
-    assert!(
-        buf.contains(
-            "  - directory: ../../spec/proto\n    paths:\n      \
-             - ../../spec/proto/io/angzarr/examples/v1/cards.proto\n"
-        ),
-        "{buf}"
-    );
-    std::fs::remove_dir_all(&cwd).unwrap();
+    for (include, src, named) in [
+        ("spec/proto", "apps/player", "../../spec/proto"),
+        ("./spec/x/../proto", "apps/./player", "../../spec/proto"),
+        ("spec/proto", "spec/proto", "."),
+        ("spec/proto", "spec/proto/player", ".."),
+    ] {
+        let cwd = empty_dir();
+        std::fs::create_dir_all(cwd.join("spec/x")).unwrap();
+        std::fs::rename(proto_dir(), cwd.join("spec/proto")).unwrap();
+        let root = cwd.join(src);
+        let out = from_directory(&cwd, include, &root, &["--no-proto-gen", "--no-lock"]);
+        actions(&out, &root);
+        let buf = std::fs::read_to_string(root.join("buf.gen.yaml")).unwrap();
+        assert!(
+            buf.contains(&format!(
+                "  - directory: {named}\n    paths:\n      \
+                 - {named}/io/angzarr/examples/v1/cards.proto\n"
+            )),
+            "-I {include} --src {src}:\n{buf}"
+        );
+        std::fs::remove_dir_all(&cwd).unwrap();
+    }
 }
 
 /// An absolute `-I` is named as it is.
