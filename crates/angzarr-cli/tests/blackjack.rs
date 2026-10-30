@@ -9,14 +9,14 @@
 //! the outcome is the table's own test's (examples-rust
 //! `table/embedded/tests/remote_player.rs`).
 //!
-//! Ignored: it needs the network (buf.build, GitHub), uv and the
-//! examples-rust checkout holding agg-table and table-player-policies,
-//! `$ANGZARR_EXAMPLES_RUST` (by default
-//! `~/workspace/worktrees/examples-rust--blackjack-embedded`).
+//! agg-table, examples-proto and table-player-policies are examples-rust's,
+//! at [`EXAMPLES_RUST_REV`]: git dependencies pinned by hash, as the
+//! scaffold pins angzarr-embedded and angzarr-client, so the outcome is
+//! that commit's and not whatever a local checkout holds.
+//!
+//! Ignored: it needs the network (buf.build, GitHub) and uv.
 
 mod common;
-
-use std::path::PathBuf;
 
 use common::{angzarr, copy_dir, here, overlay};
 
@@ -26,16 +26,13 @@ const PROTOS: &[&str] = &[
     "io/angzarr/examples/v1/policies.proto",
 ];
 
-fn examples_rust() -> PathBuf {
-    match std::env::var_os("ANGZARR_EXAMPLES_RUST") {
-        Some(dir) => PathBuf::from(dir),
-        None => PathBuf::from(std::env::var_os("HOME").expect("HOME is set"))
-            .join("workspace/worktrees/examples-rust--blackjack-embedded"),
-    }
-}
+/// The examples-rust commit the table's crates are built from (its main).
+const EXAMPLES_RUST_REV: &str = "9b569ae9162c1d918fcee1d1cc27aea9fa524fe5";
+/// Where [`EXAMPLES_RUST_REV`] is fetched from.
+const EXAMPLES_RUST_GIT: &str = "https://github.com/angzarr-io/angzarr-examples-rust";
 
 #[test]
-#[ignore = "needs the network (buf.build, GitHub), uv, and the examples-rust checkout"]
+#[ignore = "needs the network (buf.build, GitHub) and uv"]
 fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player() {
     let app = std::env::temp_dir().join(format!("angzarr-cli-blackjack-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&app);
@@ -91,14 +88,11 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
     // The user's part: the logic, the driver, the table's crates, and an
     // in-memory store.
     overlay(&here().join("tests/e2e/blackjack"), &app);
-    let examples = examples_rust();
     let manifest = std::fs::read_to_string(app.join("Cargo.toml")).unwrap();
+    let examples = format!("{{ git = \"{EXAMPLES_RUST_GIT}\", rev = \"{EXAMPLES_RUST_REV}\" }}");
     let crates = format!(
-        "prost = \"0.14\"\nagg-table = {{ path = {:?} }}\nexamples-proto = {{ path = {:?} }}\n\
-         table-player-policies = {{ path = {:?} }}\n",
-        examples.join("table/agg").display().to_string(),
-        examples.join("proto").display().to_string(),
-        examples.join("table/policies").display().to_string(),
+        "prost = \"0.14\"\nagg-table = {examples}\nexamples-proto = {examples}\n\
+         table-player-policies = {examples}\n"
     );
     // A workspace of its own, wherever the temporary directory is.
     let manifest = manifest.replace("prost = \"0.14\"\n", &crates) + "\n[workspace]\n";
