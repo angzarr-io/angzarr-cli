@@ -1,5 +1,6 @@
 //! What the end-to-end tests share: scaffolding with the CLI, laying the
-//! user's files over the scaffold's, and running the application built.
+//! user's files over the scaffold's, the application's manifest, and
+//! running the application built.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -27,6 +28,7 @@ pub fn angzarr(dir: &Path, args: &[&str]) {
 /// The user's files over the scaffold's: every file under `from`, at the
 /// same path under `to`.
 pub fn overlay(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
     for entry in std::fs::read_dir(from).unwrap() {
         let path = entry.unwrap().path();
         let target = to.join(path.file_name().unwrap());
@@ -51,13 +53,38 @@ pub fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
-/// The scaffolded application at `app`, its store in memory, run with
-/// `cargo run` into the workspace's `target/e2e`.
+/// The angzarr-embedded commit the applications are built on.
+const ANGZARR_EMBEDDED_REV: &str = "d3d642b043771c4c7a755fe5f6f77b74e703a594";
+/// Where [`ANGZARR_EMBEDDED_REV`] is fetched from.
+const ANGZARR_EMBEDDED_GIT: &str = "https://github.com/angzarr-io/angzarr-embedded";
+
+/// The application `name`'s Cargo.toml, written into `app`: angzarr-embedded,
+/// its markup, diagnostics and host at [`ANGZARR_EMBEDDED_REV`], prost,
+/// `dependencies` (TOML lines), and this workspace's angzarr-build for its
+/// build script. A workspace of its own, wherever the temporary directory
+/// is.
+pub fn manifest(app: &Path, name: &str, dependencies: &str) {
+    let embedded =
+        format!("{{ git = \"{ANGZARR_EMBEDDED_GIT}\", rev = \"{ANGZARR_EMBEDDED_REV}\" }}");
+    let build = here().join("../angzarr-build").display().to_string();
+    let manifest = format!(
+        "[package]\nname = {name:?}\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n\
+         [dependencies]\n\
+         angzarr-embedded = {embedded}\n\
+         angzarr-embedded-diagnostic = {embedded}\n\
+         angzarr-embedded-host = {embedded}\n\
+         angzarr-embedded-macros = {embedded}\n\
+         prost = \"0.14\"\n\
+         {dependencies}\n\
+         [build-dependencies]\nangzarr-build = {{ path = {build:?} }}\n\n\
+         [workspace]\n"
+    );
+    std::fs::write(app.join("Cargo.toml"), manifest).unwrap();
+}
+
+/// The application at `app` run with `cargo run` into the workspace's
+/// `target/e2e`.
 pub fn run(app: &Path) -> Output {
-    let config = std::fs::read_to_string(app.join("angzarr.toml"))
-        .unwrap()
-        .replace("path = \"angzarr.db\"", "in_memory = true");
-    std::fs::write(app.join("angzarr.toml"), config).unwrap();
     Command::new(env!("CARGO"))
         .args(["run", "--quiet"])
         .current_dir(app)

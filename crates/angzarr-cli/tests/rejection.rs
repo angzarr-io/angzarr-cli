@@ -1,10 +1,11 @@
 //! End to end: a Python decision's refusal, as the Rust host receives it.
-//! `scaffold startup` and `scaffold python` write a one-domain application,
-//! the player served by a Python child; the user's files
-//! (`tests/e2e/rejection`) are a player whose `decide_move` raises the
-//! generated `domain.Rejection("some-reason-key", amount=13)`, and a driver
-//! that sends one DecideMove through `App::handle`, then the same command
-//! straight to the child's handler.
+//! `scaffold python` writes the player of a one-domain application, served
+//! by a Python child; the user's files (`tests/e2e/rejection`) are the host
+//! config, a build script generating the domain layer and `register()`, a
+//! `main` running `register()` with the config, a player whose
+//! `decide_move` raises the generated `domain.Rejection("some-reason-key",
+//! amount=13)`, and a driver that sends one DecideMove through
+//! `App::handle`, then the same command straight to the child's handler.
 //!
 //! A total of 99 makes the decision raise the generated `domain.Bug(
 //! "some-bug-key", amount=7)` instead: it must arrive as a bug, the
@@ -34,28 +35,6 @@ fn a_python_rejection_reaches_the_host_as_a_business_refusal_with_its_key_and_ar
         &here().join("../angzarr-codegen/tests/fixtures/io"),
         &app.join("proto/io"),
     );
-    let build = format!(
-        "{{ path = {:?} }}",
-        here().join("../angzarr-build").display().to_string()
-    );
-    angzarr(
-        &app,
-        &[
-            "scaffold",
-            "startup",
-            "-I",
-            "proto",
-            "--src",
-            ".",
-            "--name",
-            "rejection",
-            "--python",
-            "player",
-            "--angzarr-build",
-            &build,
-            PLAYER,
-        ],
-    );
     angzarr(
         &app,
         &[
@@ -75,9 +54,7 @@ fn a_python_rejection_reaches_the_host_as_a_business_refusal_with_its_key_and_ar
         ],
     );
     overlay(&here().join("tests/e2e/rejection"), &app);
-    // A workspace of its own, wherever the temporary directory is.
-    let manifest = std::fs::read_to_string(app.join("Cargo.toml")).unwrap() + "\n[workspace]\n";
-    std::fs::write(app.join("Cargo.toml"), manifest).unwrap();
+    common::manifest(&app, "rejection", "");
 
     let out = common::run(&app);
     assert!(

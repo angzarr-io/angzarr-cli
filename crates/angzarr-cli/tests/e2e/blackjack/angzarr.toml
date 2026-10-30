@@ -1,0 +1,15 @@
+# The host config: the table and its policies in process, the player a
+# Python child, the store in memory.
+
+[[component]]
+name = "table"
+language = "rust"
+
+[[component]]
+name = "player"
+language = "python"
+dir = "player"
+entry = ["angzarr-player"]
+
+[store]
+in_memory = true

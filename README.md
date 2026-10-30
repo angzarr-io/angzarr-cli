@@ -8,7 +8,7 @@ plus the tooling to develop and operate them.
 |---|---|
 | [`angzarr-fmt`](crates/angzarr-fmt) | CLI output: one result rendered as json, yaml, toml, text or markdown; localizable failures and warnings |
 | [`angzarr-fmt-clap`](crates/angzarr-fmt-clap) | angzarr-fmt for clap: the global `--format`, format resolution, the process tail |
-| [`angzarr-codegen`](crates/angzarr-codegen) | the generator core: descriptors in, source out (domain layer, Rust and Python scaffolds, adapters, `register`, the startup) |
+| [`angzarr-codegen`](crates/angzarr-codegen) | the generator core: descriptors in, source out (domain layer, Rust and Python scaffolds, adapters, `register`) |
 | [`angzarr-build`](crates/angzarr-build) | `build.rs` helpers running protoc and writing what angzarr-codegen generates |
 | [`angzarr-cli`](crates/angzarr-cli) | the `angzarr` binary |
 
@@ -104,8 +104,9 @@ interface; a domain served by a child process gets a contract instead),
 `descriptors` (`DESCRIPTORS`: each component's `ComponentDescriptor`,
 generated from its protos and encoded, the crate's version its
 `rules_version`; a domain served by a child process has its own) and
-`register` (one `register(&mut Registry)` for every adapter). `app` does all
-of it from an application's host config.
+`register` (one `register(&mut Registry)` for every adapter). An
+application's own `src/main.rs` runs `register` with its host config
+(`angzarr_embedded_host::run("angzarr.toml", register)`).
 
 `angzarr scaffold python --domain <domain>` writes one domain's uv project,
 served to angzarr-embedded as a child process through angzarr-client-python's
@@ -145,30 +146,6 @@ message types on disk to commit; `--no-proto-gen` and `--no-lock` skip them.
 $ angzarr scaffold python -I proto --src player --domain player \
     --proto-git https://github.com/angzarr-io/angzarr-project --proto-ref <sha> \
     io/angzarr/examples/v1/player.proto
-```
-
-`angzarr scaffold startup --python <domain>` writes an angzarr-embedded
-application's startup, once, as the user's: `angzarr.toml`, the host config
-(angzarr-embedded-host's `HostConfig`: each domain, its language, and for a
-domain served by a child process its `dir` and `entry` after the language's
-default launch, `uv run --locked` for Python, `launch` replacing both; and
-the `[store]`, SQLite at `angzarr.db`), `Cargo.toml` (angzarr-embedded and its
-host pinned by `ANGZARR_EMBEDDED_REV`, angzarr-build at this CLI's commit or
-`--angzarr-build`), `build.rs`, a thin `src/main.rs` (it builds the
-application with `angzarr_embedded_host::run("angzarr.toml", register)` and
-hands it to the driver) and `src/driver.rs`, where the application's commands
-are sent (`App::handle`). Every domain not named `--python` is Rust, in
-process, and so is every policy between two of the application's domains.
-`angzarr lint startup` checks a host config against the protos: a language
-with no default launch and no `launch`, an empty `launch`, a domain no
-aggregate or process manager owns, one listed twice, and one of the protos
-left out; each is a warning, and any fails the run.
-
-```
-$ angzarr scaffold startup -I proto --src . --name blackjack --python player \
-    io/angzarr/examples/v1/table.proto io/angzarr/examples/v1/player.proto \
-    io/angzarr/examples/v1/policies.proto
-$ angzarr lint startup -I proto io/angzarr/examples/v1/table.proto ...
 ```
 
 Every scaffold reads the other protos of its protos' directories too, so a
