@@ -81,7 +81,7 @@ fn player(root: &Path, extra: &[&str]) -> Command {
             "--proto-git",
             "https://github.com/angzarr-io/angzarr-project",
             "--proto-ref",
-            "2bd7cbde0ecb4b8070d87c8ba4d288c43aa1a6ad",
+            "ef975bcf6fd6a0207476667d18ddc7bb29a10ab4",
         ])
         .arg("--src")
         .arg(root)
@@ -256,24 +256,18 @@ fn scaffold_python_by_default_generates_the_wire_types_and_the_lock_and_runs_und
     std::fs::remove_dir_all(&root).unwrap();
 }
 
-/// A protos directory of its own, outside any project: a copy of the
-/// spec's `proto`, the blackjack protos and angzarr's, as a user's checkout
-/// of the spec holds them.
+/// A protos directory of its own, outside any project: the blackjack
+/// protos (the spec's) and angzarr's, as a user's checkout of the spec's
+/// `proto` holds them.
 fn proto_dir() -> PathBuf {
-    fn copy(from: &Path, to: &Path) {
-        std::fs::create_dir_all(to).unwrap();
-        for entry in std::fs::read_dir(from).unwrap() {
-            let path = entry.unwrap().path();
-            let target = to.join(path.file_name().unwrap());
-            if path.is_dir() {
-                copy(&path, &target);
-            } else {
-                std::fs::copy(&path, &target).unwrap();
-            }
-        }
-    }
     let dir = empty_dir();
-    copy(Path::new(&spec()), &dir);
+    let examples = "io/angzarr/examples/v1";
+    std::fs::create_dir_all(dir.join(examples)).unwrap();
+    for entry in std::fs::read_dir(Path::new(&spec()).join(examples)).unwrap() {
+        let path = entry.unwrap().path();
+        std::fs::copy(&path, dir.join(examples).join(path.file_name().unwrap())).unwrap();
+    }
+    angzarr_proto::protos::write_include_dir(&dir).unwrap();
     dir
 }
 
