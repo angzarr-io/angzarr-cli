@@ -108,8 +108,8 @@ option anywhere but a non-zero value of the nested `Reason` of a message a
 command refuses with fails generation. An `(event)` entry naming a component outside the protos
 generated is a reference to one generated elsewhere, skipped.
 
-A component's name in an application (the host config's `[[component]]`
-`name`, a policy's or a projector's registered name) is its
+A component's name in an application (the host config's `component`
+entry's `name`, a policy's or a projector's registered name) is its
 `component_name`, or by default: an aggregate's domain (`table`), `pmg-` and
 a process manager's domain (`pmg-buy-in`), `policy-<input>-<output>` for a
 policy (`policy-table-player`), `projector-` and the kebab case of a
@@ -154,7 +154,7 @@ its name in an application, generated from its protos and encoded, the crate's v
 `rules_version`; a domain served by a child process has its own) and
 `register` (one `register(&mut Registry)` for every adapter). An
 application's own `src/main.rs` runs `register` with its host config
-(`angzarr_embedded_host::run("angzarr.toml", register)`). A crate that
+(`angzarr_embedded_host::run("angzarr.yaml", register)`). A crate that
 writes its policies by hand beside a domain a child process serves takes
 that domain's command set and event set from `stand_ins` over the
 domain's proto (`angzarr-stand-ins.rs`: the same `CommandTarget`,
@@ -255,11 +255,11 @@ scaffolded.
 [--in-memory] [--angzarr-build-path DIR] [--domain-crate CRATE
 [--domain-wire PATH]] <protos>` writes an
 angzarr-embedded application's startup into the crate root. The user's, written
-once and never rewritten: `angzarr.toml`, the host config, seeded from the
-flags; `Cargo.toml`, angzarr-embedded's crates pinned at the commit this CLI
+once and never rewritten: `angzarr.yaml`, the host config, seeded from the
+flags at the current `schema_version`; `Cargo.toml`, angzarr-embedded's crates pinned at the commit this CLI
 generates for, angzarr-build the directory given or this CLI's repository;
 and `src/driver.rs`, what the application does once it is up. The CLI's,
-rewritten on every run from the protos and the `angzarr.toml` on disk:
+rewritten on every run from the protos and the `angzarr.yaml` on disk:
 `build.rs`, one call to `angzarr_build::app`, and `src/main.rs`, the generated
 layer's modules, each in-process component's interface and implementation,
 and an async `main` running the host with the generated `register()`, which
@@ -285,23 +285,24 @@ sources are all among them (a Python child's events are recorded by the
 host, so a projector of them may run in process). Each is Rust, in process,
 unless `--language <name>=<language>` names it (a domain by its name or its
 domain): a `python` one is a child, the project `angzarr scaffold python`
-writes for it, `dir` and `entry = ["angzarr-<project>"]` its domain's for a
+writes for it, `dir` and `entry: [angzarr-<project>]` its domain's for a
 domain and its name for a policy or a projector (`--language
-policy-table-player=python` is `dir = "policy-table-player"`). A language
+policy-table-player=python` is `dir: policy-table-player`). A language
 the host has no default launch for is written as given, and the lint
 refuses it until the config gives it a `launch`. A child's policy or
 projector has no adapter, descriptor or module in the application. A
 component is
 exposed only when
-`--expose` names it; `[retry]` holds only the keys seeded (`max_retries`,
-`max_race_runs`); `[store]` is `in_memory = true` or the `angzarr.db` file;
-`[policy]` and `[supervision]` are left to the host's defaults.
+`--expose` names it; `retry` holds only the keys seeded (`max_retries`,
+`max_race_runs`); `store` is `in_memory: true` or the `angzarr.db` file;
+`policy` and `supervision` are left to the host's defaults.
 
-`angzarr lint app [--config angzarr.toml] <protos>` checks a config against
+`angzarr lint app [--config angzarr.yaml] <protos>` checks a config against
 the protos, as `scaffold app` does before it writes anything (a config with
-lints is refused, and nothing is written). It reads the config as
-angzarr-embedded-host does: an unknown key or value, or a component with no
-`kind`, is refused. The lints: a listed domain or policy no component of the
+lints is refused, and nothing is written). It reads the config through
+angzarr-embedded-host-config, the schema angzarr-embedded-host runs: a newer
+`schema_version`, an unknown key or value, or a component with no `kind`, is
+refused, naming its key path; a file with no stamp reads as version 1. The lints: a listed domain or policy no component of the
 protos is; a component listed twice; a domain of the protos the config does
 not list; a listed policy whose source or target domain no listed component
 owns (list the target, with its `launch`, if it runs elsewhere); an exposed

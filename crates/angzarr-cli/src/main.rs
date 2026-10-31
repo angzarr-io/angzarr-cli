@@ -51,7 +51,7 @@ struct LintArgs {
     #[arg(short = 'I', long = "include", value_name = "DIR")]
     includes: Vec<String>,
     /// The host config.
-    #[arg(long, default_value = "angzarr.toml")]
+    #[arg(long, default_value = "angzarr.yaml")]
     config: PathBuf,
 }
 
@@ -101,7 +101,7 @@ struct ScaffoldArgs {
 }
 
 /// What `scaffold app` alone takes: the seed of a new host config, unused
-/// once `angzarr.toml` exists (it is the user's).
+/// once `angzarr.yaml` exists (it is the user's).
 #[derive(Args)]
 struct AppArgs {
     /// App: the application's name, for the generated prose.
@@ -117,10 +117,10 @@ struct AppArgs {
     /// `<domain>=loopback` or `<domain>=ip`. Repeatable.
     #[arg(long, value_name = "DOMAIN=EXPOSURE")]
     expose: Vec<String>,
-    /// App: `[retry] max_retries`; unset, the host's default.
+    /// App: `retry.max_retries`; unset, the host's default.
     #[arg(long, value_name = "N")]
     max_retries: Option<u32>,
-    /// App: `[retry] max_race_runs`; 0 hands a lost race back as the
+    /// App: `retry.max_race_runs`; 0 hands a lost race back as the
     /// store's conflict. Unset, the host's default.
     #[arg(long, value_name = "N")]
     max_race_runs: Option<u32>,
