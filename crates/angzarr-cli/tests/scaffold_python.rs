@@ -62,14 +62,17 @@ fn offline(command: &mut Command) -> Output {
 /// `angzarr scaffold python` for the player into `root`, offline, with
 /// `extra`.
 fn scaffold(root: &Path, extra: &[&str]) -> Output {
-    offline(&mut player(root, extra))
+    offline(&mut player(root, extra, GOLDEN_REV))
 }
 
 /// `angzarr scaffold python` for the player into `root` as a user runs it,
 /// with `extra`.
 fn online(root: &Path, extra: &[&str]) -> Output {
-    player(root, extra).output().unwrap()
+    player(root, extra, &spec_rev()).output().unwrap()
 }
+
+/// The angzarr-project commit the golden project's `buf.gen.yaml` names.
+const GOLDEN_REV: &str = "ef975bcf6fd6a0207476667d18ddc7bb29a10ab4";
 
 /// The angzarr-project commit this tree pins (its submodule's), whose
 /// protos `-I` reads: buf reads the same ones from git, so the wire types
@@ -88,8 +91,9 @@ fn spec_rev() -> String {
         .to_string()
 }
 
-/// The command scaffolding the player into `root`, with `extra`.
-fn player(root: &Path, extra: &[&str]) -> Command {
+/// The command scaffolding the player into `root`, with `extra`, buf
+/// reading the protos from angzarr-project at `rev`.
+fn player(root: &Path, extra: &[&str], rev: &str) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_angzarr"));
     command
         .args(["scaffold", "python", "--format", "json", "-I", &spec()])
@@ -98,7 +102,7 @@ fn player(root: &Path, extra: &[&str]) -> Command {
             "--proto-git",
             "https://github.com/angzarr-io/angzarr-project",
             "--proto-ref",
-            &spec_rev(),
+            rev,
         ])
         .arg("--src")
         .arg(root)
