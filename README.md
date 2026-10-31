@@ -130,7 +130,10 @@ and a prost crate built otherwise fails to compile with
 `PolicyContext`, `CommandContext`, `Failed`, `BusinessStatus` and `RetryableStatus`, each component's `<Component>Command`
 and `<Component>Event` enums), `adapters` (each component's angzarr-embedded
 markup, named `policy-<input>-<output>` for a policy, delegating to its
-interface; a domain served by a child process gets a contract instead),
+interface; a domain served by a child process is instead its command set,
+a `CommandTarget` with `Decides` of each command, and its event set, an
+`EventSource` with `Ingests` of each fact, which a policy names as its
+target or source with no stand-in aggregate),
 a projector's one `#[projector]` over all its sources,
 its `input_domains` (or its one `input_domain`, else the domains its
 `(event)` entries name), registered with `registry.projector`; a
@@ -235,7 +238,9 @@ each by its name from the protos (`component_name`, or its kind's default)
 and with its `kind`: every aggregate and process manager of the protos (in
 Rust, or a Python child for a `--python` domain, `dir = "<domain>"` and
 `entry = ["angzarr-<domain>"]`), every policy between two of them, and every
-projector whose sources all run in process. A component is exposed only when
+projector whose sources are all among them (a Python child's events are
+recorded by the host, so its projector runs in process). A component is
+exposed only when
 `--expose` names it; `[retry]` holds only the keys seeded (`max_retries`,
 `max_race_runs`); `[store]` is `in_memory = true` or the `angzarr.db` file;
 `[policy]` and `[supervision]` are left to the host's defaults.

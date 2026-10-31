@@ -1,6 +1,6 @@
 //! The wire types, the markup domain layer, the adapters and `register()`,
 //! generated into OUT_DIR from the protos; the player, served by the Python
-//! child, gets a contract, not an adapter.
+//! child, is its command and event sets, not an adapter.
 
 const PROTOS: &[&str] = &["io/angzarr/examples/v1/player.proto"];
 const INCLUDES: &[&str] = &["proto"];
