@@ -3,6 +3,7 @@
 [[component]]
 name = "player"
 language = "python"
+kind = "domain"
 dir = "player"
 entry = ["angzarr-player"]
 

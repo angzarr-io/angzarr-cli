@@ -4,10 +4,12 @@
 [[component]]
 name = "table"
 language = "rust"
+kind = "domain"
 
 [[component]]
 name = "player"
 language = "python"
+kind = "domain"
 dir = "player"
 entry = ["angzarr-player"]
 
