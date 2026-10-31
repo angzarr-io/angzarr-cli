@@ -87,7 +87,7 @@ fn actions(out: &Output) -> Vec<(String, String)> {
 fn each(action: &str) -> Vec<(String, String)> {
     [
         "Cargo.toml",
-        "angzarr.toml",
+        "angzarr.yaml",
         "build.rs",
         "src/driver.rs",
         "src/main.rs",
@@ -105,7 +105,7 @@ fn scaffold_app_writes_the_golden_config_and_main_then_keeps_them() {
     // would; this run named the spec's absolute path, and its manifest's
     // angzarr-build is this binary's commit: only the config, main and
     // driver are compared.
-    for path in ["angzarr.toml", "src/main.rs", "src/driver.rs"] {
+    for path in ["angzarr.yaml", "src/main.rs", "src/driver.rs"] {
         assert_eq!(
             std::fs::read_to_string(root.join(path)).unwrap(),
             golden(path),
@@ -121,16 +121,16 @@ fn scaffold_app_keeps_the_users_config_and_rewrites_a_hand_edited_main() {
     let root = empty_dir();
     angzarr(SCAFFOLD, &root);
     let mine = format!(
-        "{}\n[retry]\nmax_race_runs = 0\n",
-        std::fs::read_to_string(root.join("angzarr.toml")).unwrap()
+        "{}\nretry:\n  max_race_runs: 0\n",
+        std::fs::read_to_string(root.join("angzarr.yaml")).unwrap()
     );
-    std::fs::write(root.join("angzarr.toml"), &mine).unwrap();
+    std::fs::write(root.join("angzarr.yaml"), &mine).unwrap();
     std::fs::write(root.join("src/main.rs"), "// edited\n").unwrap();
     let mut again = SCAFFOLD.to_vec();
     again.extend(["--expose", "table=ip", "--max-retries", "1"]);
     let done = actions(&angzarr(&again, &root));
     assert!(
-        done.contains(&("angzarr.toml".to_string(), "kept".to_string())),
+        done.contains(&("angzarr.yaml".to_string(), "kept".to_string())),
         "{done:?}"
     );
     assert!(
@@ -138,7 +138,7 @@ fn scaffold_app_keeps_the_users_config_and_rewrites_a_hand_edited_main() {
         "{done:?}"
     );
     assert_eq!(
-        std::fs::read_to_string(root.join("angzarr.toml")).unwrap(),
+        std::fs::read_to_string(root.join("angzarr.yaml")).unwrap(),
         mine
     );
     assert_eq!(
@@ -161,15 +161,15 @@ fn scaffold_app_emits_expose_and_retry_from_its_flags() {
         "0",
     ]);
     actions(&angzarr(&args, &root));
-    let config = std::fs::read_to_string(root.join("angzarr.toml")).unwrap();
+    let config = std::fs::read_to_string(root.join("angzarr.yaml")).unwrap();
     assert!(
         config.contains(
-            "name = \"table\"\nkind = \"domain\"\nlanguage = \"rust\"\nexpose = \"loopback\"\n"
+            "  - name: table\n    kind: domain\n    language: rust\n    expose: loopback\n"
         ),
         "{config}"
     );
     assert!(
-        config.contains("[retry]\nmax_retries = 5\nmax_race_runs = 0\n"),
+        config.contains("retry:\n  max_retries: 5\n  max_race_runs: 0\n"),
         "{config}"
     );
     std::fs::remove_dir_all(&root).unwrap();
@@ -258,7 +258,7 @@ fn scaffold_app_refuses_a_malformed_expose() {
 #[test]
 fn lint_app_passes_the_generated_config() {
     let root = empty_dir();
-    std::fs::write(root.join("angzarr.toml"), golden("angzarr.toml")).unwrap();
+    std::fs::write(root.join("angzarr.yaml"), golden("angzarr.yaml")).unwrap();
     let out = angzarr(&["lint", "app"], &root);
     assert!(
         out.status.success(),
@@ -272,13 +272,24 @@ fn lint_app_passes_the_generated_config() {
 fn lint_app_reports_each_lint_and_fails() {
     let root = empty_dir();
     std::fs::write(
-        root.join("angzarr.toml"),
-        "[[component]]\nname = \"table\"\nkind = \"domain\"\nlanguage = \"rust\"\n\n\
-         [[component]]\nname = \"player\"\nkind = \"domain\"\nlanguage = \"python\"\n\
-         launch = []\n\n\
-         [[component]]\nname = \"policy-table-player\"\nkind = \"policy\"\n\
-         language = \"python\"\nexpose = \"ip\"\n\n\
-         [[component]]\nname = \"dealer\"\nkind = \"domain\"\nlanguage = \"cobol\"\n",
+        root.join("angzarr.yaml"),
+        "schema_version: 1\
+         \ncomponent:\
+         \n  - name: table\
+         \n    kind: domain\
+         \n    language: rust\
+         \n  - name: player\
+         \n    kind: domain\
+         \n    language: python\
+         \n    launch: []\
+         \n  - name: policy-table-player\
+         \n    kind: policy\
+         \n    language: python\
+         \n    expose: ip\
+         \n  - name: dealer\
+         \n    kind: domain\
+         \n    language: cobol\
+         \n",
     )
     .unwrap();
     let out = angzarr(&["lint", "app"], &root);
@@ -302,11 +313,11 @@ fn scaffold_app_puts_a_policy_in_the_language_given() {
     let mut args = SCAFFOLD.to_vec();
     args.extend(["--language", "policy-table-player=python"]);
     actions(&angzarr(&args, &root));
-    let config = std::fs::read_to_string(root.join("angzarr.toml")).unwrap();
+    let config = std::fs::read_to_string(root.join("angzarr.yaml")).unwrap();
     assert!(
         config.contains(
-            "name = \"policy-table-player\"\nkind = \"policy\"\nlanguage = \"python\"\n\
-             dir = \"policy-table-player\"\nentry = [\"angzarr-policy-table-player\"]\n"
+            "  - name: policy-table-player\n    kind: policy\n    language: python\n    \
+             dir: policy-table-player\n    entry: [angzarr-policy-table-player]\n"
         ),
         "{config}"
     );
