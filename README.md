@@ -184,6 +184,19 @@ refusal's `Reason` enum is its rejection code, and its plain type gives the
 generator's diagnostic `key()` (the Rust domain layer's code for the same
 refusal, `refusal_key`; an unset reason keys as the refusal alone) and
 `args()` (its set fields). A fact's events flag it, recorded as received.
+A refusal of a command a policy sends comes back to the policy's source
+(decision 14.31): a domain's logic gets `on_refused_<command>` per command
+its policies send, taking the refused command, its typed refusal or None
+(where the command refuses with types), the state and its
+`CommandContext`, and returning the events that record the pass-through
+`CommandRefused`, as a fact's flag it. `--translate
+<policy>:<command>=<fact>`, as for Rust, gives the policy's logic
+`<command>_refused` instead, taking the refused command, its typed refusal
+or None and the refused command's `CommandContext` and returning the fact
+of its source the refusal becomes, and drops the source's
+`on_refused_<command>`. The generated dispatch is the same either way: it
+registers each with the client's `on_refused` when the logic has it, so the
+user's logic, as the user's interface in Rust, is the switch.
 Both take and return the plain types and import nothing of angzarr or
 protobuf directly: `domain.py` re-exports the context from
 `angzarr_client.router`, with the classes the logic fails with, both

@@ -87,8 +87,8 @@ struct ScaffoldArgs {
     #[arg(long, default_value = "src")]
     src: PathBuf,
     /// The refusal switch, set to translate for one command of one policy:
-    /// `<policy>:<command>=<fact>`, each fully qualified. Every other command
-    /// is passed through.
+    /// `<policy>:<command>=<fact>`, each fully qualified, for `rust` and
+    /// `python`. Every other command is passed through.
     #[arg(long, value_name = "POLICY:COMMAND=FACT")]
     translate: Vec<String>,
     /// Add the stubs an existing file lacks, changing nothing else.
@@ -195,14 +195,14 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
     } else {
         Existing::Keep
     };
+    let translate = args
+        .translate
+        .iter()
+        .map(String::as_str)
+        .map(translate)
+        .collect::<Result<Vec<_>, _>>()?;
     let done = match args.lang {
         Lang::Rust => {
-            let translate = args
-                .translate
-                .iter()
-                .map(String::as_str)
-                .map(translate)
-                .collect::<Result<Vec<_>, _>>()?;
             angzarr_build::scaffold_into(&args.src, &protos, &includes, &translate, existing)
                 .map_err(CliError::Build)?
         }
@@ -224,9 +224,10 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
                 protos: protos_input,
                 rules_version: python.rules_version.clone(),
             };
-            let done =
-                angzarr_build::scaffold_python_into(&args.src, &protos, &includes, &app, existing)
-                    .map_err(CliError::Build)?;
+            let done = angzarr_build::scaffold_python_into(
+                &args.src, &protos, &includes, &app, &translate, existing,
+            )
+            .map_err(CliError::Build)?;
             angzarr_build::proto_gen_python(&args.src, &app).map_err(CliError::Build)?;
             if !python.no_lock {
                 angzarr_build::lock_python(&args.src).map_err(CliError::Build)?;
