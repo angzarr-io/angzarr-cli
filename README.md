@@ -121,7 +121,11 @@ $ angzarr scaffold rust -I proto --src src buyin/v1/wallet.proto buyin/v1/buy_in
 ```
 
 The build script generates the rest into `OUT_DIR` with `angzarr-build`, the
-CLI's and regenerated every build: `markup_domain` (the domain types, their
+CLI's and regenerated every build. `markup_domain` is generated for prost
+types built with `wire`'s settings (bytes as `Vec<u8>`, maps as `BTreeMap`),
+and a prost crate built otherwise fails to compile with
+`angzarr-codegen-wire-bytes` or `angzarr-codegen-wire-map` at the field:
+`markup_domain` (the domain types, their
 `DomainMessage` impls, `Rejection`, `Bug`, the re-exported `Context`,
 `PolicyContext`, `CommandContext`, `Failed`, `BusinessStatus` and `RetryableStatus`, each component's `<Component>Command`
 and `<Component>Event` enums), `adapters` (each component's angzarr-embedded
