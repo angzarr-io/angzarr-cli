@@ -134,7 +134,8 @@ struct AppArgs {
 /// What `scaffold python` alone takes.
 #[derive(Args)]
 struct PythonArgs {
-    /// Python: the domain the project serves, e.g. `player`.
+    /// Python: the domain the project serves, e.g. `player`, or a
+    /// component's name, e.g. `policy-table-player`.
     #[arg(long)]
     domain: Option<String>,
     /// Python: the git repository `buf generate` reads the protos from,

@@ -9,4 +9,4 @@ angzarr-cli-lints = { $config } has { $count } lints
 ## Remedies.
 
 angzarr-cli-translate-form = write --translate as <policy>:<command>=<fact>, each a fully qualified message name, e.g. buyin.v1.BuyInWalletPolicy:buyin.v1.Hold=buyin.v1.HoldLost
-angzarr-cli-domain-name = name the domain the project serves, e.g. --domain player
+angzarr-cli-domain-name = name the domain or the component the project serves, e.g. --domain player or --domain policy-table-player

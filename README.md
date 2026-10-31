@@ -136,45 +136,70 @@ its `input_domains` (or its one `input_domain`, else the domains its
 `(event)` entries name), registered with `registry.projector`; a
 projector written by hand is angzarr-router's `ProjectorHandler`, registered
 beside `register` with `registry.projector_handler(&[sources], ..)`;
-`descriptors` (`DESCRIPTORS`: each component's `ComponentDescriptor`,
-generated from its protos and encoded, the crate's version its
+`descriptors` (`DESCRIPTORS`: each component's `ComponentDescriptor`, by
+its name in an application, generated from its protos and encoded, the crate's version its
 `rules_version`; a domain served by a child process has its own) and
 `register` (one `register(&mut Registry)` for every adapter). An
 application's own `src/main.rs` runs `register` with its host config
 (`angzarr_embedded_host::run("angzarr.toml", register)`).
 
-`angzarr scaffold python --domain <domain>` writes one domain's uv project,
-served to angzarr-embedded as a child process through angzarr-client-python's
-harness (`angzarr_client.child`). The user's files are written once and
+`angzarr scaffold python --domain <name>` writes one component's uv
+project, served to angzarr-embedded as a child process through
+angzarr-client-python's harness (`angzarr_client.child`). `--domain` names
+a domain (its aggregate or process manager) or a component's name in an
+application: its `component_name`, else its kind's default
+(`policy-<input>-<output>`, `projector-` and its anchor in kebab case), as
+the ledger's `projector-wallet-table-ledger`. The dispatch and the
+descriptor carry that name. The user's files are written once and
 completed with `--missing`: `pyproject.toml` (angzarr-client pinned by
-commit, `CLIENT_PYTHON_REV`), `logic.py`, the domain's logic interface
-(`<Domain>Logic`, a `typing.Protocol`: per command a decision taking the
-command and the state and returning its events, per event a fold taking the
-state and the event and returning the next state) and `logic_impl.py`, its
-implementation (each method a TODO). Both take and return the domain's plain
-types, each decision its `CommandContext` too, and import nothing of angzarr
-or protobuf directly: `domain.py` re-exports the context from
-`angzarr_client.router`, with the two classes a decision fails with, both
-angzarr-client-python's and each a diagnostic key and its args: `Rejection`,
-raised to refuse its command (`raise Rejection("key", name=value)`, a
-business "no" under a business status: FAILED_PRECONDITION unless given
-second, or INVALID_ARGUMENT, NOT_FOUND, ALREADY_EXISTS, OUT_OF_RANGE or
-PERMISSION_DENIED), and `Bug`, raised for a defect (`raise
-Bug("key", name=value)`, answered ROUTER_REASON_UNHANDLED_HANDLER_ERROR with the key and
-args as its cause; angzarr-embedded alerts it and dead-letters the command). The CLI's files are rewritten
-on every run: `domain.py` (the domain's messages as frozen dataclasses and
-integer enums; each event a command emits gets a classmethod building it
-from that command, `MoveDecided.from_command(cmd, action=...)`, copying
-every field the two share by name and type and taking the rest as keywords,
-or `from_<command>` per command when several emit it), `_descriptor.py`
-(the domain's `ComponentDescriptor`, generated from its protos with
+commit, `CLIENT_PYTHON_REV`), `logic.py`, the logic interface (a
+`typing.Protocol`: `<Domain>Logic` for a domain, per command or fact a
+decision taking the input, the state and its `CommandContext`, per event a
+fold taking the state and the event and returning the next state;
+`<Name>Logic` for a policy, per event a reaction taking the event, its
+source root and its `PageContext` and returning the target's commands, each
+with its root; for a projector, per event a coroutine taking the
+projection, the event and its `PageContext`, the source domain its cover's,
+and returning the next projection) and `logic_impl.py`, its implementation
+(each method a TODO). A decision returns its events as its command's emits
+cardinality declares (one event, a tuple of several, that or None, or a
+list of any of them) or one of its typed refusals, several to a command,
+answered as the client's `Refused` with the refusal on the wire; a
+refusal's `Reason` enum is its rejection code, and its plain type gives the
+generator's diagnostic `key()` (the Rust domain layer's code for the same
+refusal, `refusal_key`; an unset reason keys as the refusal alone) and
+`args()` (its set fields). A fact's events flag it, recorded as received.
+Both take and return the plain types and import nothing of angzarr or
+protobuf directly: `domain.py` re-exports the context from
+`angzarr_client.router`, with the classes the logic fails with, both
+angzarr-client-python's and each a diagnostic key and its args: `Rejection`
+(a domain's), raised to refuse its command (`raise Rejection("key",
+name=value)`, a business "no" under a business status: FAILED_PRECONDITION
+unless given second, or INVALID_ARGUMENT, NOT_FOUND, ALREADY_EXISTS,
+OUT_OF_RANGE or PERMISSION_DENIED), and `Bug`, raised for a defect (`raise
+Bug("key", name=value)`, answered ROUTER_REASON_UNHANDLED_HANDLER_ERROR with
+the key and args as its cause; angzarr-embedded alerts it and dead-letters
+the command). The CLI's files are rewritten on every run: `domain.py` (the
+messages as frozen dataclasses and integer enums, a map a dict; each event
+a command emits gets a classmethod building it from that command,
+`MoveDecided.from_command(cmd, action=...)`, copying every field the two
+share by name and type and taking the rest as keywords, or
+`from_<command>` per command when several emit it), `_descriptor.py` (the
+component's `ComponentDescriptor`, generated from its protos with
 `--rules-version`, for the child to answer `Describe` with unchanged),
-`buf.gen.yaml`, `main.py`, `__main__.py`, `_version.py` and
-the dispatch under `_gen`, which converts the wire's messages to the plain
-types and back around each call. Every run ends with `buf generate` (the
-message types, their imports rerooted, angzarr's own under
+`buf.gen.yaml`, `main.py`, `__main__.py`, `_version.py` and the dispatch
+under `_gen`, which converts the wire's messages to the plain types and
+back around each call; a projector's coroutines run on the dispatch's one
+event loop. Each generated file stands on angzarr-client-python's public
+API alone (`angzarr_client.router`'s `AggregateDispatch`,
+`ProcessManagerDispatch`, `PolicyDispatch` and `ProjectorDispatch`,
+`ComponentHost.add_<kind>(dispatch, descriptor)`, `run_child`), so a
+hand-written one can take its place; the client's `describe(dispatch)` of a
+generated dispatch is its generated descriptor, so a hand-written one is
+described without the hex. Every run ends with `buf generate`
+(the message types, their imports rerooted, angzarr's own under
 `angzarr_client.proto`) and `uv lock`, so the project is ready for
-angzarr-embedded's `uv run --locked angzarr-<domain>`, the lock and the
+angzarr-embedded's `uv run --locked angzarr-<name>`, the lock and the
 message types on disk to commit; `--no-lock` skips the lock. `buf generate`
 reads the protos from `--proto-git` at `--proto-ref` (under its `proto`, as
 angzarr-project lays them out), else from the first `-I`.
@@ -187,7 +212,7 @@ $ angzarr scaffold python -I proto --src player --domain player \
 
 Every scaffold reads the other protos of its protos' directories too, so a
 policy or a projector a scaffolded message names is found without being
-scaffolded. `scaffold python` emits no projector; `scaffold rust` does.
+scaffolded.
 
 ## An application's startup
 
