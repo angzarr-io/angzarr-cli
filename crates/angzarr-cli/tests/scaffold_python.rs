@@ -71,6 +71,23 @@ fn online(root: &Path, extra: &[&str]) -> Output {
     player(root, extra).output().unwrap()
 }
 
+/// The angzarr-project commit this tree pins (its submodule's), whose
+/// protos `-I` reads: buf reads the same ones from git, so the wire types
+/// are the descriptor set's.
+fn spec_rev() -> String {
+    let out = Command::new("git")
+        .args(["ls-tree", "HEAD", "angzarr-project"])
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .output()
+        .unwrap();
+    let listing = String::from_utf8(out.stdout).unwrap();
+    listing
+        .split_whitespace()
+        .nth(2)
+        .unwrap_or_else(|| panic!("no angzarr-project in {listing:?}"))
+        .to_string()
+}
+
 /// The command scaffolding the player into `root`, with `extra`.
 fn player(root: &Path, extra: &[&str]) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_angzarr"));
@@ -81,7 +98,7 @@ fn player(root: &Path, extra: &[&str]) -> Command {
             "--proto-git",
             "https://github.com/angzarr-io/angzarr-project",
             "--proto-ref",
-            "ef975bcf6fd6a0207476667d18ddc7bb29a10ab4",
+            &spec_rev(),
         ])
         .arg("--src")
         .arg(root)
