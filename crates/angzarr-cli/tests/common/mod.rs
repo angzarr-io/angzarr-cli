@@ -54,7 +54,7 @@ pub fn copy_dir(from: &Path, to: &Path) {
 }
 
 /// The angzarr-embedded commit the applications are built on.
-const ANGZARR_EMBEDDED_REV: &str = "e2810b47fcfce7ad97f063f33252d1d44a53d263";
+const ANGZARR_EMBEDDED_REV: &str = "7c8520470fa0fd9435020d7c30ade79dd2808ae7";
 /// Where [`ANGZARR_EMBEDDED_REV`] is fetched from.
 const ANGZARR_EMBEDDED_GIT: &str = "https://github.com/angzarr-io/angzarr-embedded";
 
