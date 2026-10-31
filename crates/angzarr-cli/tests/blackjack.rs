@@ -10,11 +10,12 @@
 //! user's files (`tests/e2e/blackjack`) are the table's interface and
 //! implementation, agg-table's `TableAggregate` and `Table`, the policies'
 //! implementations over table-player-policies, a basic-strategy player, a
-//! driver that seats two players and deals seed 21, and the table's crates
-//! added to the manifest. From the deal the
-//! turn crosses to the Python child and back by the policies alone, until
-//! the round settles; the outcome is the table's own test's (examples-rust
-//! `table/embedded/tests/remote_player.rs`).
+//! driver playing seed 21's hand, and the table's crates added to the
+//! manifest. From the deal the turn crosses to the Python child and back
+//! by the policies alone, until the round settles. The hand is agg-table's
+//! `test_support::seed_21`, the one every driver of the table plays: the
+//! driver checks the players' moves, the table's events and the settlement
+//! against it, and prints the settlement this test asserts.
 //!
 //! agg-table, examples-proto and table-player-policies are examples-rust's,
 //! at [`EXAMPLES_RUST_REV`]: git dependencies pinned by hash, as
@@ -40,8 +41,9 @@ const PROTOS: &[&str] = &[
 
 /// The examples-rust commit the table's crates are built from: its main,
 /// where agg-table implements the table's generated interface over
-/// examples-proto's generated domain layer.
-const EXAMPLES_RUST_REV: &str = "5d2cf8cda2917c467fdaed56454f06ed216f3633";
+/// examples-proto's generated domain layer, and has seed 21's hand as test
+/// support.
+const EXAMPLES_RUST_REV: &str = "6a173bcaae7167d3b6f587c442b2592764e65bf6";
 /// Where [`EXAMPLES_RUST_REV`] is fetched from.
 const EXAMPLES_RUST_GIT: &str = "https://github.com/angzarr-io/angzarr-examples-rust";
 
@@ -73,10 +75,6 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
     assert_eq!(
         String::from_utf8(out.stdout).unwrap(),
         [
-            "alice: DoubleDown",
-            "bob: Hit Hit Stand",
-            "table: RoundDealt TurnStarted HandDoubled TurnStarted CardDealt TurnStarted \
-             CardDealt TurnStarted HandStood DealerPlayed RoundSettled",
             "seat 0: wager 40 returned 80 stack 540",
             "seat 1: wager 20 returned 40 stack 520",
             "house -60",
@@ -139,9 +137,10 @@ fn scaffold(app: &std::path::Path, build: &str) {
     );
 }
 
-/// The table's crates added to the app's manifest, examples-rust's
-/// angzarr-embedded patched to a checkout of the CLI's (returned), and its
-/// angzarr-build to this workspace's (`build`).
+/// The table's crates added to the app's manifest (agg-table with its test
+/// support, seed 21's hand), examples-rust's angzarr-embedded patched to a
+/// checkout of the CLI's (returned), and its angzarr-build to this
+/// workspace's (`build`).
 fn patch_manifest(app: &std::path::Path, build: &str) -> std::path::PathBuf {
     // Beside the app, not in it: a path dependency under the app's
     // directory would be a member of its workspace.
@@ -154,6 +153,10 @@ fn patch_manifest(app: &std::path::Path, build: &str) -> std::path::PathBuf {
     git(app, &["clone", "--quiet", ANGZARR_EMBEDDED_GIT, &into]);
     git(&embedded, &["checkout", "--quiet", ANGZARR_EMBEDDED_REV]);
     let examples = format!("{{ git = \"{EXAMPLES_RUST_GIT}\", rev = \"{EXAMPLES_RUST_REV}\" }}");
+    // Seed 21's hand, which the driver plays, is agg-table's test support.
+    let agg_table = format!(
+        "{{ git = \"{EXAMPLES_RUST_GIT}\", rev = \"{EXAMPLES_RUST_REV}\", features = [\"test-support\"] }}"
+    );
     let patched: String = [
         "angzarr-embedded",
         "angzarr-embedded-host",
@@ -169,7 +172,7 @@ fn patch_manifest(app: &std::path::Path, build: &str) -> std::path::PathBuf {
     let manifest = manifest.replace(
         "\n[build-dependencies]",
         &format!(
-            "agg-table = {examples}\nexamples-proto = {examples}\n\
+            "agg-table = {agg_table}\nexamples-proto = {examples}\n\
              table-player-policies = {examples}\n\n[build-dependencies]"
         ),
     ) + &format!(

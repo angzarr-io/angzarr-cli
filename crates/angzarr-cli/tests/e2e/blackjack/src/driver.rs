@@ -1,9 +1,12 @@
-//! The blackjack driver: seed 21's hand (one deck), the table's own test's
-//! (examples-rust remote_player.rs): Alice 4 6 and Bob A 5 against the
-//! dealer's 9. The driver seats both and deals; the turn then crosses to
-//! the Python player and back by the two policies alone, until the round
-//! settles. It prints what happened, one line per fact the test checks.
+//! The blackjack driver: seed 21's hand, agg-table's
+//! `test_support::seed_21`, the one every driver of the table plays. The
+//! driver seats both players, has them bet and deals; the turn then
+//! crosses to the Python player and back by the two policies alone, until
+//! the round settles. It checks each player's moves and the table's events
+//! against seed 21's, and the settlement (`assert_settled`), then prints
+//! the settlement.
 
+use agg_table::test_support::seed_21::{self, ALICE, BOB};
 use angzarr_embedded::v1::{Command, CommandBook, CommandPage, Cover, Uuid, command_page};
 use angzarr_embedded::{Sampled, Timestamp, pack, type_name};
 use angzarr_embedded_host::App;
@@ -12,8 +15,6 @@ use prost::{Message, Name};
 use crate::wire;
 
 const TABLE: u8 = 0x7a;
-const ALICE: u8 = 0xa1;
-const BOB: u8 = 0xb0;
 
 fn cover(domain: &str, b: u8) -> Cover {
     Cover {
@@ -74,76 +75,36 @@ async fn stream(
 }
 
 pub async fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
-    to_table(
-        app,
-        1,
-        wire::CreateTable {
-            name: "Main".into(),
-            min_bet: 10,
-            max_bet: 100,
-            min_buy_in: 100,
-            max_buy_in: 1000,
-            seats: 3,
-            decks: 1,
-            shoe_seed: 21,
-        },
-    )
-    .await?;
-    for (n, player, seat) in [(2, ALICE, 0), (4, BOB, 1)] {
-        to_table(
-            app,
-            n,
-            wire::RequestSeat {
-                player_root: vec![player; 16],
-                seat,
-                amount: 500,
-                request_id: vec![n; 16],
-            },
-        )
-        .await?;
-        to_table(
-            app,
-            n + 1,
-            wire::ConfirmSeat {
-                buy_in_id: vec![n; 16],
-            },
-        )
-        .await?;
+    to_table(app, 1, seed_21::create_table()).await?;
+    let mut n = 1;
+    for (request, confirm) in seed_21::seats() {
+        to_table(app, n + 1, request).await?;
+        to_table(app, n + 2, confirm).await?;
+        n += 2;
     }
-    to_table(
-        app,
-        6,
-        wire::PlaceBet {
-            seat: 0,
-            amount: 20,
-        },
-    )
-    .await?;
-    to_table(
-        app,
-        7,
-        wire::PlaceBet {
-            seat: 1,
-            amount: 20,
-        },
-    )
-    .await?;
-    to_table(app, 8, wire::DealRound {}).await?;
+    for bet in seed_21::bets() {
+        n += 1;
+        to_table(app, n, bet).await?;
+    }
+    to_table(app, n + 1, wire::DealRound {}).await?;
 
-    for (name, player) in [("alice", ALICE), ("bob", BOB)] {
-        let moves: Vec<String> = stream(app, &cover("player", player))
+    for player in [ALICE, BOB] {
+        let moves: Vec<wire::MoveAction> = stream(app, &cover("player", player))
             .await?
             .into_iter()
             .filter(|(n, _)| n == "MoveDecided")
             .map(|(_, bytes)| {
                 let decided = wire::MoveDecided::decode(&*bytes).expect("decodes");
-                format!(
-                    "{:?}",
-                    wire::MoveAction::try_from(decided.action).expect("an action")
-                )
+                decided.action()
             })
             .collect();
-        println!("{name}: {}", moves.join(" "));
+        let expected: Vec<wire::MoveAction> = seed_21::moves_of(player)
+            .into_iter()
+            .map(|(_, action)| action)
+            .collect();
+        if moves != expected {
+            return Err(format!("player {player:#x} moved {moves:?}, not {expected:?}").into());
+        }
     }
     let table = stream(app, &cover("table", TABLE)).await?;
     let from_deal: Vec<&str> = table
@@ -151,16 +112,21 @@ pub async fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
         .map(|(n, _)| n.as_str())
         .skip_while(|n| *n != "RoundDealt")
         .collect();
-    println!("table: {}", from_deal.join(" "));
-    if let Some((_, bytes)) = table.iter().find(|(n, _)| n == "RoundSettled") {
-        let settled = wire::RoundSettled::decode(&**bytes)?;
-        for o in &settled.outcomes {
-            println!(
-                "seat {}: wager {} returned {} stack {}",
-                o.seat, o.wager, o.returned, o.stack_after
-            );
-        }
-        println!("house {}", settled.house_delta);
+    if from_deal != seed_21::FROM_DEAL {
+        return Err(format!("the table recorded {from_deal:?} from the deal").into());
     }
+    let (_, bytes) = table
+        .iter()
+        .find(|(n, _)| n == "RoundSettled")
+        .ok_or("the round did not settle")?;
+    let settled = wire::RoundSettled::decode(&**bytes)?;
+    seed_21::assert_settled(&settled);
+    for o in &settled.outcomes {
+        println!(
+            "seat {}: wager {} returned {} stack {}",
+            o.seat, o.wager, o.returned, o.stack_after
+        );
+    }
+    println!("house {}", settled.house_delta);
     Ok(())
 }
