@@ -245,7 +245,12 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
             let seed = AppSeed {
                 name: args.app.name.clone(),
                 includes: args.includes.clone(),
-                python: args.app.python.clone(),
+                languages: args
+                    .app
+                    .python
+                    .iter()
+                    .map(|domain| (domain.clone(), "python".to_string()))
+                    .collect(),
                 expose,
                 retry: RetrySeed {
                     max_retries: args.app.max_retries,

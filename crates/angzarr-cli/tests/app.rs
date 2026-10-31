@@ -58,8 +58,8 @@ const SCAFFOLD: &[&str] = &[
     ".",
     "--name",
     "blackjack",
-    "--python",
-    "player",
+    "--language",
+    "player=python",
     "--in-memory",
 ];
 
@@ -293,5 +293,43 @@ fn lint_app_reports_each_lint_and_fails() {
     ] {
         assert!(stderr.contains(code), "{code}:\n{stderr}");
     }
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn scaffold_app_puts_a_policy_in_the_language_given() {
+    let root = empty_dir();
+    let mut args = SCAFFOLD.to_vec();
+    args.extend(["--language", "policy-table-player=python"]);
+    actions(&angzarr(&args, &root));
+    let config = std::fs::read_to_string(root.join("angzarr.toml")).unwrap();
+    assert!(
+        config.contains(
+            "name = \"policy-table-player\"\nkind = \"policy\"\nlanguage = \"python\"\n\
+             dir = \"policy-table-player\"\nentry = [\"angzarr-policy-table-player\"]\n"
+        ),
+        "{config}"
+    );
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn scaffold_app_refuses_a_malformed_language_and_the_python_flag_is_gone() {
+    let root = empty_dir();
+    for value in ["player", "player=", "=python"] {
+        let mut args = SCAFFOLD.to_vec();
+        args.extend(["--language", value]);
+        let out = angzarr(&args, &root);
+        assert!(!out.status.success(), "{value}");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("angzarr-cli-language-malformed"),
+            "{value}: {stderr}"
+        );
+    }
+    let mut args = SCAFFOLD.to_vec();
+    args.extend(["--python", "player"]);
+    assert!(!angzarr(&args, &root).status.success());
+    assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
     std::fs::remove_dir_all(&root).unwrap();
 }
