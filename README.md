@@ -154,7 +154,13 @@ its name in an application, generated from its protos and encoded, the crate's v
 `rules_version`; a domain served by a child process has its own) and
 `register` (one `register(&mut Registry)` for every adapter). An
 application's own `src/main.rs` runs `register` with its host config
-(`angzarr_embedded_host::run("angzarr.toml", register)`).
+(`angzarr_embedded_host::run("angzarr.toml", register)`). A crate that
+writes its policies by hand beside a domain a child process serves takes
+that domain's command set and event set from `stand_ins` over the
+domain's proto (`angzarr-stand-ins.rs`: the same `CommandTarget`,
+`Decides`, `EventSource` and `Ingests` the adapters give a remote domain,
+over `crate::domain`'s types, and nothing else), rather than writing them
+by hand.
 
 `angzarr scaffold python --domain <name>` writes one component's uv
 project, served to angzarr-embedded as a child process through
