@@ -85,10 +85,16 @@ fn actions(out: &Output) -> Vec<(String, String)> {
 }
 
 fn each(action: &str) -> Vec<(String, String)> {
-    ["angzarr.toml", "build.rs", "src/driver.rs", "src/main.rs"]
-        .iter()
-        .map(|p| (p.to_string(), action.to_string()))
-        .collect()
+    [
+        "Cargo.toml",
+        "angzarr.toml",
+        "build.rs",
+        "src/driver.rs",
+        "src/main.rs",
+    ]
+    .iter()
+    .map(|p| (p.to_string(), action.to_string()))
+    .collect()
 }
 
 #[test]
@@ -96,8 +102,9 @@ fn scaffold_app_writes_the_golden_config_and_main_then_keeps_them() {
     let root = empty_dir();
     assert_eq!(actions(&angzarr(SCAFFOLD, &root)), each("created"));
     // The golden build script names the include `proto`, as the user
-    // would; this run named the spec's absolute path, so only the config,
-    // main and driver are compared.
+    // would; this run named the spec's absolute path, and its manifest's
+    // angzarr-build is this binary's commit: only the config, main and
+    // driver are compared.
     for path in ["angzarr.toml", "src/main.rs", "src/driver.rs"] {
         assert_eq!(
             std::fs::read_to_string(root.join(path)).unwrap(),
@@ -156,7 +163,9 @@ fn scaffold_app_emits_expose_and_retry_from_its_flags() {
     actions(&angzarr(&args, &root));
     let config = std::fs::read_to_string(root.join("angzarr.toml")).unwrap();
     assert!(
-        config.contains("name = \"table\"\nlanguage = \"rust\"\nexpose = \"loopback\"\n"),
+        config.contains(
+            "name = \"table\"\nkind = \"domain\"\nlanguage = \"rust\"\nexpose = \"loopback\"\n"
+        ),
         "{config}"
     );
     assert!(
@@ -170,7 +179,7 @@ fn scaffold_app_emits_expose_and_retry_from_its_flags() {
 fn scaffold_app_refuses_exposing_a_policy_and_writes_nothing() {
     let root = empty_dir();
     let mut args = SCAFFOLD.to_vec();
-    args.extend(["--expose", "table-player-policy=ip"]);
+    args.extend(["--expose", "policy-table-player=ip"]);
     let out = angzarr(&args, &root);
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -214,11 +223,12 @@ fn lint_app_reports_each_lint_and_fails() {
     let root = empty_dir();
     std::fs::write(
         root.join("angzarr.toml"),
-        "[[component]]\nname = \"table\"\nlanguage = \"rust\"\n\n\
-         [[component]]\nname = \"player\"\nlanguage = \"python\"\nlaunch = []\n\n\
-         [[component]]\nname = \"table-player-policy\"\nkind = \"policy\"\n\
+        "[[component]]\nname = \"table\"\nkind = \"domain\"\nlanguage = \"rust\"\n\n\
+         [[component]]\nname = \"player\"\nkind = \"domain\"\nlanguage = \"python\"\n\
+         launch = []\n\n\
+         [[component]]\nname = \"policy-table-player\"\nkind = \"policy\"\n\
          language = \"python\"\nexpose = \"ip\"\n\n\
-         [[component]]\nname = \"dealer\"\nlanguage = \"cobol\"\n",
+         [[component]]\nname = \"dealer\"\nkind = \"domain\"\nlanguage = \"cobol\"\n",
     )
     .unwrap();
     let out = angzarr(&["lint", "app"], &root);

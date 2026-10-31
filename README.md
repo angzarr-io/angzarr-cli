@@ -189,6 +189,44 @@ Every scaffold reads the other protos of its protos' directories too, so a
 policy or a projector a scaffolded message names is found without being
 scaffolded. `scaffold python` emits no projector; `scaffold rust` does.
 
+## An application's startup
+
+`angzarr scaffold app -I proto --src . [--name N] [--python DOMAIN]...
+[--expose NAME=loopback|ip]... [--max-retries N] [--max-race-runs N]
+[--in-memory] [--angzarr-build-path DIR] <protos>` writes an
+angzarr-embedded application's startup into the crate root. The user's, written
+once and never rewritten: `angzarr.toml`, the host config, seeded from the
+flags; `Cargo.toml`, angzarr-embedded's crates pinned at the commit this CLI
+generates for, angzarr-build the directory given or this CLI's repository;
+and `src/driver.rs`, what the application does once it is up. The CLI's,
+rewritten on every run from the protos and the `angzarr.toml` on disk:
+`build.rs`, one call to `angzarr_build::app`, and `src/main.rs`, the generated
+layer's modules, each in-process component's interface and implementation,
+and an async `main` running the host with the generated `register()`, which
+registers the in-process components the config lists.
+
+The config lists every component, in-process policies and projectors too,
+each by its name from the protos (`component_name`, or its kind's default)
+and with its `kind`: every aggregate and process manager of the protos (in
+Rust, or a Python child for a `--python` domain, `dir = "<domain>"` and
+`entry = ["angzarr-<domain>"]`), every policy between two of them, and every
+projector whose sources all run in process. A component is exposed only when
+`--expose` names it; `[retry]` holds only the keys seeded (`max_retries`,
+`max_race_runs`); `[store]` is `in_memory = true` or the `angzarr.db` file;
+`[policy]` and `[supervision]` are left to the host's defaults.
+
+`angzarr lint app [--config angzarr.toml] <protos>` checks a config against
+the protos, as `scaffold app` does before it writes anything (a config with
+lints is refused, and nothing is written). It reads the config as
+angzarr-embedded-host does: an unknown key or value, or a component with no
+`kind`, is refused. The lints: a listed domain or policy no component of the
+protos is; a component listed twice; a domain of the protos the config does
+not list; a listed policy whose source or target domain no listed component
+owns (list the target, with its `launch`, if it runs elsewhere); an exposed
+component that is not an aggregate (a process manager, a policy, a projector
+or an upcaster); a language with no default launch and no `launch`; an empty
+`launch`.
+
 ## Building
 
 The spec's protos, the blackjack example's among them, are the

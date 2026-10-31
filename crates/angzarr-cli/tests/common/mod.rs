@@ -1,6 +1,8 @@
 //! What the end-to-end tests share: scaffolding with the CLI, laying the
 //! user's files over the scaffold's, the application's manifest, and
-//! running the application built.
+//! running the application built. Each test binary uses its own part.
+
+#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};

@@ -1,7 +1,8 @@
 //! TableAggregateImpl: the table's logic is agg-table's (`TableLogic` on
 //! `Table`, over examples-proto's types); this converts the domain types
-//! to those and back, one decision at a time. A decision with several
-//! events takes the continuation steps itself, on a working copy.
+//! to those and back, one decision at a time, and agg-table's rejections
+//! to the table's typed refusal, TableRefused. A decision of MANY events
+//! takes the continuation steps itself, on a working copy.
 
 use agg_table::{AfterAction, Table, TableLogic};
 use examples_proto::v1;
@@ -31,16 +32,56 @@ pub struct TableAggregateImpl {
     pub table: Table,
 }
 
-/// agg-table's rejection as the domain's: its reason code and its args.
-fn rejected(rejection: agg_table::Rejection) -> Rejection {
-    let key = Rejection::new(rejection.code.reason());
-    rejection
-        .args
-        .into_iter()
-        .fold(key, |r, (name, value)| match value {
-            agg_table::RejectionArg::Int(n) => r.arg(name, n),
-            agg_table::RejectionArg::Str(s) => r.arg(name, s),
+/// agg-table's rejection as the table's typed refusal, TableRefused: its
+/// reason code as the Reason, its args as the fields that name them. A
+/// code TableRefused does not list is a bug.
+fn rejected(rejection: agg_table::Rejection) -> Failed<TableRefused> {
+    use TableRefusedReason as R;
+    let reason = match rejection.code.reason() {
+        "TABLE_ALREADY_EXISTS" => R::TableAlreadyExists,
+        "INVALID_TABLE_CONFIG" => R::InvalidTableConfig,
+        "TABLE_NOT_FOUND" => R::TableNotFound,
+        "SEAT_TAKEN" => R::SeatTaken,
+        "PLAYER_ALREADY_SEATED" => R::PlayerAlreadySeated,
+        "NOT_SEATED" => R::NotSeated,
+        "ROUND_IN_PROGRESS" => R::RoundInProgress,
+        "ALREADY_BET" => R::AlreadyBet,
+        "INSUFFICIENT_STACK" => R::InsufficientStack,
+        "NO_BETS" => R::NoBets,
+        "NO_ROUND_IN_PROGRESS" => R::NoRoundInProgress,
+        "NOT_YOUR_TURN" => R::NotYourTurn,
+        "DOUBLE_NOT_ALLOWED" => R::DoubleNotAllowed,
+        "SEAT_OUT_OF_RANGE" => R::SeatOutOfRange,
+        "BUY_IN_OUT_OF_RANGE" => R::BuyInOutOfRange,
+        "BET_OUT_OF_RANGE" => R::BetOutOfRange,
+        "BET_NOT_EVEN" => R::BetNotEven,
+        "WAGER_IN_PLAY" => R::WagerInPlay,
+        other => {
+            return Failed::bug(&Bug::new("examples-table-unknown-reason").arg("reason", other));
+        }
+    };
+    let int = |name: &str| {
+        rejection.args.iter().find_map(|(n, v)| match v {
+            agg_table::RejectionArg::Int(i) if *n == name => Some(*i),
+            _ => None,
         })
+    };
+    let text = |name: &str| {
+        rejection.args.iter().find_map(|(n, v)| match v {
+            agg_table::RejectionArg::Str(s) if *n == name => Some(s.clone()),
+            _ => None,
+        })
+    };
+    Failed::rejected(TableRefused {
+        reason,
+        name: text("name"),
+        rule: text("rule"),
+        seat: int("seat").and_then(|n| i32::try_from(n).ok()),
+        min_buy_in: int("min_buy_in"),
+        max_buy_in: int("max_buy_in"),
+        min_bet: int("min_bet"),
+        max_bet: int("max_bet"),
+    })
 }
 
 impl TableAggregateImpl {
@@ -94,18 +135,19 @@ impl TableAggregateImpl {
 }
 
 impl TableAggregate for TableAggregateImpl {
-    fn create_table(&self, cmd: &CreateTable, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
+    fn create_table(
+        &self,
+        cmd: &CreateTable,
+        _ctx: &Context,
+    ) -> Result<(TableCreated, ShoeShuffled), Failed<TableRefused>> {
         let (created, shuffled) = self
             .table
             .create_table(&theirs!(cmd, CreateTable))
             .map_err(rejected)?;
-        Ok(vec![
-            TableAggregateEvent::TableCreated(ours!(created, TableCreated)),
-            TableAggregateEvent::ShoeShuffled(ours!(shuffled, ShoeShuffled)),
-        ])
+        Ok((ours!(created, TableCreated), ours!(shuffled, ShoeShuffled)))
     }
 
-    fn request_seat(&self, cmd: &RequestSeat, _ctx: &Context) -> Result<Option<SeatHeld>, Failed<Rejection>> {
+    fn request_seat(&self, cmd: &RequestSeat, _ctx: &Context) -> Result<Option<SeatHeld>, Failed<TableRefused>> {
         let held = self
             .table
             .request_seat(&theirs!(cmd, RequestSeat))
@@ -113,7 +155,7 @@ impl TableAggregate for TableAggregateImpl {
         Ok(held.map(|h| ours!(h, SeatHeld)))
     }
 
-    fn leave_table(&self, cmd: &LeaveTable, ctx: &Context) -> Result<PlayerCashedOut, Failed<Rejection>> {
+    fn leave_table(&self, cmd: &LeaveTable, ctx: &Context) -> Result<PlayerCashedOut, Failed<TableRefused>> {
         // agg-table's leave_table needs the table's stream root: the
         // context's cover names it.
         let root: [u8; 16] = ctx
@@ -130,7 +172,7 @@ impl TableAggregate for TableAggregateImpl {
         Ok(ours!(out, PlayerCashedOut))
     }
 
-    fn place_bet(&self, cmd: &PlaceBet, _ctx: &Context) -> Result<BetPlaced, Failed<Rejection>> {
+    fn place_bet(&self, cmd: &PlaceBet, _ctx: &Context) -> Result<BetPlaced, Failed<TableRefused>> {
         let bet = self
             .table
             .place_bet(&theirs!(cmd, PlaceBet))
@@ -138,7 +180,7 @@ impl TableAggregate for TableAggregateImpl {
         Ok(ours!(bet, BetPlaced))
     }
 
-    fn deal_round(&self, cmd: &DealRound, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
+    fn deal_round(&self, cmd: &DealRound, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<TableRefused>> {
         let mut events = Vec::new();
         if let Some(shuffled) = self
             .table
@@ -160,19 +202,19 @@ impl TableAggregate for TableAggregateImpl {
         Ok(self.after(events)?)
     }
 
-    fn hit(&self, cmd: &Hit, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
+    fn hit(&self, cmd: &Hit, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<TableRefused>> {
         let card = self.table.hit(&theirs!(cmd, Hit)).map_err(rejected)?;
         Ok(self.after(vec![TableAggregateEvent::CardDealt(ours!(card, CardDealt))])?)
     }
 
-    fn stand(&self, cmd: &Stand, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
+    fn stand(&self, cmd: &Stand, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<TableRefused>> {
         let stood = self.table.stand(&theirs!(cmd, Stand)).map_err(rejected)?;
         Ok(self.after(vec![TableAggregateEvent::HandStood(ours!(
             stood, HandStood
         ))])?)
     }
 
-    fn double_down(&self, cmd: &DoubleDown, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<Rejection>> {
+    fn double_down(&self, cmd: &DoubleDown, _ctx: &Context) -> Result<Vec<TableAggregateEvent>, Failed<TableRefused>> {
         let doubled = self
             .table
             .double_down(&theirs!(cmd, DoubleDown))

@@ -125,6 +125,10 @@ struct AppArgs {
     /// App: an in-memory store, else the SQLite file `angzarr.db`.
     #[arg(long)]
     in_memory: bool,
+    /// App: the manifest's angzarr-build is this directory's, else the
+    /// angzarr-cli repository at the commit this binary was built from.
+    #[arg(long, value_name = "DIR")]
+    angzarr_build_path: Option<PathBuf>,
 }
 
 /// What `scaffold python` alone takes.
@@ -236,6 +240,10 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
                     max_race_runs: args.app.max_race_runs,
                 },
                 in_memory: args.app.in_memory,
+                angzarr_build: Some(angzarr_build_dependency(
+                    args.app.angzarr_build_path.as_deref(),
+                    option_env!("ANGZARR_COMMIT"),
+                )),
             };
             angzarr_build::app_scaffold_into(&args.src, &protos, &includes, &seed)
                 .map_err(CliError::Build)?
@@ -327,6 +335,24 @@ fn lint(args: LintArgs, catalog: &Catalog) -> Result<LintReport, Box<dyn Failure
         config: args.config.display().to_string(),
         lints: 0,
     })
+}
+
+/// The generated manifest's angzarr-build: the directory given, else the
+/// angzarr-cli repository at `commit` when it is one (hex, not `-dirty`),
+/// else its default branch.
+fn angzarr_build_dependency(path: Option<&Path>, commit: Option<&str>) -> String {
+    match (path, commit) {
+        (Some(path), _) => format!("{{ path = {:?} }}", path.display().to_string()),
+        (None, Some(commit))
+            if !commit.is_empty() && commit.chars().all(|c| c.is_ascii_hexdigit()) =>
+        {
+            format!(
+                "{{ git = \"{}\", rev = \"{commit}\" }}",
+                angzarr_build::ANGZARR_BUILD_GIT
+            )
+        }
+        _ => format!("{{ git = \"{}\" }}", angzarr_build::ANGZARR_BUILD_GIT),
+    }
 }
 
 /// `<domain>=loopback` or `<domain>=ip` as an exposure.
@@ -577,6 +603,26 @@ mod tests {
             "p.Policy:=s.Fact",
         ] {
             assert!(translate(malformed).is_err(), "{malformed}");
+        }
+    }
+
+    #[test]
+    fn the_manifests_angzarr_build_is_the_path_else_the_commit_else_the_repository() {
+        let git = angzarr_build::ANGZARR_BUILD_GIT;
+        assert_eq!(
+            angzarr_build_dependency(Some(Path::new("/x/angzarr-build")), Some("abc123")),
+            "{ path = \"/x/angzarr-build\" }"
+        );
+        assert_eq!(
+            angzarr_build_dependency(None, Some("0123456789ab")),
+            format!("{{ git = \"{git}\", rev = \"0123456789ab\" }}")
+        );
+        for commit in [None, Some(""), Some("0123456789ab-dirty")] {
+            assert_eq!(
+                angzarr_build_dependency(None, commit),
+                format!("{{ git = \"{git}\" }}"),
+                "{commit:?}"
+            );
         }
     }
 }

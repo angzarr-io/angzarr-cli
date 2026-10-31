@@ -1,15 +1,16 @@
 //! End to end: a blackjack application the CLI scaffolds, run. `scaffold
-//! app` writes its startup from the spec's protos (the host config, the
-//! table in process and the player a Python child, the store in memory; the
-//! build script; the `main` running the generated `register()` with the
+//! app` writes its startup from the spec's protos (the host config listing
+//! every component, the table and its two policies in process and the
+//! player a Python child, the store in memory; the manifest; the build
+//! script; the async `main` running the generated `register()` with the
 //! config), `scaffold rust` the Rust table and its two policies, `scaffold
 //! python` the player at `player/`; the user's files (`tests/e2e/blackjack`)
 //! are the table's logic, agg-table's `TableLogic`, and the policies',
 //! table-player-policies', each behind the generated interface, a
-//! basic-strategy player, and a driver that seats two players and deals
-//! seed 21. From the deal the turn crosses to the
-//! Python child and back by the policies alone, until the round settles;
-//! the outcome is the table's own test's (examples-rust
+//! basic-strategy player, a driver that seats two players and deals seed
+//! 21, and the table's crates added to the manifest. From the deal the
+//! turn crosses to the Python child and back by the policies alone, until
+//! the round settles; the outcome is the table's own test's (examples-rust
 //! `table/embedded/tests/remote_player.rs`).
 //!
 //! agg-table, examples-proto and table-player-policies are examples-rust's,
@@ -45,6 +46,7 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
         &here().join("../../angzarr-project/proto/io/angzarr"),
         &app.join("proto/io/angzarr"),
     );
+    let build = here().join("../angzarr-build").display().to_string();
     let mut startup = vec![
         "scaffold",
         "app",
@@ -57,6 +59,8 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
         "--python",
         "player",
         "--in-memory",
+        "--angzarr-build-path",
+        &build,
     ];
     startup.extend(PROTOS);
     angzarr(&app, &startup);
@@ -86,17 +90,19 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
     );
 
     // The user's part: the logic, the driver (over the scaffold's stub),
-    // and the table's crates.
+    // and the table's crates, added to the scaffolded manifest (a
+    // workspace of its own, wherever the temporary directory is).
     overlay(&here().join("tests/e2e/blackjack"), &app);
     let examples = format!("{{ git = \"{EXAMPLES_RUST_GIT}\", rev = \"{EXAMPLES_RUST_REV}\" }}");
-    common::manifest(
-        &app,
-        "blackjack",
+    let manifest = std::fs::read_to_string(app.join("Cargo.toml")).unwrap();
+    let manifest = manifest.replace(
+        "\n[build-dependencies]",
         &format!(
             "agg-table = {examples}\nexamples-proto = {examples}\n\
-             table-player-policies = {examples}\n"
+             table-player-policies = {examples}\n\n[build-dependencies]"
         ),
-    );
+    ) + "\n[workspace]\n";
+    std::fs::write(app.join("Cargo.toml"), manifest).unwrap();
 
     let out = common::run(&app);
     assert!(
