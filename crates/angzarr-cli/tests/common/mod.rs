@@ -55,13 +55,13 @@ pub fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
-/// The angzarr-embedded commit the applications are built on.
-const ANGZARR_EMBEDDED_REV: &str = "c23457c14c857fc457324c563a12ca14fe4e7e79";
-/// Where [`ANGZARR_EMBEDDED_REV`] is fetched from.
-const ANGZARR_EMBEDDED_GIT: &str = "https://github.com/angzarr-io/angzarr-embedded";
+// The angzarr-embedded commit the applications are built on: the one the
+// generator writes against.
+use angzarr_codegen::{ANGZARR_EMBEDDED_GIT, ANGZARR_EMBEDDED_REV};
 
 /// The application `name`'s Cargo.toml, written into `app`: angzarr-embedded,
-/// its markup, diagnostics and host at [`ANGZARR_EMBEDDED_REV`], prost,
+/// its markup and host at [`ANGZARR_EMBEDDED_REV`] (the kernel re-exports
+/// the diagnostics), prost,
 /// tokio (the App is async, on the caller's runtime; already in the graph
 /// through angzarr-embedded-host),
 /// `dependencies` (TOML lines), and this workspace's angzarr-build for its
@@ -75,7 +75,6 @@ pub fn manifest(app: &Path, name: &str, dependencies: &str) {
         "[package]\nname = {name:?}\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n\
          [dependencies]\n\
          angzarr-embedded = {embedded}\n\
-         angzarr-embedded-diagnostic = {embedded}\n\
          angzarr-embedded-host = {embedded}\n\
          angzarr-embedded-macros = {embedded}\n\
          prost = \"0.14\"\n\

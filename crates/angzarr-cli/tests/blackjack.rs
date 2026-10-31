@@ -120,7 +120,6 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
     let examples = format!("{{ git = \"{EXAMPLES_RUST_GIT}\", rev = \"{EXAMPLES_RUST_REV}\" }}");
     let patched: String = [
         "angzarr-embedded",
-        "angzarr-embedded-diagnostic",
         "angzarr-embedded-host",
         "angzarr-embedded-macros",
     ]

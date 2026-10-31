@@ -4,8 +4,8 @@
 //! the Python player and back by the two policies alone, until the round
 //! settles. It prints what happened, one line per fact the test checks.
 
-use angzarr_embedded::next::v1::{Command, CommandBook, CommandPage, Cover, Uuid, command_page};
-use angzarr_embedded::next::{Sampled, Timestamp, pack, type_name};
+use angzarr_embedded::v1::{Command, CommandBook, CommandPage, Cover, Uuid, command_page};
+use angzarr_embedded::{Sampled, Timestamp, pack, type_name};
 use angzarr_embedded_host::App;
 use prost::{Message, Name};
 

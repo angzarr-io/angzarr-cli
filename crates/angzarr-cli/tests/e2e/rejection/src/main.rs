@@ -22,6 +22,6 @@ pub mod driver;
 /// async, on the caller's). Dropping the application stops the child.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let app = angzarr_embedded_host::run("angzarr.toml", register).await?;
+    let app = angzarr_embedded_host::run("angzarr.yaml", register).await?;
     driver::drive(&app).await
 }

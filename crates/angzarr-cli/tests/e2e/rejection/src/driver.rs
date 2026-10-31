@@ -8,11 +8,11 @@
 //! amount=7)`, through `App::handle`; and what the player's stream holds
 //! after.
 
-use angzarr_embedded::next::angzarr_router::pb;
-use angzarr_embedded::next::angzarr_router::router::CommandHandler;
-use angzarr_embedded::next::v1::{Command, CommandBook, CommandPage, Cover, Uuid, command_page};
-use angzarr_embedded::next::{Failure, KernelError, Sampled, Timestamp, pack};
-use angzarr_embedded_diagnostic::{Arg, Diagnostic};
+use angzarr_embedded::angzarr_router::pb;
+use angzarr_embedded::angzarr_router::router::CommandHandler;
+use angzarr_embedded::v1::{Command, CommandBook, CommandPage, Cover, Uuid, command_page};
+use angzarr_embedded::{Failure, KernelError, Sampled, Timestamp, pack};
+use angzarr_embedded::angzarr_diagnostic::{Arg, Diagnostic};
 use angzarr_embedded_host::{App, is_retryable};
 use prost::Message;
 
@@ -56,7 +56,7 @@ fn book_of(total: u32, id: u8) -> CommandBook {
     }
 }
 
-fn args(args: Vec<(&'static str, Arg)>) -> String {
+fn args(args: Vec<(&str, Arg)>) -> String {
     args.into_iter()
         .map(|(name, arg)| match arg {
             Arg::Str(s) => format!("{name}={s}"),
