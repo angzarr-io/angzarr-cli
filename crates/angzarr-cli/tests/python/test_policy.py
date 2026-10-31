@@ -2,7 +2,7 @@
 each TurnStarted becomes the player's DecideMove at its root, and a
 hand-written dispatch on the client's public API takes its place."""
 
-from angzarr_client import ComponentHost
+from angzarr_client import ComponentHost, describe
 from angzarr_client.proto.io.angzarr.v1 import types_pb2 as t
 from angzarr_client.router import PolicyDispatch, pack
 
@@ -52,6 +52,8 @@ def test_the_generated_dispatch_sends_the_targets_commands():
 def test_the_generated_host_registers_the_policy_by_its_name():
     assert main.host().descriptor is DESCRIPTOR
     assert DESCRIPTOR.name == "policy-table-player"
+    generated = new_table_player_policy_dispatch(Logic())
+    assert describe(generated, rules_version="0.1.0") == DESCRIPTOR
 
 
 def test_a_hand_written_dispatch_takes_the_generated_ones_place():
@@ -62,7 +64,9 @@ def test_a_hand_written_dispatch_takes_the_generated_ones_place():
 
     hand = PolicyDispatch("policy-table-player", "table", "player")
     hand.on_event_with_context("io.angzarr.examples.v1.TurnStarted", started)
-    host = ComponentHost(rules_version="0.1.0").add_policy(hand, DESCRIPTOR)
-    assert host.descriptor is DESCRIPTOR
+    described = describe(hand, rules_version="0.1.0")
+    assert described == DESCRIPTOR
+    host = ComponentHost(rules_version="0.1.0").add_policy(hand, described)
+    assert host.descriptor is described
     [reaction] = hand.handle(turn(1)).reactions
     assert len(reaction.commands) == 1

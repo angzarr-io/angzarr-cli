@@ -4,7 +4,7 @@ hand-written dispatch on the client's public API in its place."""
 
 import dataclasses
 
-from angzarr_client import ComponentHost
+from angzarr_client import ComponentHost, describe
 from angzarr_client.proto.io.angzarr.v1 import types_pb2 as t
 from angzarr_client.router import ProcessManagerDispatch, Rebuilder, pack
 
@@ -62,6 +62,11 @@ def test_the_generated_dispatch_records_a_fact_and_its_flag():
 def test_the_generated_host_registers_the_process_manager_by_its_name():
     assert main.host().descriptor is DESCRIPTOR
     assert DESCRIPTOR.name == "pmg-buy-in"
+    generated = new_buy_in_process_manager_dispatch(Logic())
+    starting = [buy_in_pb2.StartBuyIn]
+    assert describe(generated, rules_version="0.1.0", starting_types=starting) == (
+        DESCRIPTOR
+    )
 
 
 def test_a_hand_written_dispatch_takes_the_generated_ones_place():
@@ -73,7 +78,11 @@ def test_a_hand_written_dispatch_takes_the_generated_ones_place():
     hand = ProcessManagerDispatch(
         "pmg-buy-in", "buy-in", Rebuilder(buy_in_pb2.BuyInState)
     ).on_command("io.angzarr.examples.v1.StartBuyIn", start)
-    host = ComponentHost(rules_version="0.1.0").add_process_manager(hand, DESCRIPTOR)
-    assert host.descriptor is DESCRIPTOR
+    described = describe(
+        hand, rules_version="0.1.0", starting_types=[buy_in_pb2.StartBuyIn]
+    )
+    assert described == DESCRIPTOR
+    host = ComponentHost(rules_version="0.1.0").add_process_manager(hand, described)
+    assert host.descriptor is described
     resp = hand.handle(request("command", buy_in_pb2.StartBuyIn()))
     assert len(resp.events.pages) == 1

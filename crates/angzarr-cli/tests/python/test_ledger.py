@@ -5,7 +5,7 @@ hand-written dispatch on the client's public API takes its place."""
 import asyncio
 import dataclasses
 
-from angzarr_client import ComponentHost
+from angzarr_client import ComponentHost, describe
 from angzarr_client.proto.io.angzarr.v1 import types_pb2 as t
 from angzarr_client.router import ProjectorDispatch, pack
 
@@ -74,6 +74,8 @@ def test_the_generated_host_registers_the_projector_by_its_name():
     host = main.host()
     assert host.descriptor is DESCRIPTOR
     assert DESCRIPTOR.name == "projector-wallet-table-ledger"
+    generated = new_ledger_projector_dispatch(Logic())
+    assert describe(generated, rules_version="0.1.0") == DESCRIPTOR
 
 
 def test_a_hand_written_dispatch_takes_the_generated_ones_place():
@@ -85,9 +87,9 @@ def test_a_hand_written_dispatch_takes_the_generated_ones_place():
         "projector-wallet-table-ledger", ledger_pb2.LedgerProjection
     ).for_domains("table", "wallet")
     hand.on_event("io.angzarr.examples.v1.TableCreated", created)
-    host = main.register(ComponentHost(rules_version="0.1.0"))
-    assert host.descriptor is DESCRIPTOR
-    replaced = ComponentHost(rules_version="0.1.0").add_projector(hand, DESCRIPTOR)
-    assert replaced.descriptor is DESCRIPTOR
+    described = describe(hand, rules_version="0.1.0")
+    assert described == DESCRIPTOR
+    replaced = ComponentHost(rules_version="0.1.0").add_projector(hand, described)
+    assert replaced.descriptor is described
     table = projection(hand.handle(book("table", table_pb2.TableCreated(name="t"))))
     assert table.tables["t1"].name == "hand"

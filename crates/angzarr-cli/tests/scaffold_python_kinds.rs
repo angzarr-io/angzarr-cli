@@ -3,8 +3,9 @@
 //! table-to-player policy, the buy-in process manager (with its fact) and
 //! the table (typed refusals, emits cardinality). Each project gets the
 //! pytest module of `tests/python` beside its own tests: the generated
-//! dispatch answering a delivery, and a hand-written dispatch built on the
-//! client's public API hosted in its place.
+//! dispatch answering a delivery, its generated descriptor the client's
+//! `describe` of it, and a hand-written dispatch built on the client's
+//! public API, described by `describe`, hosted in its place.
 //!
 //! Ignored: it needs the network (buf.build, GitHub) and uv.
 

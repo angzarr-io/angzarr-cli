@@ -4,6 +4,7 @@ on the wire, its Reason the rejection code."""
 
 import pytest
 
+from angzarr_client import describe
 from angzarr_client.proto.io.angzarr.v1 import types_pb2 as t
 from angzarr_client.router import Refused, pack
 
@@ -55,3 +56,5 @@ def test_an_optional_decision_may_emit_nothing():
 
 def test_the_descriptor_names_the_aggregate_by_its_domain():
     assert DESCRIPTOR.name == "table"
+    generated = new_table_aggregate_dispatch(Logic())
+    assert describe(generated, rules_version="0.1.0") == DESCRIPTOR

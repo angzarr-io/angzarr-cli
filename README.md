@@ -157,7 +157,9 @@ event loop. Each generated file stands on angzarr-client-python's public
 API alone (`angzarr_client.router`'s `AggregateDispatch`,
 `ProcessManagerDispatch`, `PolicyDispatch` and `ProjectorDispatch`,
 `ComponentHost.add_<kind>(dispatch, descriptor)`, `run_child`), so a
-hand-written one can take its place. Every run ends with `buf generate`
+hand-written one can take its place; the client's `describe(dispatch)` of a
+generated dispatch is its generated descriptor, so a hand-written one is
+described without the hex. Every run ends with `buf generate`
 (the message types, their imports rerooted, angzarr's own under
 `angzarr_client.proto`) and `uv lock`, so the project is ready for
 angzarr-embedded's `uv run --locked angzarr-<name>`, the lock and the
