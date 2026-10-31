@@ -39,8 +39,10 @@ implementation into the crate's `src`, once: `wallet.rs`, a trait over the
 domain types (one method per command, fact and event; a policy's per event it
 reacts to, taking the source stream's root, the event and its `PolicyContext`
 and returning the commands to send, each with its target root, or its
-`Bug`), and `wallet_impl.rs`, its implementation (every body `todo!()`,
-the state the wire type). Each command takes its `Context` too (the instant
+`Bug`; a projector's, async, per event it projects, taking the event and
+its `ProjectionContext` and returning its future of `Result<(), Bug>`),
+and `wallet_impl.rs`, its implementation (every body `todo!()`, the state
+the wire type, a projector's `async fn`s holding its projection). Each command takes its `Context` too (the instant
 its events are recorded at, and the router's context of the input as
 `ctx.command`), and so does each fact, which returns its event with no
 `Result`: a fact is recorded, never refused. Appliers stay folds of the
@@ -125,6 +127,11 @@ CLI's and regenerated every build: `markup_domain` (the domain types, their
 and `<Component>Event` enums), `adapters` (each component's angzarr-embedded
 markup, named `policy-<input>-<output>` for a policy, delegating to its
 interface; a domain served by a child process gets a contract instead),
+a projector's one `#[projector]` over all its sources,
+its `input_domains` (or its one `input_domain`, else the domains its
+`(event)` entries name), registered with `registry.projector`; a
+projector written by hand is angzarr-router's `ProjectorHandler`, registered
+beside `register` with `registry.projector_handler(&[sources], ..)`;
 `descriptors` (`DESCRIPTORS`: each component's `ComponentDescriptor`,
 generated from its protos and encoded, the crate's version its
 `rules_version`; a domain served by a child process has its own) and
@@ -176,7 +183,7 @@ $ angzarr scaffold python -I proto --src player --domain player \
 
 Every scaffold reads the other protos of its protos' directories too, so a
 policy or a projector a scaffolded message names is found without being
-scaffolded; a projector is never scaffolded.
+scaffolded. `scaffold python` emits no projector; `scaffold rust` does.
 
 ## Building
 
