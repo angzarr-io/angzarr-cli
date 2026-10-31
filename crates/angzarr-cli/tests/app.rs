@@ -176,6 +176,56 @@ fn scaffold_app_emits_expose_and_retry_from_its_flags() {
 }
 
 #[test]
+fn scaffold_app_over_a_domain_crate_writes_the_golden_main_importing_it() {
+    let root = empty_dir();
+    let mut args = SCAFFOLD.to_vec();
+    args.extend([
+        "--domain-crate",
+        "examples_proto",
+        "--domain-wire",
+        "examples_proto::v1",
+    ]);
+    actions(&angzarr(&args, &root));
+    let over = |path: &str| {
+        std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../angzarr-codegen/tests/golden/app/blackjack-domain-crate")
+                .join(path),
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        std::fs::read_to_string(root.join("src/main.rs")).unwrap(),
+        over("src/main.rs")
+    );
+    let manifest = std::fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    assert!(
+        manifest.contains(
+            "[package.metadata.angzarr.domain]\ncrate = \"examples_proto\"\nwire = \"examples_proto::v1\"\n"
+        ),
+        "{manifest}"
+    );
+    // The manifest is the user's: a run without the flag follows it.
+    actions(&angzarr(SCAFFOLD, &root));
+    assert_eq!(
+        std::fs::read_to_string(root.join("src/main.rs")).unwrap(),
+        over("src/main.rs")
+    );
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn scaffold_app_refuses_a_wire_path_without_a_domain_crate() {
+    let root = empty_dir();
+    let mut args = SCAFFOLD.to_vec();
+    args.extend(["--domain-wire", "examples_proto::v1"]);
+    let out = angzarr(&args, &root);
+    assert!(!out.status.success());
+    assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn scaffold_app_refuses_exposing_a_policy_and_writes_nothing() {
     let root = empty_dir();
     let mut args = SCAFFOLD.to_vec();

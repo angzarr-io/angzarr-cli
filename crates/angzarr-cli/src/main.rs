@@ -5,8 +5,8 @@ use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
 use angzarr_build::{
-    AppSeed, BuildError, Existing, Exposure, ProtoInput, PythonApp, RetrySeed, Scaffolded,
-    Translate,
+    AppSeed, BuildError, DomainCrate, Existing, Exposure, ProtoInput, PythonApp, RetrySeed,
+    Scaffolded, Translate,
 };
 use angzarr_fmt::{Catalog, Failure, Format, Viewable};
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -129,6 +129,16 @@ struct AppArgs {
     /// angzarr-cli repository at the commit this binary was built from.
     #[arg(long, value_name = "DIR")]
     angzarr_build_path: Option<PathBuf>,
+    /// App: the library crate whose domain layer the application uses
+    /// (its `domain` module, from angzarr-build's `wire` and
+    /// `markup_domain`), as Rust names it, e.g. `examples_proto`; written
+    /// into the manifest, and no domain layer is generated.
+    #[arg(long, value_name = "CRATE")]
+    domain_crate: Option<String>,
+    /// App: the domain crate's wire types, as the application's
+    /// `crate::wire`, e.g. `examples_proto::v1`.
+    #[arg(long, value_name = "PATH", requires = "domain_crate")]
+    domain_wire: Option<String>,
 }
 
 /// What `scaffold python` alone takes.
@@ -245,6 +255,10 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
                     args.app.angzarr_build_path.as_deref(),
                     option_env!("ANGZARR_COMMIT"),
                 )),
+                domain: args.app.domain_crate.clone().map(|path| DomainCrate {
+                    path,
+                    wire: args.app.domain_wire.clone(),
+                }),
             };
             angzarr_build::app_scaffold_into(&args.src, &protos, &includes, &seed)
                 .map_err(CliError::Build)?

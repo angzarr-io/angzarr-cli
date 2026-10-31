@@ -221,7 +221,8 @@ scaffolded.
 
 `angzarr scaffold app -I proto --src . [--name N] [--python DOMAIN]...
 [--expose NAME=loopback|ip]... [--max-retries N] [--max-race-runs N]
-[--in-memory] [--angzarr-build-path DIR] <protos>` writes an
+[--in-memory] [--angzarr-build-path DIR] [--domain-crate CRATE
+[--domain-wire PATH]] <protos>` writes an
 angzarr-embedded application's startup into the crate root. The user's, written
 once and never rewritten: `angzarr.toml`, the host config, seeded from the
 flags; `Cargo.toml`, angzarr-embedded's crates pinned at the commit this CLI
@@ -232,6 +233,18 @@ rewritten on every run from the protos and the `angzarr.toml` on disk:
 layer's modules, each in-process component's interface and implementation,
 and an async `main` running the host with the generated `register()`, which
 registers the in-process components the config lists.
+
+An application whose domain layer a library crate already generates (its
+build script running angzarr-build's `wire` and `markup_domain`, as
+examples-rust's `examples_proto` does) uses that crate's types rather than
+generating its own: `--domain-crate examples_proto` writes
+`[package.metadata.angzarr.domain]` into the new manifest (`crate`, and
+`wire` from `--domain-wire examples_proto::v1`), and while the manifest on
+disk names one, `src/main.rs` is `pub use examples_proto::domain;` (and
+`pub use examples_proto::v1 as wire;`) in place of the generated modules,
+and `build.rs` calls `angzarr_build::app_without_domain`, which generates the
+adapters, descriptors and `register()` alone. Add the crate to
+`[dependencies]`; it must be generated from the same protos.
 
 The config lists every component, in-process policies and projectors too,
 each by its name from the protos (`component_name`, or its kind's default)

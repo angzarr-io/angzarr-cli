@@ -1,8 +1,6 @@
 //! TablePlayerPolicyImpl: table-player-policies' TablePlayer, over the
-//! domain types.
+//! domain types the application and the policies share (examples-proto's).
 
-use examples_proto::v1;
-use prost::Message;
 use table_player_policies::{Policies, TablePlayer};
 
 use crate::domain::*;
@@ -18,15 +16,10 @@ impl TablePlayerPolicy for TablePlayerPolicyImpl {
         event: &TurnStarted,
         _ctx: &PolicyContext,
     ) -> Result<Vec<(Vec<u8>, PlayerAggregateCommand)>, Bug> {
-        let event = v1::TurnStarted::decode(
-            &*crate::wire::TurnStarted::from(event.clone()).encode_to_vec(),
-        )
-        .expect("one proto");
-        let ask = Policies.turn_started(source, &event);
-        let command = DecideMove::try_from(
-            crate::wire::DecideMove::decode(&*ask.command.encode_to_vec()).expect("one proto"),
-        )
-        .expect("a domain value");
-        Ok(vec![(ask.root, PlayerAggregateCommand::DecideMove(command))])
+        let ask = Policies.turn_started(source, event);
+        Ok(vec![(
+            ask.root,
+            PlayerAggregateCommand::DecideMove(ask.command),
+        )])
     }
 }
