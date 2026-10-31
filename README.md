@@ -62,8 +62,9 @@ command's issuer is told of; an immediate return, "re-read and re-decide";
 a fatal bug, a defect angzarr-embedded alerts and dead-letters; or a
 retryable bug, a defect outside the handler that may clear. A command
 returns `Result<_, Failed<Rejection>>` (the domain's untyped rejection, a
-diagnostic key and its args) or, refusing one typed refusal,
-`Result<_, Failed<R>>`: `Err(rejection)?` refuses under
+diagnostic key and its args), refusing one typed refusal
+`Result<_, Failed<R>>`, or refusing several `Result<_,
+Failed<<Command>Refuses>>`, a choice `From` each: `Err(rejection)?` refuses under
 FAILED_PRECONDITION, `Failed::from(rejection).with_status(..)` under another
 `BusinessStatus`; `Err(Failed::immediate(&Bug::new("key")))` returns
 ABORTED under its key, back to a caller at once, a policy's step reloaded
@@ -78,9 +79,22 @@ now; `DeadlineExceeded` means resend only if the call is idempotent, since
 the work may have happened (a command is, by its `command_id`);
 `ResourceExhausted` means wait longer before resending, a quota or a
 capacity limit was hit. A policy's bug is its `Bug`.
-Its `Ok` is its one event, which may be changed to any shape
-angzarr-embedded takes (`Option<E>`, `Vec<E>`), or, for a command declaring
-several, `Vec<<Component>Event>`: any number of any of its events.
+Its `Ok` follows the input's `emits_cardinality` (decision 14.50): ONE, the
+default, is one event of each emits type, the event or a tuple
+(`(TableCreated, ShoeShuffled)`); OPTIONAL is that or nothing (`Option<E>`,
+`Option<(A, B)>`); MANY is any number of any of its events,
+`Vec<<Component>Event>`, and is what an input with no emits takes. ONE or
+OPTIONAL with no emits, or with more than four (the markup's widest tuple),
+fails generation. A fact returns the same shapes, unwrapped.
+
+A typed refusal is a diagnostic: its code is `refusal_key` of its full name
+and, when it holds a nested `Reason` enum as `reason`, the reason's wire name
+(the value's name without the enum's prefix, `TableRefused` refusing
+`REASON_ALREADY_BET` as `io-angzarr-examples-v1-tablerefused-already-bet`);
+its args are its set fields, an enum as its wire name.
+`angzarr_codegen::refusal_key` is public, so a hand-written refusal
+reproduces the key. An `(event)` entry naming a component outside the protos
+generated is a reference to one generated elsewhere, skipped.
 
 A message named `Context`, `PolicyContext`, `CommandContext`, `Rejection`,
 `Bug`, `Failed`, `BusinessStatus` or `RetryableStatus` (the names the generated domain layers give the
