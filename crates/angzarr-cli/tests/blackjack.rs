@@ -116,3 +116,21 @@ fn the_e2e_players_decision_builds_its_event_with_from_command() {
         "{logic}"
     );
 }
+
+/// RED (red/table-generation): the fixture's table implementation converts
+/// every domain value to examples-proto's copy of the same message and back
+/// (`theirs!`, `ours!`), because agg-table holds its own prost types. Once
+/// agg-table takes the generated domain types (one prost type set), the
+/// implementation delegates and converts nothing.
+#[test]
+fn the_blackjack_fixture_does_not_re_adapt_agg_tables_types() {
+    let path = here().join("tests/e2e/blackjack/src/table_aggregate_impl.rs");
+    let source = std::fs::read_to_string(&path).unwrap();
+    for adapter in ["macro_rules! theirs", "macro_rules! ours", "encode_to_vec"] {
+        assert!(
+            !source.contains(adapter),
+            "{} still converts between two prost copies ({adapter})",
+            path.display()
+        );
+    }
+}
