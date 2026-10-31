@@ -1,0 +1,24 @@
+angzarr-cli Generated Output Exception
+
+Additional permission under GNU AGPL version 3 section 7
+
+angzarr-cli is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, version 3.
+
+As a special exception, the copyright holders of angzarr-cli give you
+permission to use, copy, modify, and distribute the output that
+angzarr-cli generates into your project (including any part of
+angzarr-cli's templates, skeletons or other text that the tool copies
+into that output) under terms of your choice, without that output
+being covered by the GNU Affero General Public License. This exception
+covers the generated output only. It does not apply to angzarr-cli
+itself, or to any work based on angzarr-cli that is itself a code
+generator using angzarr-cli's templates (or modified versions of them)
+as the templates of its output.
+
+If you modify angzarr-cli, you may extend this exception to your version
+of it, but you are not obliged to do so. If you do not wish to do so,
+delete this exception statement from your version. Removing it makes
+the output of your version subject to the GNU Affero General Public
+License, without this exception.
