@@ -2,7 +2,7 @@
 
 use std::io::Write;
 
-use angzarr_embedded_diagnostic::{Arg, Diagnostic, Report};
+use angzarr_diagnostic::{Arg, Diagnostic, Report};
 use serde_json::{Map, Value, json};
 
 use crate::catalog::Catalog;

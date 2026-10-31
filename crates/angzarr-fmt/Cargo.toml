@@ -9,7 +9,7 @@ rust-version.workspace = true
 
 # Knows nothing about angzarr and nothing about any argument parser.
 [dependencies]
-angzarr-embedded-diagnostic.workspace = true
+angzarr-diagnostic.workspace = true
 fluent-bundle.workspace = true
 fluent-syntax.workspace = true
 serde.workspace = true

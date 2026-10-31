@@ -12,7 +12,7 @@ use angzarr_fmt::{Catalog, Failure, Format, Viewable};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
 
-use angzarr_embedded_diagnostic::{Arg, Diagnostic, Report};
+use angzarr_diagnostic::{Arg, Diagnostic, Report};
 
 mod output;
 
@@ -468,7 +468,7 @@ impl fmt::Display for CliError {
 impl std::error::Error for CliError {}
 
 impl Diagnostic for CliError {
-    fn code(&self) -> &'static str {
+    fn code(&self) -> &str {
         match self {
             CliError::TranslateMalformed { .. } => "angzarr-cli-translate-malformed",
             CliError::DomainRequired => "angzarr-cli-domain-required",
@@ -479,7 +479,7 @@ impl Diagnostic for CliError {
         }
     }
 
-    fn args(&self) -> Vec<(&'static str, Arg)> {
+    fn args(&self) -> Vec<(&str, Arg)> {
         match self {
             CliError::TranslateMalformed { value } => vec![("value", value.as_str().into())],
             CliError::DomainRequired => Vec::new(),

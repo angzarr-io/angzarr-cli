@@ -4,7 +4,7 @@
 
 use std::collections::BTreeSet;
 
-use angzarr_embedded_diagnostic::{Arg, Diagnostic};
+use angzarr_diagnostic::{Arg, Diagnostic};
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
 use fluent_syntax::ast;
 use unic_langid::LanguageIdentifier;
@@ -153,7 +153,7 @@ fn inline_vars(inline: &ast::InlineExpression<&str>, out: &mut BTreeSet<String>)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use angzarr_embedded_diagnostic::Report;
+    use angzarr_diagnostic::Report;
 
     #[test]
     fn this_crates_catalog_covers_every_diagnostic_with_exactly_its_args() {

@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use angzarr_embedded_diagnostic::{Arg, Diagnostic};
+use angzarr_diagnostic::{Arg, Diagnostic};
 
 use crate::failure::Failure;
 
@@ -91,7 +91,8 @@ mod tests {
 
     #[test]
     fn every_catalog_message_is_the_code_of_a_sample() {
-        let mut codes: Vec<&str> = diagnostic_samples().iter().map(|d| d.code()).collect();
+        let samples = diagnostic_samples();
+        let mut codes: Vec<&str> = samples.iter().map(|d| d.code()).collect();
         codes.sort_unstable();
         assert_eq!(codes, messages());
     }

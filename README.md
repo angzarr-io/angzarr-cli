@@ -29,7 +29,7 @@ $ angzarr version | jq .version
 
 A failure goes to stderr in the same format: `{"error": {...}, "remedy":
 {...}}` in json, `Error:` and `Fix:` lines in text. Each
-diagnostic has a stable code and named args (`angzarr-embedded-diagnostic`), rendered
+diagnostic has a stable code and named args (angzarr core's `angzarr-diagnostic`), rendered
 through the crate's en-US Fluent catalog.
 
 ## Scaffold
