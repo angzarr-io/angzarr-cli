@@ -168,7 +168,9 @@ projection, the event and its `PageContext`, the source domain its cover's,
 and returning the next projection) and `logic_impl.py`, its implementation
 (each method a TODO). A decision returns its events as its command's emits
 cardinality declares (one event, a tuple of several, that or None, or a
-list of any of them) or one of its typed refusals, several to a command,
+list of any of them; a command declaring no emits, a list of any of its
+domain's events, as Rust's `Vec<<Component>Event>`) or one of its typed
+refusals, several to a command,
 answered as the client's `Refused` with the refusal on the wire; a
 refusal's `Reason` enum is its rejection code, and its plain type gives the
 generator's diagnostic `key()` (the Rust domain layer's code for the same
