@@ -107,10 +107,12 @@ struct AppArgs {
     /// App: the application's name, for the generated prose.
     #[arg(long, default_value = "the application")]
     name: String,
-    /// App: a domain served by a Python child process; every other domain
-    /// is Rust, in process. Repeatable.
-    #[arg(long = "python", value_name = "DOMAIN")]
-    python: Vec<String>,
+    /// App: a component's language, `<name>=<language>`, the component by
+    /// its name in the application (a domain also by its domain): `python`
+    /// is served by a child process, the project of `scaffold python`;
+    /// every component not named is Rust, in process. Repeatable.
+    #[arg(long = "language", value_name = "NAME=LANGUAGE")]
+    languages: Vec<String>,
     /// App: a domain exposed through the host's listener,
     /// `<domain>=loopback` or `<domain>=ip`. Repeatable.
     #[arg(long, value_name = "DOMAIN=EXPOSURE")]
@@ -242,15 +244,17 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
                 .map(String::as_str)
                 .map(exposure)
                 .collect::<Result<Vec<_>, _>>()?;
+            let languages = args
+                .app
+                .languages
+                .iter()
+                .map(String::as_str)
+                .map(language)
+                .collect::<Result<Vec<_>, _>>()?;
             let seed = AppSeed {
                 name: args.app.name.clone(),
                 includes: args.includes.clone(),
-                languages: args
-                    .app
-                    .python
-                    .iter()
-                    .map(|domain| (domain.clone(), "python".to_string()))
-                    .collect(),
+                languages,
                 expose,
                 retry: RetrySeed {
                     max_retries: args.app.max_retries,
@@ -393,6 +397,18 @@ fn exposure(value: &str) -> Result<(String, Exposure), CliError> {
     Ok((domain.to_string(), how))
 }
 
+/// `<name>=<language>` as a component's language.
+fn language(value: &str) -> Result<(String, String), CliError> {
+    match value.split_once('=') {
+        Some((name, language)) if !name.is_empty() && !language.is_empty() => {
+            Ok((name.to_string(), language.to_string()))
+        }
+        _ => Err(CliError::LanguageMalformed {
+            value: value.to_string(),
+        }),
+    }
+}
+
 /// `<policy>:<command>=<fact>` as a translate selection.
 fn translate(value: &str) -> Result<Translate, CliError> {
     let malformed = || CliError::TranslateMalformed {
@@ -419,6 +435,8 @@ enum CliError {
     DomainRequired,
     /// An `--expose` value not of the form `<domain>=loopback|ip`.
     ExposeMalformed { value: String },
+    /// A `--language` value not of the form `<name>=<language>`.
+    LanguageMalformed { value: String },
     /// `lint` found `count` problems in `config`.
     Lints { config: String, count: usize },
     /// Generation failed; reported as the build error itself.
@@ -438,6 +456,9 @@ impl fmt::Display for CliError {
                     "--expose {value} is not <domain>=loopback or <domain>=ip"
                 )
             }
+            CliError::LanguageMalformed { value } => {
+                write!(f, "--language {value} is not <name>=<language>")
+            }
             CliError::Lints { config, count } => write!(f, "{config} has {count} lints"),
             CliError::Build(error) => error.fmt(f),
         }
@@ -452,6 +473,7 @@ impl Diagnostic for CliError {
             CliError::TranslateMalformed { .. } => "angzarr-cli-translate-malformed",
             CliError::DomainRequired => "angzarr-cli-domain-required",
             CliError::ExposeMalformed { .. } => "angzarr-cli-expose-malformed",
+            CliError::LanguageMalformed { .. } => "angzarr-cli-language-malformed",
             CliError::Lints { .. } => "angzarr-cli-lints",
             CliError::Build(error) => error.code(),
         }
@@ -461,7 +483,9 @@ impl Diagnostic for CliError {
         match self {
             CliError::TranslateMalformed { value } => vec![("value", value.as_str().into())],
             CliError::DomainRequired => Vec::new(),
-            CliError::ExposeMalformed { value } => vec![("value", value.as_str().into())],
+            CliError::ExposeMalformed { value } | CliError::LanguageMalformed { value } => {
+                vec![("value", value.as_str().into())]
+            }
             CliError::Lints { config, count } => vec![
                 ("config", config.as_str().into()),
                 ("count", i64::try_from(*count).unwrap_or(i64::MAX).into()),
@@ -476,6 +500,7 @@ impl Failure for CliError {
         match self {
             CliError::TranslateMalformed { .. } => Some(Report::new("angzarr-cli-translate-form")),
             CliError::DomainRequired => Some(Report::new("angzarr-cli-domain-name")),
+            CliError::LanguageMalformed { .. } => Some(Report::new("angzarr-cli-language-form")),
             CliError::ExposeMalformed { .. } | CliError::Lints { .. } | CliError::Build(_) => None,
         }
     }
@@ -559,6 +584,10 @@ mod tests {
             Box::new(CliError::ExposeMalformed {
                 value: "x".to_string(),
             }),
+            Box::new(CliError::LanguageMalformed {
+                value: "x".to_string(),
+            }),
+            Box::new(Report::new("angzarr-cli-language-form")),
             Box::new(CliError::Lints {
                 config: "x".to_string(),
                 count: 2,

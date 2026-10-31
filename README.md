@@ -244,7 +244,7 @@ scaffolded.
 
 ## An application's startup
 
-`angzarr scaffold app -I proto --src . [--name N] [--python DOMAIN]...
+`angzarr scaffold app -I proto --src . [--name N] [--language NAME=LANGUAGE]...
 [--expose NAME=loopback|ip]... [--max-retries N] [--max-race-runs N]
 [--in-memory] [--angzarr-build-path DIR] [--domain-crate CRATE
 [--domain-wire PATH]] <protos>` writes an
@@ -273,11 +273,19 @@ adapters, descriptors and `register()` alone. Add the crate to
 
 The config lists every component, in-process policies and projectors too,
 each by its name from the protos (`component_name`, or its kind's default)
-and with its `kind`: every aggregate and process manager of the protos (in
-Rust, or a Python child for a `--python` domain, `dir = "<domain>"` and
-`entry = ["angzarr-<domain>"]`), every policy between two of them, and every
-projector whose sources are all among them (a Python child's events are
-recorded by the host, so its projector runs in process). A component is
+and with its `kind` and `language`: every aggregate and process manager of
+the protos, every policy between two of them, and every projector whose
+sources are all among them (a Python child's events are recorded by the
+host, so a projector of them may run in process). Each is Rust, in process,
+unless `--language <name>=<language>` names it (a domain by its name or its
+domain): a `python` one is a child, the project `angzarr scaffold python`
+writes for it, `dir` and `entry = ["angzarr-<project>"]` its domain's for a
+domain and its name for a policy or a projector (`--language
+policy-table-player=python` is `dir = "policy-table-player"`). A language
+the host has no default launch for is written as given, and the lint
+refuses it until the config gives it a `launch`. A child's policy or
+projector has no adapter, descriptor or module in the application. A
+component is
 exposed only when
 `--expose` names it; `[retry]` holds only the keys seeded (`max_retries`,
 `max_race_runs`); `[store]` is `in_memory = true` or the `angzarr.db` file;
