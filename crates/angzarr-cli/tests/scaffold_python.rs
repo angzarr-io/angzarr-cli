@@ -81,7 +81,7 @@ fn player(root: &Path, extra: &[&str]) -> Command {
             "--proto-git",
             "https://github.com/angzarr-io/angzarr-project",
             "--proto-ref",
-            "ef975bcf6fd6a0207476667d18ddc7bb29a10ab4",
+            "2bd7cbde0ecb4b8070d87c8ba4d288c43aa1a6ad",
         ])
         .arg("--src")
         .arg(root)
@@ -261,13 +261,15 @@ fn scaffold_python_by_default_generates_the_wire_types_and_the_lock_and_runs_und
 /// `proto` holds them.
 fn proto_dir() -> PathBuf {
     let dir = empty_dir();
-    let examples = "io/angzarr/examples/v1";
-    std::fs::create_dir_all(dir.join(examples)).unwrap();
-    for entry in std::fs::read_dir(Path::new(&spec()).join(examples)).unwrap() {
-        let path = entry.unwrap().path();
-        std::fs::copy(&path, dir.join(examples).join(path.file_name().unwrap())).unwrap();
+    for package in ["io/angzarr/examples/v1", "io/angzarr/v1"] {
+        std::fs::create_dir_all(dir.join(package)).unwrap();
+        for entry in std::fs::read_dir(Path::new(&spec()).join(package)).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_file() {
+                std::fs::copy(&path, dir.join(package).join(path.file_name().unwrap())).unwrap();
+            }
+        }
     }
-    angzarr_proto::protos::write_include_dir(&dir).unwrap();
     dir
 }
 
