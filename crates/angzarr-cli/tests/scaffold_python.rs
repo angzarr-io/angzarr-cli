@@ -257,17 +257,20 @@ fn scaffold_python_by_default_generates_the_wire_types_and_the_lock_and_runs_und
 }
 
 /// A protos directory of its own, outside any project: the blackjack
-/// protos (the spec's) and angzarr's, as a user's checkout of the spec's
-/// `proto` holds them.
+/// protos and angzarr's, the spec's, as a user's checkout of the spec's
+/// `proto` holds them (angzarr-proto's beneath, for any the spec lacks).
 fn proto_dir() -> PathBuf {
     let dir = empty_dir();
-    let examples = "io/angzarr/examples/v1";
-    std::fs::create_dir_all(dir.join(examples)).unwrap();
-    for entry in std::fs::read_dir(Path::new(&spec()).join(examples)).unwrap() {
-        let path = entry.unwrap().path();
-        std::fs::copy(&path, dir.join(examples).join(path.file_name().unwrap())).unwrap();
-    }
     angzarr_proto::protos::write_include_dir(&dir).unwrap();
+    for protos in ["io/angzarr/examples/v1", "io/angzarr/v1"] {
+        std::fs::create_dir_all(dir.join(protos)).unwrap();
+        for entry in std::fs::read_dir(Path::new(&spec()).join(protos)).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_file() {
+                std::fs::copy(&path, dir.join(protos).join(path.file_name().unwrap())).unwrap();
+            }
+        }
+    }
     dir
 }
 
