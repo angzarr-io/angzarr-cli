@@ -54,7 +54,9 @@ input taken as `cmd` where the proto declares a fact, or as `fact` where it
 declares a command. `--translate <policy>:<command>=<fact>` sets a policy's
 refusal switch to translate that command's refusals into a fact of its
 source, adding a `<command>_refused` method, which takes the refused
-command, its typed refusal if it has one, and the refused command's
+command, its typed refusal if it has one (`Option<T>`, or for a command
+refusing several types `Option<<Command>Refuses>`, the domain layer's choice
+of them its handler refuses with), and the refused command's
 `CommandContext`, and returns `Result<Fact, Bug>`. A policy's `Bug`, a
 diagnostic key and its args, is a defect (a policy reacts to events the
 application's own domains recorded): angzarr-embedded dead-letters it.
