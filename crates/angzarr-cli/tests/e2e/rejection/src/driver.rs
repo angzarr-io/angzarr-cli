@@ -8,7 +8,7 @@
 //! amount=7)`, through `App::handle`; and what the player's stream holds
 //! after.
 
-use angzarr_embedded::angzarr_router::pb;
+use angzarr_embedded::angzarr_proto::v1 as pb;
 use angzarr_embedded::angzarr_router::router::CommandHandler;
 use angzarr_embedded::v1::{Command, CommandBook, CommandPage, Cover, Uuid, command_page};
 use angzarr_embedded::{Failure, KernelError, Sampled, Timestamp, pack};
