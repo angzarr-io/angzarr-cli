@@ -1,12 +1,13 @@
 //! End to end: a blackjack application the CLI scaffolds, run. `scaffold
-//! rust` writes the Rust table and its two policies from the spec's protos,
-//! `scaffold python` the player at `player/`; the user's files
-//! (`tests/e2e/blackjack`) are the host config, a build script generating
-//! the domain layer, adapters and `register()`, a `main` running
-//! `register()` with the config, the table's logic, agg-table's
-//! `TableLogic`, and the policies', table-player-policies', each behind the
-//! generated interface, a basic-strategy player, and a driver that seats
-//! two players and deals seed 21. From the deal the turn crosses to the
+//! app` writes its startup from the spec's protos (the host config, the
+//! table in process and the player a Python child, the store in memory; the
+//! build script; the `main` running the generated `register()` with the
+//! config), `scaffold rust` the Rust table and its two policies, `scaffold
+//! python` the player at `player/`; the user's files (`tests/e2e/blackjack`)
+//! are the table's logic, agg-table's `TableLogic`, and the policies',
+//! table-player-policies', each behind the generated interface, a
+//! basic-strategy player, and a driver that seats two players and deals
+//! seed 21. From the deal the turn crosses to the
 //! Python child and back by the policies alone, until the round settles;
 //! the outcome is the table's own test's (examples-rust
 //! `table/embedded/tests/remote_player.rs`).
@@ -44,6 +45,21 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
         &here().join("../../angzarr-project/proto/io/angzarr"),
         &app.join("proto/io/angzarr"),
     );
+    let mut startup = vec![
+        "scaffold",
+        "app",
+        "-I",
+        "proto",
+        "--src",
+        ".",
+        "--name",
+        "blackjack",
+        "--python",
+        "player",
+        "--in-memory",
+    ];
+    startup.extend(PROTOS);
+    angzarr(&app, &startup);
     angzarr(
         &app,
         &[
@@ -69,8 +85,8 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
         ],
     );
 
-    // The user's part: the host config, the build script, main, the logic,
-    // the driver, and the table's crates.
+    // The user's part: the logic, the driver (over the scaffold's stub),
+    // and the table's crates.
     overlay(&here().join("tests/e2e/blackjack"), &app);
     let examples = format!("{{ git = \"{EXAMPLES_RUST_GIT}\", rev = \"{EXAMPLES_RUST_REV}\" }}");
     common::manifest(

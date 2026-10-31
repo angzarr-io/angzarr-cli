@@ -4,7 +4,10 @@ use std::fmt;
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
-use angzarr_build::{BuildError, Existing, ProtoInput, PythonApp, Scaffolded, Translate};
+use angzarr_build::{
+    AppSeed, BuildError, Existing, Exposure, ProtoInput, PythonApp, RetrySeed, Scaffolded,
+    Translate,
+};
 use angzarr_fmt::{Catalog, Failure, Format, Viewable};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
@@ -31,7 +34,41 @@ enum Command {
     /// Write each component's markup scaffold, once: the user's file, never
     /// overwritten.
     Scaffold(Box<ScaffoldArgs>),
+    /// Check a project's files against its protos.
+    Lint(LintArgs),
 }
+
+#[derive(Args)]
+struct LintArgs {
+    /// What to check: `app`, the host config.
+    #[arg(value_enum)]
+    what: LintWhat,
+    /// The protos declaring the components, as import names under an
+    /// include.
+    #[arg(required = true)]
+    protos: Vec<String>,
+    /// Where the protos' imports are found; angzarr's own are always found.
+    #[arg(short = 'I', long = "include", value_name = "DIR")]
+    includes: Vec<String>,
+    /// The host config.
+    #[arg(long, default_value = "angzarr.toml")]
+    config: PathBuf,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum LintWhat {
+    /// The host config, against the protos' components.
+    App,
+}
+
+/// A lint run that found nothing.
+#[derive(Serialize)]
+struct LintReport {
+    config: String,
+    lints: usize,
+}
+
+impl Viewable for LintReport {}
 
 #[derive(Args)]
 struct ScaffoldArgs {
@@ -59,6 +96,35 @@ struct ScaffoldArgs {
     missing: bool,
     #[command(flatten)]
     python: PythonArgs,
+    #[command(flatten)]
+    app: AppArgs,
+}
+
+/// What `scaffold app` alone takes: the seed of a new host config, unused
+/// once `angzarr.toml` exists (it is the user's).
+#[derive(Args)]
+struct AppArgs {
+    /// App: the application's name, for the generated prose.
+    #[arg(long, default_value = "the application")]
+    name: String,
+    /// App: a domain served by a Python child process; every other domain
+    /// is Rust, in process. Repeatable.
+    #[arg(long = "python", value_name = "DOMAIN")]
+    python: Vec<String>,
+    /// App: a domain exposed through the host's listener,
+    /// `<domain>=loopback` or `<domain>=ip`. Repeatable.
+    #[arg(long, value_name = "DOMAIN=EXPOSURE")]
+    expose: Vec<String>,
+    /// App: `[retry] max_retries`; unset, the host's default.
+    #[arg(long, value_name = "N")]
+    max_retries: Option<u32>,
+    /// App: `[retry] max_race_runs`; 0 hands a lost race back as the
+    /// store's conflict. Unset, the host's default.
+    #[arg(long, value_name = "N")]
+    max_race_runs: Option<u32>,
+    /// App: an in-memory store, else the SQLite file `angzarr.db`.
+    #[arg(long)]
+    in_memory: bool,
 }
 
 /// What `scaffold python` alone takes.
@@ -86,6 +152,9 @@ struct PythonArgs {
 enum Lang {
     Rust,
     Python,
+    /// The application's startup: its host config, build.rs, main.rs and
+    /// driver, under `--src` (the crate root).
+    App,
 }
 
 /// What a scaffold run did, one entry per component file.
@@ -149,6 +218,28 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
             }
             done
         }
+        Lang::App => {
+            let expose = args
+                .app
+                .expose
+                .iter()
+                .map(String::as_str)
+                .map(exposure)
+                .collect::<Result<Vec<_>, _>>()?;
+            let seed = AppSeed {
+                name: args.app.name.clone(),
+                includes: args.includes.clone(),
+                python: args.app.python.clone(),
+                expose,
+                retry: RetrySeed {
+                    max_retries: args.app.max_retries,
+                    max_race_runs: args.app.max_race_runs,
+                },
+                in_memory: args.app.in_memory,
+            };
+            angzarr_build::app_scaffold_into(&args.src, &protos, &includes, &seed)
+                .map_err(CliError::Build)?
+        }
     };
     Ok(report(done))
 }
@@ -208,6 +299,53 @@ fn report(done: Vec<Scaffolded>) -> ScaffoldReport {
     ScaffoldReport { files }
 }
 
+/// `angzarr lint app`: each lint a warning on stderr, and a failure when
+/// there is any.
+fn lint(args: LintArgs, catalog: &Catalog) -> Result<LintReport, Box<dyn Failure>> {
+    let LintWhat::App = args.what;
+    let protos: Vec<&str> = args.protos.iter().map(String::as_str).collect();
+    let includes: Vec<&str> = args.includes.iter().map(String::as_str).collect();
+    let lints =
+        angzarr_build::lint_app(&args.config, &protos, &includes).map_err(CliError::Build)?;
+    // angzarr-fmt has no warning of its own: each lint is one line, its
+    // code and its message.
+    for lint in &lints {
+        eprintln!(
+            "angzarr: warning[{}]: {}",
+            lint.code(),
+            catalog.render(lint)
+        );
+    }
+    if !lints.is_empty() {
+        return Err(CliError::Lints {
+            config: args.config.display().to_string(),
+            count: lints.len(),
+        }
+        .into());
+    }
+    Ok(LintReport {
+        config: args.config.display().to_string(),
+        lints: 0,
+    })
+}
+
+/// `<domain>=loopback` or `<domain>=ip` as an exposure.
+fn exposure(value: &str) -> Result<(String, Exposure), CliError> {
+    let malformed = || CliError::ExposeMalformed {
+        value: value.to_string(),
+    };
+    let (domain, how) = value.split_once('=').ok_or_else(malformed)?;
+    let how = match how {
+        "loopback" => Exposure::Loopback,
+        "ip" => Exposure::Ip,
+        _ => return Err(malformed()),
+    };
+    if domain.is_empty() {
+        return Err(malformed());
+    }
+    Ok((domain.to_string(), how))
+}
+
 /// `<policy>:<command>=<fact>` as a translate selection.
 fn translate(value: &str) -> Result<Translate, CliError> {
     let malformed = || CliError::TranslateMalformed {
@@ -232,6 +370,10 @@ enum CliError {
     TranslateMalformed { value: String },
     /// `scaffold python` without `--domain`.
     DomainRequired,
+    /// An `--expose` value not of the form `<domain>=loopback|ip`.
+    ExposeMalformed { value: String },
+    /// `lint` found `count` problems in `config`.
+    Lints { config: String, count: usize },
     /// Generation failed; reported as the build error itself.
     Build(BuildError),
 }
@@ -243,6 +385,13 @@ impl fmt::Display for CliError {
                 write!(f, "--translate {value} is not <policy>:<command>=<fact>")
             }
             CliError::DomainRequired => f.write_str("scaffold python needs --domain"),
+            CliError::ExposeMalformed { value } => {
+                write!(
+                    f,
+                    "--expose {value} is not <domain>=loopback or <domain>=ip"
+                )
+            }
+            CliError::Lints { config, count } => write!(f, "{config} has {count} lints"),
             CliError::Build(error) => error.fmt(f),
         }
     }
@@ -255,6 +404,8 @@ impl Diagnostic for CliError {
         match self {
             CliError::TranslateMalformed { .. } => "angzarr-cli-translate-malformed",
             CliError::DomainRequired => "angzarr-cli-domain-required",
+            CliError::ExposeMalformed { .. } => "angzarr-cli-expose-malformed",
+            CliError::Lints { .. } => "angzarr-cli-lints",
             CliError::Build(error) => error.code(),
         }
     }
@@ -263,6 +414,11 @@ impl Diagnostic for CliError {
         match self {
             CliError::TranslateMalformed { value } => vec![("value", value.as_str().into())],
             CliError::DomainRequired => Vec::new(),
+            CliError::ExposeMalformed { value } => vec![("value", value.as_str().into())],
+            CliError::Lints { config, count } => vec![
+                ("config", config.as_str().into()),
+                ("count", i64::try_from(*count).unwrap_or(i64::MAX).into()),
+            ],
             CliError::Build(error) => error.args(),
         }
     }
@@ -273,7 +429,7 @@ impl Failure for CliError {
         match self {
             CliError::TranslateMalformed { .. } => Some(Report::new("angzarr-cli-translate-form")),
             CliError::DomainRequired => Some(Report::new("angzarr-cli-domain-name")),
-            CliError::Build(_) => None,
+            CliError::ExposeMalformed { .. } | CliError::Lints { .. } | CliError::Build(_) => None,
         }
     }
 }
@@ -329,6 +485,10 @@ fn main() -> ExitCode {
     match cli.command {
         Command::Version => finish(format, &catalog, Ok::<_, Box<dyn Failure>>(version())),
         Command::Scaffold(args) => finish(format, &catalog, scaffold(*args)),
+        Command::Lint(args) => {
+            let result = lint(args, &catalog);
+            finish(format, &catalog, result)
+        }
     }
 }
 
@@ -349,6 +509,13 @@ mod tests {
             Box::new(remedy),
             Box::new(domain),
             Box::new(domain_remedy),
+            Box::new(CliError::ExposeMalformed {
+                value: "x".to_string(),
+            }),
+            Box::new(CliError::Lints {
+                config: "x".to_string(),
+                count: 2,
+            }),
         ]
     }
 
@@ -366,6 +533,13 @@ mod tests {
                 value: "x".to_string(),
             },
             CliError::DomainRequired,
+            CliError::ExposeMalformed {
+                value: "x".to_string(),
+            },
+            CliError::Lints {
+                config: "x".to_string(),
+                count: 2,
+            },
             CliError::Build(BuildError::Uv {
                 detail: "x".to_string(),
             }),
