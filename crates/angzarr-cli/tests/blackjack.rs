@@ -55,6 +55,43 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
         &app.join("proto/io/angzarr"),
     );
     let build = here().join("../angzarr-build").display().to_string();
+    scaffold(&app, &build);
+    // The user's part: the logic, the driver (over the scaffold's stub),
+    // and the table's crates, added to the scaffolded manifest (a
+    // workspace of its own, wherever the temporary directory is), with
+    // examples-rust's angzarr-embedded and angzarr-build patched to the
+    // app's.
+    overlay(&here().join("tests/e2e/blackjack"), &app);
+    let embedded = patch_manifest(&app, &build);
+
+    let out = common::run(&app);
+    assert!(
+        out.status.success(),
+        "the app runs:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        [
+            "alice: DoubleDown",
+            "bob: Hit Hit Stand",
+            "table: RoundDealt TurnStarted HandDoubled TurnStarted CardDealt TurnStarted \
+             CardDealt TurnStarted HandStood DealerPlayed RoundSettled",
+            "seat 0: wager 40 returned 80 stack 540",
+            "seat 1: wager 20 returned 40 stack 520",
+            "house -60",
+            "",
+        ]
+        .join("\n")
+    );
+    std::fs::remove_dir_all(&app).unwrap();
+    std::fs::remove_dir_all(&embedded).unwrap();
+}
+
+/// The app scaffolded in `app`: its startup, the Rust table and its two
+/// policies, and the Python player, the startup building with angzarr-build
+/// at `build`.
+fn scaffold(app: &std::path::Path, build: &str) {
     let mut startup = vec![
         "scaffold",
         "app",
@@ -68,22 +105,22 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
         "player=python",
         "--in-memory",
         "--angzarr-build-path",
-        &build,
+        build,
         "--domain-crate",
         "examples_proto",
         "--domain-wire",
         "examples_proto::v1",
     ];
     startup.extend(PROTOS);
-    angzarr(&app, &startup);
+    angzarr(app, &startup);
     angzarr(
-        &app,
+        app,
         &[
             "scaffold", "rust", "-I", "proto", "--src", "src", PROTOS[0], PROTOS[2],
         ],
     );
     angzarr(
-        &app,
+        app,
         &[
             "scaffold",
             "python",
@@ -100,13 +137,12 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
             PROTOS[1],
         ],
     );
+}
 
-    // The user's part: the logic, the driver (over the scaffold's stub),
-    // and the table's crates, added to the scaffolded manifest (a
-    // workspace of its own, wherever the temporary directory is), with
-    // examples-rust's angzarr-embedded and angzarr-build patched to the
-    // app's.
-    overlay(&here().join("tests/e2e/blackjack"), &app);
+/// The table's crates added to the app's manifest, examples-rust's
+/// angzarr-embedded patched to a checkout of the CLI's (returned), and its
+/// angzarr-build to this workspace's (`build`).
+fn patch_manifest(app: &std::path::Path, build: &str) -> std::path::PathBuf {
     // Beside the app, not in it: a path dependency under the app's
     // directory would be a member of its workspace.
     let embedded = app.with_file_name(format!(
@@ -115,7 +151,7 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
     ));
     let _ = std::fs::remove_dir_all(&embedded);
     let into = embedded.display().to_string();
-    git(&app, &["clone", "--quiet", ANGZARR_EMBEDDED_GIT, &into]);
+    git(app, &["clone", "--quiet", ANGZARR_EMBEDDED_GIT, &into]);
     git(&embedded, &["checkout", "--quiet", ANGZARR_EMBEDDED_REV]);
     let examples = format!("{{ git = \"{EXAMPLES_RUST_GIT}\", rev = \"{EXAMPLES_RUST_REV}\" }}");
     let patched: String = [
@@ -142,29 +178,7 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
          angzarr-build = {{ path = {build:?} }}\n\n[workspace]\n"
     );
     std::fs::write(app.join("Cargo.toml"), manifest).unwrap();
-
-    let out = common::run(&app);
-    assert!(
-        out.status.success(),
-        "the app runs:\n{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    assert_eq!(
-        String::from_utf8(out.stdout).unwrap(),
-        [
-            "alice: DoubleDown",
-            "bob: Hit Hit Stand",
-            "table: RoundDealt TurnStarted HandDoubled TurnStarted CardDealt TurnStarted \
-             CardDealt TurnStarted HandStood DealerPlayed RoundSettled",
-            "seat 0: wager 40 returned 80 stack 540",
-            "seat 1: wager 20 returned 40 stack 520",
-            "house -60",
-            "",
-        ]
-        .join("\n")
-    );
-    std::fs::remove_dir_all(&app).unwrap();
-    std::fs::remove_dir_all(&embedded).unwrap();
+    embedded
 }
 
 /// `git <args>` in `dir`, which must succeed.
