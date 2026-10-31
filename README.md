@@ -96,6 +96,17 @@ its args are its set fields, an enum as its wire name.
 reproduces the key. An `(event)` entry naming a component outside the protos
 generated is a reference to one generated elsewhere, skipped.
 
+A component's name in an application (the host config's `[[component]]`
+`name`, a policy's or a projector's registered name) is its
+`component_name`, or by default: an aggregate's domain (`table`), `pmg-` and
+a process manager's domain (`pmg-buy-in`), `policy-<input>-<output>` for a
+policy (`policy-table-player`), `projector-` and the kebab case of a
+projector's anchor message (`projector-ledger-projection`). A name that is
+not lower-case letters, digits and `-`, starting with a letter, fails
+generation. `angzarr_codegen::component_name` computes it from the options
+and `component_names` reads every component's from a descriptor set, so
+hand-written code and its config take the generator's names.
+
 A message named `Context`, `PolicyContext`, `CommandContext`, `Rejection`,
 `Bug`, `Failed`, `BusinessStatus` or `RetryableStatus` (the names the generated domain layers give the
 runtime's types)
