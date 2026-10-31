@@ -97,7 +97,15 @@ and, when it holds a nested `Reason` enum as `reason`, the reason's wire name
 `REASON_ALREADY_BET` as `io-angzarr-examples-v1-tablerefused-already-bet`);
 its args are its set fields, an enum as its wire name.
 `angzarr_codegen::refusal_key` is public, so a hand-written refusal
-reproduces the key. An `(event)` entry naming a component outside the protos
+reproduces the key. A refusal with a `Reason` is refused under its code's
+status (decision 14.52): the value's `(io.angzarr.v1.refusal_status)`,
+FAILED_PRECONDITION where unmarked. Rust's has `status()` and
+`with_code_status`, which the adapter applies whatever status the handler
+gave (a choice of several applies the chosen type's, a type with no
+`Reason` keeping the handler's); Python's has `status()`, a
+`google.rpc.Code`, which the dispatch's `Refused` goes out under. The
+option anywhere but a non-zero value of the nested `Reason` of a message a
+command refuses with fails generation. An `(event)` entry naming a component outside the protos
 generated is a reference to one generated elsewhere, skipped.
 
 A component's name in an application (the host config's `[[component]]`

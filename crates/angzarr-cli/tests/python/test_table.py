@@ -1,6 +1,7 @@
 """The table's generated project under the real angzarr-client: a decision
 returning a typed refusal is answered as the client's Refused, the refusal
-on the wire, its Reason the rejection code."""
+on the wire, its Reason the rejection code, under the code's status
+(decision 14.52: FAILED_PRECONDITION unless its value marks another)."""
 
 import pytest
 
@@ -19,7 +20,10 @@ from angzarr_table.logic_impl import TableLogicImpl
 
 class Logic(TableLogicImpl):
     def place_bet(self, cmd, state, ctx):
-        reason = domain.TableRefusedReason.ALREADY_BET
+        if cmd.amount % 2:
+            reason = domain.TableRefusedReason.BET_NOT_EVEN
+        else:
+            reason = domain.TableRefusedReason.ALREADY_BET
         return domain.TableRefused(reason=reason, seat=cmd.seat)
 
     def release_seat(self, cmd, state, ctx):
@@ -46,6 +50,16 @@ def test_a_returned_refusal_is_refused_with_its_code():
     plain = domain.TableRefused(reason=domain.TableRefusedReason.ALREADY_BET, seat=2)
     assert plain.key() == "io-angzarr-examples-v1-tablerefused-already-bet"
     assert plain.args() == {"reason": "ALREADY_BET", "seat": 2}
+    assert refused.value.status().code == 9  # FAILED_PRECONDITION, unmarked
+
+
+def test_a_refusal_goes_out_under_its_codes_marked_status():
+    dispatch = new_table_aggregate_dispatch(Logic())
+    with pytest.raises(Refused) as refused:
+        dispatch.handle(request(table_pb2.PlaceBet(seat=2, amount=11)))
+    # BET_NOT_EVEN is marked REFUSAL_STATUS_INVALID_ARGUMENT.
+    assert refused.value.status().code == 3
+    assert domain.TableRefused(reason=domain.TableRefusedReason.BET_NOT_EVEN).status() == 3
 
 
 def test_an_optional_decision_may_emit_nothing():

@@ -14,7 +14,7 @@ use std::process::Command;
 
 /// The spec draft whose protos the projects generate from (decision 14.50):
 /// the angzarr-project submodule's commit.
-const SPEC_REV: &str = "2bd7cbde0ecb4b8070d87c8ba4d288c43aa1a6ad";
+const SPEC_REV: &str = "7597d23465ba9af449f7b405b34099f77fc38bde";
 
 fn here() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
