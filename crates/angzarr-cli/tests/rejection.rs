@@ -49,7 +49,7 @@ fn a_python_rejection_reaches_the_host_as_a_business_refusal_with_its_key_and_ar
             "--proto-git",
             "https://github.com/angzarr-io/angzarr-project",
             "--proto-ref",
-            "47c8e09b1d034391f3cf24beb47aa47994722a5a",
+            "ef975bcf6fd6a0207476667d18ddc7bb29a10ab4",
             PLAYER,
         ],
     );

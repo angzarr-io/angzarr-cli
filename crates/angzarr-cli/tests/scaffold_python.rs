@@ -81,7 +81,7 @@ fn player(root: &Path, extra: &[&str]) -> Command {
             "--proto-git",
             "https://github.com/angzarr-io/angzarr-project",
             "--proto-ref",
-            "47c8e09b1d034391f3cf24beb47aa47994722a5a",
+            "ef975bcf6fd6a0207476667d18ddc7bb29a10ab4",
         ])
         .arg("--src")
         .arg(root)

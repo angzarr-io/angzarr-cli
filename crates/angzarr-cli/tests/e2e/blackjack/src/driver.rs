@@ -23,7 +23,7 @@ fn cover(domain: &str, b: u8) -> Cover {
     }
 }
 
-fn to_table<M: Message + Name>(
+async fn to_table<M: Message + Name>(
     app: &App,
     n: u8,
     command: M,
@@ -47,14 +47,19 @@ fn to_table<M: Message + Name>(
         command_id: Uuid::from_bytes([0xe0 | n; 16]),
     };
     app.handle(book, &sampled)
+        .await
         .map(|_| ())
         .map_err(|failure| format!("command {n} ({}) failed: {failure:?}", M::full_name()).into())
 }
 
 /// The short type names of a stream's events, and the stream's events.
-fn stream(app: &App, cover: &Cover) -> Result<Vec<(String, Vec<u8>)>, Box<dyn std::error::Error>> {
+async fn stream(
+    app: &App,
+    cover: &Cover,
+) -> Result<Vec<(String, Vec<u8>)>, Box<dyn std::error::Error>> {
     Ok(app
-        .events(cover)?
+        .events(cover)
+        .await?
         .into_iter()
         .filter_map(|page| page.payload)
         .map(|any| {
@@ -68,7 +73,7 @@ fn stream(app: &App, cover: &Cover) -> Result<Vec<(String, Vec<u8>)>, Box<dyn st
         .collect())
 }
 
-pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     to_table(
         app,
         1,
@@ -82,7 +87,8 @@ pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
             decks: 1,
             shoe_seed: 21,
         },
-    )?;
+    )
+    .await?;
     for (n, player, seat) in [(2, ALICE, 0), (4, BOB, 1)] {
         to_table(
             app,
@@ -93,14 +99,16 @@ pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
                 amount: 500,
                 request_id: vec![n; 16],
             },
-        )?;
+        )
+        .await?;
         to_table(
             app,
             n + 1,
             wire::ConfirmSeat {
                 buy_in_id: vec![n; 16],
             },
-        )?;
+        )
+        .await?;
     }
     to_table(
         app,
@@ -109,7 +117,8 @@ pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
             seat: 0,
             amount: 20,
         },
-    )?;
+    )
+    .await?;
     to_table(
         app,
         7,
@@ -117,11 +126,13 @@ pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
             seat: 1,
             amount: 20,
         },
-    )?;
-    to_table(app, 8, wire::DealRound {})?;
+    )
+    .await?;
+    to_table(app, 8, wire::DealRound {}).await?;
 
     for (name, player) in [("alice", ALICE), ("bob", BOB)] {
-        let moves: Vec<String> = stream(app, &cover("player", player))?
+        let moves: Vec<String> = stream(app, &cover("player", player))
+            .await?
             .into_iter()
             .filter(|(n, _)| n == "MoveDecided")
             .map(|(_, bytes)| {
@@ -134,7 +145,7 @@ pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
             .collect();
         println!("{name}: {}", moves.join(" "));
     }
-    let table = stream(app, &cover("table", TABLE))?;
+    let table = stream(app, &cover("table", TABLE)).await?;
     let from_deal: Vec<&str> = table
         .iter()
         .map(|(n, _)| n.as_str())

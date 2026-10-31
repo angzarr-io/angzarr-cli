@@ -28,8 +28,10 @@ const PROTOS: &[&str] = &[
     "io/angzarr/examples/v1/policies.proto",
 ];
 
-/// The examples-rust commit the table's crates are built from (its main).
-const EXAMPLES_RUST_REV: &str = "9b569ae9162c1d918fcee1d1cc27aea9fa524fe5";
+/// The examples-rust commit the table's crates are built from: on
+/// angzarr-embedded at [`common`]'s rev, so the app has one angzarr-embedded
+/// and one angzarr-proto.
+const EXAMPLES_RUST_REV: &str = "320707759c44851434797165c9050c387ba92585";
 /// Where [`EXAMPLES_RUST_REV`] is fetched from.
 const EXAMPLES_RUST_GIT: &str = "https://github.com/angzarr-io/angzarr-examples-rust";
 
@@ -62,7 +64,7 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
             "--proto-git",
             "https://github.com/angzarr-io/angzarr-project",
             "--proto-ref",
-            "47c8e09b1d034391f3cf24beb47aa47994722a5a",
+            "ef975bcf6fd6a0207476667d18ddc7bb29a10ab4",
             PROTOS[1],
         ],
     );

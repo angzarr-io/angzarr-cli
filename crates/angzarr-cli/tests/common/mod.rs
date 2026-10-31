@@ -54,12 +54,14 @@ pub fn copy_dir(from: &Path, to: &Path) {
 }
 
 /// The angzarr-embedded commit the applications are built on.
-const ANGZARR_EMBEDDED_REV: &str = "d3d642b043771c4c7a755fe5f6f77b74e703a594";
+const ANGZARR_EMBEDDED_REV: &str = "e2810b47fcfce7ad97f063f33252d1d44a53d263";
 /// Where [`ANGZARR_EMBEDDED_REV`] is fetched from.
 const ANGZARR_EMBEDDED_GIT: &str = "https://github.com/angzarr-io/angzarr-embedded";
 
 /// The application `name`'s Cargo.toml, written into `app`: angzarr-embedded,
 /// its markup, diagnostics and host at [`ANGZARR_EMBEDDED_REV`], prost,
+/// tokio (the App is async, on the caller's runtime; already in the graph
+/// through angzarr-embedded-host),
 /// `dependencies` (TOML lines), and this workspace's angzarr-build for its
 /// build script. A workspace of its own, wherever the temporary directory
 /// is.
@@ -75,6 +77,7 @@ pub fn manifest(app: &Path, name: &str, dependencies: &str) {
          angzarr-embedded-host = {embedded}\n\
          angzarr-embedded-macros = {embedded}\n\
          prost = \"0.14\"\n\
+         tokio = {{ version = \"1\", features = [\"macros\", \"rt-multi-thread\"] }}\n\
          {dependencies}\n\
          [build-dependencies]\nangzarr-build = {{ path = {build:?} }}\n\n\
          [workspace]\n"

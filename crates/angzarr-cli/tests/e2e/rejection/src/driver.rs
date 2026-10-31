@@ -68,7 +68,7 @@ fn args(args: Vec<(&'static str, Arg)>) -> String {
         .join(" ")
 }
 
-pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     let sampled = Sampled {
         now: Timestamp {
             seconds: 1,
@@ -76,7 +76,7 @@ pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
         },
         command_id: Uuid::from_bytes([0xe1; 16]),
     };
-    match app.handle(book(), &sampled) {
+    match app.handle(book(), &sampled).await {
         Ok(_) => println!("handle: accepted"),
         Err(Failure::Rejected(rejected)) => println!(
             "handle: rejected {} {} recovery {:?}",
@@ -99,7 +99,7 @@ pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
         command: Some(pb::CommandBook::decode(&*book().encode_to_vec())?),
         ..pb::ContextualCommand::default()
     };
-    match handler.dispatch(&request) {
+    match handler.dispatch(&request).await {
         Ok(response) => println!("dispatch: accepted {response:?}"),
         Err(error) => println!(
             "dispatch: {:?} {} {} retryable {}",
@@ -120,7 +120,7 @@ pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
         command_id: Uuid::from_bytes([0xe2; 16]),
         ..sampled
     };
-    match app.handle(book_of(99, 0xd2), &sampled) {
+    match app.handle(book_of(99, 0xd2), &sampled).await {
         Err(Failure::Kernel(error @ KernelError::Router(_))) => {
             let recovery = error.recovery();
             let KernelError::Router(error) = error else {
@@ -142,6 +142,6 @@ pub fn drive(app: &App) -> Result<(), Box<dyn std::error::Error>> {
         Err(other) => println!("bug: failed {:?} {other:?}", other.recovery()),
     }
 
-    println!("player events: {}", app.events(&cover())?.len());
+    println!("player events: {}", app.events(&cover()).await?.len());
     Ok(())
 }
