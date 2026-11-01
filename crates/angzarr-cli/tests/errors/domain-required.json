@@ -1,0 +1,12 @@
+{
+  "error": {
+    "code": "angzarr-cli-domain-required",
+    "message": "scaffold python needs --domain",
+    "args": {}
+  },
+  "remedy": {
+    "code": "angzarr-cli-domain-name",
+    "message": "name the domain or the component the project serves, e.g. --domain player or --domain policy-table-player",
+    "args": {}
+  }
+}

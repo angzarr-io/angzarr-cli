@@ -1,0 +1,2 @@
+Error: scaffold python needs --domain
+Fix: name the domain or the component the project serves, e.g. --domain player or --domain policy-table-player

@@ -1,0 +1,5 @@
+angzarr: warning[angzarr-codegen-app-empty-launch]: player's launch names no program
+angzarr: warning[angzarr-codegen-app-not-exposable]: policy-table-player is a policy, which cannot be exposed: only an aggregate is
+angzarr: warning[angzarr-codegen-app-unknown-component]: the domain dealer is no component of the protos
+angzarr: warning[angzarr-codegen-app-unknown-language]: dealer is in cobol, which has no default launch; give it a launch
+Error: angzarr.yaml has 4 lints

@@ -1,0 +1,1 @@
+Error: the host config does not read as one: angzarr-yaml-load-failed-at kind=angzarr-host-config source=angzarr.yaml problem=angzarr-yaml-decode-type problem.key_path=component problem.expected=sequence problem.found=scalar

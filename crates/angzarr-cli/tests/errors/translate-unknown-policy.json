@@ -1,0 +1,15 @@
+{
+  "error": {
+    "code": "angzarr-build-codegen",
+    "message": "translate names the policy x.Y, which no message declares",
+    "args": {
+      "error": {
+        "code": "angzarr-codegen-translate-unknown-policy",
+        "message": "translate names the policy x.Y, which no message declares",
+        "args": {
+          "policy": "x.Y"
+        }
+      }
+    }
+  }
+}

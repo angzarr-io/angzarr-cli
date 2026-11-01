@@ -1,0 +1,9 @@
+{
+  "error": {
+    "code": "angzarr-cli-expose-malformed",
+    "message": "--expose table is not <domain>=loopback or <domain>=ip",
+    "args": {
+      "value": "table"
+    }
+  }
+}

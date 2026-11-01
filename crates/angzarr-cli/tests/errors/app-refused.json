@@ -1,0 +1,15 @@
+{
+  "error": {
+    "code": "angzarr-build-codegen",
+    "message": "the host config has 1 lints; nothing is written",
+    "args": {
+      "error": {
+        "code": "angzarr-codegen-app-refused",
+        "message": "the host config has 1 lints; nothing is written",
+        "args": {
+          "count": 1
+        }
+      }
+    }
+  }
+}
