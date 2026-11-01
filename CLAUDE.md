@@ -18,8 +18,11 @@ joining them.
 
 ## Errors are localizable: a code, args, and an en-US message
 
-Every error and diagnostic implements `angzarr_diagnostic::Diagnostic` (angzarr core's) and
-keeps an English `Display` as the fallback.
+Every error and diagnostic implements `angzarr_diagnostic::Diagnostic` (angzarr core's),
+and its `Display` is code and args (`angzarr_diagnostic::display`), never English
+(decision 14.37). English is rendered only where a person reads it: the cli through
+angzarr-fmt's `Catalog` (`output::finish`), and a build script through
+`angzarr_diagnostic::catalog::render` in angzarr-build.
 
 - Codes are stable and never reused: kebab-case, starting with the crate's
   name (`angzarr-fmt-unknown-format`). A code whose meaning changes gets a new
