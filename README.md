@@ -138,8 +138,9 @@ and a prost crate built otherwise fails to compile with
 `markup_domain` (the domain types, their
 `DomainMessage` impls, `Rejection`, `Bug`, the re-exported `Context`,
 `PolicyContext`, `CommandContext`, `Failed`, `BusinessStatus` and `RetryableStatus`, each component's `<Component>Command`
-and `<Component>Event` enums), `adapters` (each component's angzarr-embedded
-markup, named `policy-<input>-<output>` for a policy, delegating to its
+and `<Component>Event` enums, each with its `Payload`, the domain's payloads),
+`adapters` (each component's angzarr-embedded markup, naming those enums
+(`command = ..`, `event = ..`), named `policy-<input>-<output>` for a policy, delegating to its
 interface; a domain served by a child process is instead its command set,
 a `CommandTarget` with `Decides` of each command, and its event set, an
 `EventSource` with `Ingests` of each fact, which a policy names as its

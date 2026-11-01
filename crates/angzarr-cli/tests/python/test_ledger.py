@@ -79,7 +79,7 @@ def test_the_generated_host_registers_the_projector_by_its_name():
 
 
 def test_a_hand_written_dispatch_takes_the_generated_ones_place():
-    def created(projection, event):
+    def created(projection, event, _ctx):
         row = ledger_pb2.TableLedgerRow(name="hand")
         projection.tables["t1"].CopyFrom(row)
 

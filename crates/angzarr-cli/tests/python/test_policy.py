@@ -63,7 +63,7 @@ def test_a_hand_written_dispatch_takes_the_generated_ones_place():
         return [book]
 
     hand = PolicyDispatch("policy-table-player", "table", "player")
-    hand.on_event_with_context("io.angzarr.examples.v1.TurnStarted", started)
+    hand.on_event("io.angzarr.examples.v1.TurnStarted", started)
     described = describe(hand, rules_version="0.1.0")
     assert described == DESCRIPTOR
     host = ComponentHost(rules_version="0.1.0").add_policy(hand, described)
