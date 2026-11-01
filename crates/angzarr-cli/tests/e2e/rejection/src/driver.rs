@@ -10,8 +10,8 @@
 
 use angzarr_embedded::angzarr_proto::v1 as pb;
 use angzarr_embedded::angzarr_router::router::CommandHandler;
-use angzarr_embedded::v1::{Command, CommandBook, CommandPage, Cover, Uuid, command_page};
-use angzarr_embedded::{Failure, KernelError, Sampled, Timestamp, pack};
+use angzarr_embedded::v1::{CommandBook, Cover, Uuid};
+use angzarr_embedded::{CommandBookExt, Failure, KernelError, Sampled, Timestamp, pack};
 use angzarr_embedded::angzarr_diagnostic::{Arg, Diagnostic};
 use angzarr_embedded_host::{App, is_retryable};
 use prost::Message;
@@ -43,17 +43,7 @@ fn book() -> CommandBook {
 }
 
 fn book_of(total: u32, id: u8) -> CommandBook {
-    CommandBook {
-        cover: Some(cover()),
-        page: Some(CommandPage {
-            body: Some(command_page::Body::Command(Command {
-                payload: Some(pack(&decide_move(total))),
-            })),
-            command_id: Some(Uuid::from_bytes([id; 16])),
-            ..CommandPage::default()
-        }),
-        handling: None,
-    }
+    CommandBook::command(cover(), pack(&decide_move(total))).with_id(Uuid::from_bytes([id; 16]))
 }
 
 fn args(args: Vec<(&str, Arg)>) -> String {

@@ -7,8 +7,8 @@
 //! the settlement.
 
 use agg_table::test_support::seed_21::{self, ALICE, BOB};
-use angzarr_embedded::v1::{Command, CommandBook, CommandPage, Cover, Uuid, command_page};
-use angzarr_embedded::{Sampled, Timestamp, pack, type_name};
+use angzarr_embedded::v1::{CommandBook, Cover, Uuid};
+use angzarr_embedded::{CommandBookExt, Sampled, Timestamp, pack, type_name};
 use angzarr_embedded_host::App;
 use prost::{Message, Name};
 
@@ -29,17 +29,8 @@ async fn to_table<M: Message + Name>(
     n: u8,
     command: M,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let book = CommandBook {
-        cover: Some(cover("table", TABLE)),
-        page: Some(CommandPage {
-            body: Some(command_page::Body::Command(Command {
-                payload: Some(pack(&command)),
-            })),
-            command_id: Some(Uuid::from_bytes([0xd0 | n; 16])),
-            ..CommandPage::default()
-        }),
-        handling: None,
-    };
+    let book = CommandBook::command(cover("table", TABLE), pack(&command))
+        .with_id(Uuid::from_bytes([0xd0 | n; 16]));
     let sampled = Sampled {
         now: Timestamp {
             seconds: i64::from(n),
