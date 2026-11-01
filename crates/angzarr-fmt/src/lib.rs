@@ -10,8 +10,9 @@
 //! - **Human view is a document.** text lays out a [`Doc`] derived from the
 //!   serde shape, which a result type may replace or decorate
 //!   ([`Viewable`]).
-//! - **Failures are diagnostics.** Each has a stable code and named args
-//!   rendered through a Fluent [`Catalog`], and may name a remedy
+//! - **Failures are diagnostics.** Each has a stable code and named args,
+//!   and `Display`s as them (decision 14.37); its English is made only
+//!   here, rendered through a Fluent [`Catalog`]. It may name a remedy
 //!   ([`Failure`]).
 //!
 //! Nothing here knows about angzarr or about any argument parser.

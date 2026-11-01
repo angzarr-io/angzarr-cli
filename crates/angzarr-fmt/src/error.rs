@@ -26,17 +26,11 @@ impl FmtError {
     }
 }
 
+/// Its code and args (decision 14.37); its English is its message in a
+/// [`Catalog`](crate::Catalog), rendered where it is shown.
 impl fmt::Display for FmtError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FmtError::Serialize { detail } => {
-                write!(f, "the result could not be serialized: {detail}")
-            }
-            FmtError::Write { detail } => write!(f, "the output could not be written: {detail}"),
-            FmtError::CatalogParse { detail } => {
-                write!(f, "a message catalog has a syntax error: {detail}")
-            }
-        }
+        angzarr_diagnostic::display(self, f)
     }
 }
 
@@ -76,7 +70,7 @@ pub fn diagnostic_samples() -> Vec<Box<dyn Diagnostic>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::{Catalog, EN_US};
+    use crate::catalog::EN_US;
 
     /// The message ids of this crate's catalog.
     fn messages() -> Vec<&'static str> {
@@ -97,17 +91,12 @@ mod tests {
         assert_eq!(codes, messages());
     }
 
+    /// Every error displays as its code and args, never English (decision
+    /// 14.37), and core's catalog check agrees with the catalog.
     #[test]
-    fn every_errors_english_is_its_catalog_message() {
-        let mut catalog = Catalog::en_us();
-        catalog.add(EN_US).unwrap();
-        for sample in diagnostic_samples() {
-            let rendered: String = catalog
-                .render(&*sample)
-                .chars()
-                .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
-                .collect();
-            assert_eq!(sample.to_string(), rendered, "{}", sample.code());
-        }
+    fn every_error_displays_as_its_code_and_args() {
+        let problems =
+            angzarr_diagnostic::catalog::check("angzarr-fmt", EN_US, &diagnostic_samples());
+        assert_eq!(problems, Vec::new());
     }
 }

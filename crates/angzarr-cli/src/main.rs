@@ -443,25 +443,11 @@ enum CliError {
     Build(BuildError),
 }
 
+/// Its code and args (decision 14.37), a build's error as that error's;
+/// [`finish`] shows it in English, through the catalog.
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CliError::TranslateMalformed { value } => {
-                write!(f, "--translate {value} is not <policy>:<command>=<fact>")
-            }
-            CliError::DomainRequired => f.write_str("scaffold python needs --domain"),
-            CliError::ExposeMalformed { value } => {
-                write!(
-                    f,
-                    "--expose {value} is not <domain>=loopback or <domain>=ip"
-                )
-            }
-            CliError::LanguageMalformed { value } => {
-                write!(f, "--language {value} is not <name>=<language>")
-            }
-            CliError::Lints { config, count } => write!(f, "{config} has {count} lints"),
-            CliError::Build(error) => error.fmt(f),
-        }
+        angzarr_diagnostic::display(self, f)
     }
 }
 
@@ -601,33 +587,21 @@ mod tests {
         assert!(problems.is_empty(), "{problems:#?}");
     }
 
+    /// Every error displays as its code and args, never English (decision
+    /// 14.37), and core's catalog check agrees with the catalog; a build's
+    /// error displays as that error.
     #[test]
-    fn every_errors_english_is_its_catalog_message() {
-        let catalog = catalog();
-        let errors = [
-            CliError::TranslateMalformed {
-                value: "x".to_string(),
-            },
-            CliError::DomainRequired,
-            CliError::ExposeMalformed {
-                value: "x".to_string(),
-            },
-            CliError::Lints {
-                config: "x".to_string(),
-                count: 2,
-            },
-            CliError::Build(BuildError::Uv {
-                detail: "x".to_string(),
-            }),
-        ];
-        for sample in errors {
-            let rendered: String = catalog
-                .render(&sample)
-                .chars()
-                .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
-                .collect();
-            assert_eq!(sample.to_string(), rendered, "{}", sample.code());
-        }
+    fn every_error_displays_as_its_code_and_args() {
+        let problems =
+            angzarr_diagnostic::catalog::check("angzarr-cli", EN_US, &diagnostic_samples());
+        assert_eq!(problems, Vec::new());
+        let build = BuildError::Uv {
+            detail: "x".to_string(),
+        };
+        assert_eq!(
+            CliError::Build(build.clone()).to_string(),
+            build.to_string()
+        );
     }
 
     #[test]

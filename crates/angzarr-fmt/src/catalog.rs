@@ -1,6 +1,8 @@
 //! Rendering diagnostics in a language: a code is a Fluent message id, the
-//! args fill its variables. A code the catalog lacks, or a message that does
-//! not format, falls back to the diagnostic's English `Display`.
+//! args fill its variables. This is where a diagnostic's English is made
+//! (decision 14.37): a diagnostic carries a code and args, never English. A
+//! code the catalog lacks, or a message that does not format, falls back to
+//! its `Display`, its code and args.
 
 use std::collections::BTreeSet;
 

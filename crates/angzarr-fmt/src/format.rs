@@ -60,9 +60,10 @@ pub struct UnknownFormat {
     pub name: String,
 }
 
+/// Its code and args (decision 14.37), like [`FmtError`](crate::FmtError).
 impl fmt::Display for UnknownFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown format {}: use json or text", self.name)
+        angzarr_diagnostic::display(self, f)
     }
 }
 
