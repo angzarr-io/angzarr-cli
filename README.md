@@ -407,8 +407,10 @@ part. `SPEC_RUN_TAGGED=1` runs the tagged ones too.
 ## Licence
 
 AGPL-3.0-only ([LICENSE](LICENSE)), except `angzarr-build`, which build
-scripts depend on, and `angzarr-codegen`, which it depends on: BSD-3-Clause
-([crates/angzarr-build/LICENSE](crates/angzarr-build/LICENSE),
-[crates/angzarr-codegen/LICENSE](crates/angzarr-codegen/LICENSE)).
+scripts depend on, and `angzarr-codegen`, which it depends on: licensed under
+either of Apache License 2.0 or BSD 3-Clause, at your option (each crate's
+`LICENSE-APACHE` and `LICENSE-BSD`:
+[crates/angzarr-build/](crates/angzarr-build/),
+[crates/angzarr-codegen/](crates/angzarr-codegen/)).
 
 The generated-output exception: [LICENSE-EXCEPTION](LICENSE-EXCEPTION).
