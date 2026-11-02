@@ -3,9 +3,12 @@
 //! written once; build.rs and main.rs the CLI's, rewritten every run), and
 //! the host config checked against the protos.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output};
-use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[path = "../../../test-support/test_dir.rs"]
+mod test_dir;
+use test_dir::TestDir;
 
 const BLACKJACK: &[&str] = &[
     "io/angzarr/examples/v1/table.proto",
@@ -30,15 +33,8 @@ fn golden(path: &str) -> String {
     .unwrap()
 }
 
-fn empty_dir() -> PathBuf {
-    static RUN: AtomicUsize = AtomicUsize::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "angzarr-cli-app-test-{}-{}",
-        std::process::id(),
-        RUN.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn empty_dir() -> TestDir {
+    TestDir::new("angzarr-cli-app-test")
 }
 
 fn angzarr(args: &[&str], root: &Path) -> Output {
@@ -113,7 +109,6 @@ fn scaffold_app_writes_the_golden_config_and_main_then_keeps_them() {
         );
     }
     assert_eq!(actions(&angzarr(SCAFFOLD, &root)), each("kept"));
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -145,7 +140,6 @@ fn scaffold_app_keeps_the_users_config_and_rewrites_a_hand_edited_main() {
         std::fs::read_to_string(root.join("src/main.rs")).unwrap(),
         golden("src/main.rs")
     );
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -172,7 +166,6 @@ fn scaffold_app_emits_expose_and_retry_from_its_flags() {
         config.contains("retry:\n  max_retries: 5\n  max_race_runs: 0\n"),
         "{config}"
     );
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -211,7 +204,6 @@ fn scaffold_app_over_a_domain_crate_writes_the_golden_main_importing_it() {
         std::fs::read_to_string(root.join("src/main.rs")).unwrap(),
         over("src/main.rs")
     );
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -222,7 +214,6 @@ fn scaffold_app_refuses_a_wire_path_without_a_domain_crate() {
     let out = angzarr(&args, &root);
     assert!(!out.status.success());
     assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -235,7 +226,6 @@ fn scaffold_app_refuses_exposing_a_policy_and_writes_nothing() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("angzarr-codegen-app-refused"), "{stderr}");
     assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -252,7 +242,6 @@ fn scaffold_app_refuses_a_malformed_expose() {
             "{value}: {stderr}"
         );
     }
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -265,7 +254,6 @@ fn lint_app_passes_the_generated_config() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -304,7 +292,6 @@ fn lint_app_reports_each_lint_and_fails() {
     ] {
         assert!(stderr.contains(code), "{code}:\n{stderr}");
     }
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -321,7 +308,6 @@ fn scaffold_app_puts_a_policy_in_the_language_given() {
         ),
         "{config}"
     );
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -342,5 +328,4 @@ fn scaffold_app_refuses_a_malformed_language_and_the_python_flag_is_gone() {
     args.extend(["--python", "player"]);
     assert!(!angzarr(&args, &root).status.success());
     assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
-    std::fs::remove_dir_all(&root).unwrap();
 }

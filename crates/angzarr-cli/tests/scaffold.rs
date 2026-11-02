@@ -4,7 +4,10 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[path = "../../../test-support/test_dir.rs"]
+mod test_dir;
+use test_dir::TestDir;
 
 const BUYIN: &[&str] = &[
     "buyin/v1/wallet.proto",
@@ -19,15 +22,8 @@ fn fixtures() -> String {
         .to_string()
 }
 
-fn empty_dir() -> PathBuf {
-    static RUN: AtomicUsize = AtomicUsize::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "angzarr-cli-scaffold-test-{}-{}",
-        std::process::id(),
-        RUN.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn empty_dir() -> TestDir {
+    TestDir::new("angzarr-cli-scaffold-test")
 }
 
 /// `angzarr scaffold rust` over the buy-in protos into `src`, with `extra`.
@@ -102,7 +98,6 @@ fn scaffold_rust_writes_each_component_once_and_never_overwrites() {
         std::fs::read_to_string(src.join("wallet.rs")).unwrap(),
         mine
     );
-    std::fs::remove_dir_all(&src).unwrap();
 }
 
 #[test]
@@ -120,7 +115,6 @@ fn scaffold_rust_with_translate_writes_the_policys_callback_stub() {
     assert!(policy.contains("fn hold_refused("), "{policy}");
     let other = std::fs::read_to_string(src.join("wallet_buy_in.rs")).unwrap();
     assert!(!other.contains("_refused("), "{other}");
-    std::fs::remove_dir_all(&src).unwrap();
 }
 
 #[test]
@@ -141,7 +135,6 @@ fn scaffold_rust_missing_with_translate_adds_the_policys_callback_stub() {
     );
     let policy = std::fs::read_to_string(src.join("buy_in_wallet.rs")).unwrap();
     assert!(policy.contains("fn hold_refused("), "{policy}");
-    std::fs::remove_dir_all(&src).unwrap();
 }
 
 #[test]
@@ -153,7 +146,6 @@ fn scaffold_rust_refuses_a_malformed_translate() {
         std::fs::read_dir(&src).unwrap().next().is_none(),
         "nothing written"
     );
-    std::fs::remove_dir_all(&src).unwrap();
 }
 
 #[test]
@@ -175,5 +167,4 @@ fn scaffold_rust_missing_refuses_an_input_the_proto_contradicts() {
         "{failure}"
     );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), mine);
-    std::fs::remove_dir_all(&src).unwrap();
 }

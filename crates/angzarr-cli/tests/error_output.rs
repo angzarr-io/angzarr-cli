@@ -6,7 +6,10 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[path = "../../../test-support/test_dir.rs"]
+mod test_dir;
+use test_dir::TestDir;
 
 const BLACKJACK: &[&str] = &[
     "io/angzarr/examples/v1/table.proto",
@@ -41,15 +44,8 @@ fn fixtures() -> String {
         .to_string()
 }
 
-fn empty_dir() -> PathBuf {
-    static RUN: AtomicUsize = AtomicUsize::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "angzarr-cli-error-output-test-{}-{}",
-        std::process::id(),
-        RUN.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn empty_dir() -> TestDir {
+    TestDir::new("angzarr-cli-error-output-test")
 }
 
 /// `angzarr <args> --format <format>` in a fresh directory holding
@@ -59,15 +55,13 @@ fn run(args: &[&str], format: &str, files: &[(&str, &str)], stdout: Stdio) -> Ou
     for (name, text) in files {
         std::fs::write(dir.join(name), text).unwrap();
     }
-    let out = Command::new(env!("CARGO_BIN_EXE_angzarr"))
+    Command::new(env!("CARGO_BIN_EXE_angzarr"))
         .args(args)
         .args(["--format", format])
         .current_dir(&dir)
         .stdout(stdout)
         .output()
-        .unwrap();
-    std::fs::remove_dir_all(&dir).unwrap();
-    out
+        .unwrap()
 }
 
 /// `out` failed, and its stderr is the golden `case.format`.

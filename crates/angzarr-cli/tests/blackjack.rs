@@ -33,6 +33,10 @@ mod common;
 use angzarr_codegen::{ANGZARR_EMBEDDED_GIT, ANGZARR_EMBEDDED_REV};
 use common::{angzarr, copy_dir, here, overlay};
 
+#[path = "../../../test-support/test_dir.rs"]
+mod test_dir;
+use test_dir::TestDir;
+
 const PROTOS: &[&str] = &[
     "io/angzarr/examples/v1/table.proto",
     "io/angzarr/examples/v1/player.proto",
@@ -50,8 +54,7 @@ const EXAMPLES_RUST_GIT: &str = "https://github.com/angzarr-io/angzarr-examples-
 #[test]
 #[ignore = "needs the network (buf.build, GitHub) and uv"]
 fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player() {
-    let app = std::env::temp_dir().join(format!("angzarr-cli-blackjack-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&app);
+    let app = TestDir::new("angzarr-cli-blackjack");
     copy_dir(
         &here().join("../../angzarr-project/proto/io/angzarr"),
         &app.join("proto/io/angzarr"),
@@ -64,7 +67,7 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
     // examples-rust's angzarr-embedded and angzarr-build patched to the
     // app's.
     overlay(&here().join("tests/e2e/blackjack"), &app);
-    let embedded = patch_manifest(&app, &build);
+    let _embedded = patch_manifest(&app, &build);
 
     let out = common::run(&app);
     assert!(
@@ -82,8 +85,6 @@ fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player
         ]
         .join("\n")
     );
-    std::fs::remove_dir_all(&app).unwrap();
-    std::fs::remove_dir_all(&embedded).unwrap();
 }
 
 /// The app scaffolded in `app`: its startup, the Rust table and its two
@@ -139,16 +140,12 @@ fn scaffold(app: &std::path::Path, build: &str) {
 
 /// The table's crates added to the app's manifest (agg-table with its test
 /// support, seed 21's hand), examples-rust's angzarr-embedded patched to a
-/// checkout of the CLI's (returned), and its angzarr-build to this
-/// workspace's (`build`).
-fn patch_manifest(app: &std::path::Path, build: &str) -> std::path::PathBuf {
+/// checkout of the CLI's (returned, removed when it drops), and its
+/// angzarr-build to this workspace's (`build`).
+fn patch_manifest(app: &std::path::Path, build: &str) -> TestDir {
     // Beside the app, not in it: a path dependency under the app's
     // directory would be a member of its workspace.
-    let embedded = app.with_file_name(format!(
-        "{}-embedded",
-        app.file_name().unwrap().to_string_lossy()
-    ));
-    let _ = std::fs::remove_dir_all(&embedded);
+    let embedded = TestDir::new("angzarr-cli-blackjack-embedded");
     let into = embedded.display().to_string();
     git(app, &["clone", "--quiet", ANGZARR_EMBEDDED_GIT, &into]);
     git(&embedded, &["checkout", "--quiet", ANGZARR_EMBEDDED_REV]);

@@ -12,6 +12,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "../../../test-support/test_dir.rs"]
+mod test_dir;
+use test_dir::TestDir;
+
 /// The spec draft whose protos the projects generate from (decision 14.50):
 /// the angzarr-project submodule's commit.
 const SPEC_REV: &str = "7597d23465ba9af449f7b405b34099f77fc38bde";
@@ -20,14 +24,8 @@ fn here() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "angzarr-cli-scaffold-python-kinds-{}-{name}",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn scratch(name: &str) -> TestDir {
+    TestDir::new(&format!("angzarr-cli-scaffold-python-kinds-{name}"))
 }
 
 /// Scaffolds `proto` as `domain` (a domain or a component name) into a
@@ -72,7 +70,6 @@ fn runs(proto: &str, domain: &str, check: &str) {
         String::from_utf8_lossy(&test.stdout),
         String::from_utf8_lossy(&test.stderr)
     );
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
