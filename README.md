@@ -153,7 +153,8 @@ beside `register` with `registry.projector_handler(&[sources], ..)`;
 `descriptors` (`DESCRIPTORS`: each component's `ComponentDescriptor`, by
 its name in an application, generated from its protos and encoded, the crate's version its
 `rules_version`; a domain served by a child process has its own) and
-`register` (one `register(&mut Registry)` for every adapter). An
+`register` (one `register(&mut Registry) -> Result<(), Misconfigured>`
+for every adapter, refused as the registry refuses a component). An
 application's own `src/main.rs` runs `register` with its host config
 (`angzarr_embedded_host::run("angzarr.yaml", register)`). A crate that
 writes its policies by hand beside a domain a child process serves takes
