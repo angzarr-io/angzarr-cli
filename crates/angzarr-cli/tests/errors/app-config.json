@@ -1,21 +1,21 @@
 {
   "error": {
     "code": "angzarr-build-codegen",
-    "message": "the host config does not read as one: angzarr-yaml-load-failed-at kind=angzarr-host-config source=angzarr.yaml problem=angzarr-yaml-decode-type problem.key_path=component problem.expected=sequence problem.found=scalar",
+    "message": "the host config does not read as one: angzarr-host-config document angzarr.yaml: `component`: expected a sequence, found a scalar",
     "args": {
       "error": {
         "code": "angzarr-codegen-app-config",
-        "message": "the host config does not read as one: angzarr-yaml-load-failed-at kind=angzarr-host-config source=angzarr.yaml problem=angzarr-yaml-decode-type problem.key_path=component problem.expected=sequence problem.found=scalar",
+        "message": "the host config does not read as one: angzarr-host-config document angzarr.yaml: `component`: expected a sequence, found a scalar",
         "args": {
           "cause": {
             "code": "angzarr-yaml-load-failed-at",
-            "message": "angzarr-yaml-load-failed-at kind=angzarr-host-config source=angzarr.yaml problem=angzarr-yaml-decode-type problem.key_path=component problem.expected=sequence problem.found=scalar",
+            "message": "angzarr-host-config document angzarr.yaml: `component`: expected a sequence, found a scalar",
             "args": {
               "kind": "angzarr-host-config",
               "source": "angzarr.yaml",
               "problem": {
                 "code": "angzarr-yaml-decode-type",
-                "message": "angzarr-yaml-decode-type key_path=component expected=sequence found=scalar",
+                "message": "`component`: expected a sequence, found a scalar",
                 "args": {
                   "key_path": "component",
                   "expected": "sequence",

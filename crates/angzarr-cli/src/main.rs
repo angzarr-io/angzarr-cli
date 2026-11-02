@@ -15,8 +15,9 @@ use serde::Serialize;
 use angzarr_diagnostic::{Arg, Diagnostic, Report};
 
 mod output;
+mod probe;
 
-use output::{FormatArgs, finish};
+use output::{FormatArgs, finish, finish_shown};
 
 #[derive(Parser)]
 #[command(name = "angzarr", about = "The command line for angzarr projects.")]
@@ -36,6 +37,9 @@ enum Command {
     Scaffold(Box<ScaffoldArgs>),
     /// Check a project's files against its protos.
     Lint(LintArgs),
+    /// Take one component of the host config through the child protocol,
+    /// a step at a time, and show how each step went.
+    Probe(Box<probe::ProbeArgs>),
 }
 
 #[derive(Args)]
@@ -441,6 +445,19 @@ enum CliError {
     Lints { config: String, count: usize },
     /// Generation failed; reported as the build error itself.
     Build(BuildError),
+    /// The host refused: its config unreadable or invalid; reported as
+    /// the host's error itself.
+    Host(angzarr_embedded_host::HostError),
+    /// `probe` named a component `config` does not list.
+    ProbeNotListed { component: String, config: String },
+    /// `probe` gave a component of `kind` (its kind in the config), which
+    /// is handed an input, none.
+    ProbeNoInput { component: String, kind: String },
+    /// `probe`'s `--payload` file could not be read. `kind` is the I/O
+    /// error's `std::io::ErrorKind`, by name.
+    ProbePayloadUnreadable { path: String, kind: String },
+    /// A step of `probe` failed: the first, `step`.
+    ProbeFailed { component: String, step: String },
 }
 
 /// Its code and args (decision 14.37), a build's error as that error's;
@@ -462,6 +479,11 @@ impl Diagnostic for CliError {
             CliError::LanguageMalformed { .. } => "angzarr-cli-language-malformed",
             CliError::Lints { .. } => "angzarr-cli-lints",
             CliError::Build(error) => error.code(),
+            CliError::Host(error) => error.code(),
+            CliError::ProbeNotListed { .. } => "angzarr-cli-probe-not-listed",
+            CliError::ProbeNoInput { .. } => "angzarr-cli-probe-no-input",
+            CliError::ProbePayloadUnreadable { .. } => "angzarr-cli-probe-payload-unreadable",
+            CliError::ProbeFailed { .. } => "angzarr-cli-probe-failed",
         }
     }
 
@@ -477,6 +499,23 @@ impl Diagnostic for CliError {
                 ("count", i64::try_from(*count).unwrap_or(i64::MAX).into()),
             ],
             CliError::Build(error) => error.args(),
+            CliError::Host(error) => error.args(),
+            CliError::ProbeNotListed { component, config } => vec![
+                ("component", component.as_str().into()),
+                ("config", config.as_str().into()),
+            ],
+            CliError::ProbeNoInput { component, kind } => vec![
+                ("component", component.as_str().into()),
+                ("kind", kind.as_str().into()),
+            ],
+            CliError::ProbePayloadUnreadable { path, kind } => vec![
+                ("path", path.as_str().into()),
+                ("kind", kind.as_str().into()),
+            ],
+            CliError::ProbeFailed { component, step } => vec![
+                ("component", component.as_str().into()),
+                ("step", step.as_str().into()),
+            ],
         }
     }
 }
@@ -487,7 +526,14 @@ impl Failure for CliError {
             CliError::TranslateMalformed { .. } => Some(Report::new("angzarr-cli-translate-form")),
             CliError::DomainRequired => Some(Report::new("angzarr-cli-domain-name")),
             CliError::LanguageMalformed { .. } => Some(Report::new("angzarr-cli-language-form")),
-            CliError::ExposeMalformed { .. } | CliError::Lints { .. } | CliError::Build(_) => None,
+            CliError::ProbeNoInput { .. } => Some(Report::new("angzarr-cli-probe-input-form")),
+            CliError::ExposeMalformed { .. }
+            | CliError::Lints { .. }
+            | CliError::Build(_)
+            | CliError::Host(_)
+            | CliError::ProbeNotListed { .. }
+            | CliError::ProbePayloadUnreadable { .. }
+            | CliError::ProbeFailed { .. } => None,
         }
     }
 }
@@ -527,6 +573,11 @@ fn catalog() -> Catalog {
         angzarr_fmt::EN_US,
         angzarr_codegen::EN_US,
         angzarr_build::EN_US,
+        // The probe's refusals to start: the host's own, a config's
+        // reader's, and the spec's keys.
+        angzarr_embedded_host::EN_US.1,
+        angzarr_embedded_host::angzarr_embedded_host_config::angzarr_yaml::EN_US.1,
+        angzarr_proto::REASONS_EN_US.1,
         EN_US,
     ] {
         catalog
@@ -547,6 +598,7 @@ fn main() -> ExitCode {
             let result = lint(args, &catalog);
             finish(format, &catalog, result)
         }
+        Command::Probe(args) => finish_shown(format, &catalog, probe::run(*args), probe::verdict),
     }
 }
 
@@ -577,6 +629,23 @@ mod tests {
             Box::new(CliError::Lints {
                 config: "x".to_string(),
                 count: 2,
+            }),
+            Box::new(CliError::ProbeNotListed {
+                component: "dealer".to_string(),
+                config: "angzarr.yaml".to_string(),
+            }),
+            Box::new(CliError::ProbeNoInput {
+                component: "player".to_string(),
+                kind: "domain".to_string(),
+            }),
+            Box::new(Report::new("angzarr-cli-probe-input-form")),
+            Box::new(CliError::ProbePayloadUnreadable {
+                path: "move.bin".to_string(),
+                kind: "NotFound".to_string(),
+            }),
+            Box::new(CliError::ProbeFailed {
+                component: "player".to_string(),
+                step: "handshake".to_string(),
             }),
         ]
     }

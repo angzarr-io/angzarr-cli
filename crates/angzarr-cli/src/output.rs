@@ -57,9 +57,24 @@ pub fn finish<T: Viewable>(
     catalog: &Catalog,
     result: Result<T, Box<dyn Failure>>,
 ) -> ExitCode {
+    finish_shown(format, catalog, result, |_| None)
+}
+
+/// [`finish`] for a command whose result is shown however it went: the
+/// result to stdout; then, when `failed` (the result's own verdict on
+/// itself) names a failure, that failure to stderr and its exit status.
+pub fn finish_shown<T: Viewable>(
+    format: Format,
+    catalog: &Catalog,
+    result: Result<T, Box<dyn Failure>>,
+    failed: impl FnOnce(&T) -> Option<Box<dyn Failure>>,
+) -> ExitCode {
     let failure = match result {
         Ok(value) => match angzarr_fmt::render(&mut io::stdout().lock(), format, &value) {
-            Ok(()) => return ExitCode::SUCCESS,
+            Ok(()) => match failed(&value) {
+                None => return ExitCode::SUCCESS,
+                Some(failure) => failure,
+            },
             Err(e) => Box::new(e) as Box<dyn Failure>,
         },
         Err(f) => f,

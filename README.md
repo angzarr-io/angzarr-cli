@@ -312,6 +312,56 @@ component that is not an aggregate (a process manager, a policy, a projector
 or an upcaster); a language with no default launch and no `launch`; an empty
 `launch`.
 
+## Probing a child
+
+`angzarr probe <component> [--config angzarr.yaml] [--command TYPE_URL |
+--event TYPE_URL] [--domain DOMAIN] [--payload FILE]` takes one component of
+the host config through the child protocol (angzarr-project's
+`docs/design/child-protocol.md`) with angzarr-embedded-host's conformance
+probe: it launches the child as the host would, from its `component` entry
+and the config's `supervision` time limits, and runs six steps in order,
+`launch`, `handshake`, `health` (SERVING on grpc.health.v1), `describe` (a
+valid descriptor of the entry's `kind`), `handle` (one input answered) and
+`shutdown` (an exit with status 0 on its stdin's end). A step that fails
+ends the probe; the steps after it are `not-run`, and an upcaster sidecar
+runs neither `describe` nor `handle`. It is what a client library for a new
+language runs against its own child shim.
+
+The input is the command a domain is handed (`--command`) or the event a
+policy or a projector is (`--event`), its payload's type URL, on the domain
+`--domain` names (the component's name when unset) and the probe's fixed
+root, its payload the encoded message in `--payload` (an empty message, every
+field its default, when unset). An upcaster needs none. A language other
+than `rust` and `python` is launched by its entry's `launch`.
+
+Each step's outcome is `passed`, `failed` or `not-run`; a failure is its
+code, its args (a nested cause of the same shape) and its English, rendered
+through the catalog its code is in (the spec's `reasons.en-US.ftl` for a
+framework key such as `HOST_REASON_HANDSHAKE_TIMEOUT`, angzarr-embedded-host's
+for the host's own codes) by `angzarr_diagnostic::catalog::render`. A code in
+neither, such as a child's own refusal key, is shown as its code and args.
+
+```
+$ angzarr probe player --command type.googleapis.com/io.angzarr.examples.v1.DecideMove --format text
+Component: player
+Passed: false
+Step       Outcome  Detail
+launch     passed
+handshake  failed   component "player": stdout closed before a handshake [angzarr-embedded-host-handshake]
+health     not-run
+describe   not-run
+handle     not-run
+shutdown   not-run
+```
+
+In json the result is `{"component", "passed", "steps": [{"step",
+"outcome", "failure": {"code", "message", "args"}}]}`, `failure` only on
+a failed step. Any failed step fails the command: the result is written to
+stdout, then `angzarr-cli-probe-failed` (the component, the first step that
+failed) to stderr, and the exit status is 1. A config that cannot be read,
+a component it does not list, a domain or policy given no input, and a
+payload file that cannot be read are refused before anything starts.
+
 ## Building
 
 The spec's protos, the blackjack example's among them, are the

@@ -43,3 +43,23 @@ Write a non-ASCII character in a literal as an escape.
 ## Use `just`
 
 `just test` and `just lint` are the checks; both must pass before a commit.
+
+## `angzarr probe` runs the host's probe
+
+angzarr-cli depends on angzarr-embedded's host crate, `angzarr-embedded-host`
+(the owner's ruling, 2026-11-01), for `angzarr probe` alone
+(`crates/angzarr-cli/src/probe.rs`): the host's config reader
+(`config::read`) and its child conformance probe (`probe`, with
+`Input::command` and `Input::event`). It is pinned at the rev the
+host-config crate is, and moves with it. A probe's failures carry the
+spec's keys and the host's codes, so the probe renders each, where it is
+shown, through `angzarr_diagnostic::catalog::render` with the catalog its
+code is in (`angzarr_proto::REASONS_EN_US`, `angzarr_embedded_host::EN_US`);
+the cli's own refusals around it go through `output::finish_shown`, which
+writes the steps and then fails the command.
+
+Its tests (`tests/probe.rs`) launch shell commands as fake children that
+break the protocol at once, so none waits for a time limit; the child that
+passes every step is client-python's shim, as the Python player runs it,
+an ignored test that needs uv and `ANGZARR_PLAYER_DIR` naming the player's
+checkout.
