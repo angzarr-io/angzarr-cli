@@ -421,3 +421,8 @@ either of Apache License 2.0 or BSD 3-Clause, at your option (each crate's
 [crates/angzarr-codegen/](crates/angzarr-codegen/)).
 
 The generated-output exception: [LICENSE-EXCEPTION](LICENSE-EXCEPTION).
+
+Commercial licensing: the AGPL-3.0 parts of this project (not the
+dual-licensed `angzarr-build` and `angzarr-codegen` above) are also
+available under a commercial licence. The author is open to it; contact
+Benjamin Abbitt.
