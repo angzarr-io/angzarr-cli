@@ -46,9 +46,10 @@ const PROTOS: &[&str] = &[
 
 /// The examples-rust commit the table's crates are built from: its main,
 /// where agg-table implements the table's generated interface over
-/// examples-proto's generated domain layer (now with the wallet and the
-/// buy-in beside it), and has seed 21's hand as test support.
-const EXAMPLES_RUST_REV: &str = "c0c38fb7bccb8a2ce7159542cd00b4412a1bdc12";
+/// examples-proto's generated domain layer (with the wallet and the
+/// buy-in, its compensation, beside it), and has seed 21's hand as test
+/// support.
+const EXAMPLES_RUST_REV: &str = "7352def03634fa095a582b2bee9a6798547c288c";
 /// Where [`EXAMPLES_RUST_REV`] is fetched from.
 const EXAMPLES_RUST_GIT: &str = "https://github.com/angzarr-io/angzarr-examples-rust";
 
