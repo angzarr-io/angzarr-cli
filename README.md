@@ -338,6 +338,16 @@ CI) judges each crate against its `mutation_thresholds` (justfile).
 
 The toolchain is pinned in `rust-toolchain.toml`.
 
+### The spec's codegen tier
+
+`just test` runs the spec's codegen tier, the submodule's
+`angzarr-project/features/codegen`, against angzarr-codegen with cucumber
+(`crates/angzarr-codegen/tests/spec.rs`): each scenario's protos are
+written and compiled, then linted (every check generation makes) or
+generated from. A scenario the runner does not run is tagged, with why,
+in `tests/spec/tags.rs`: the one record of where angzarr-cli and the tier
+part. `SPEC_RUN_TAGGED=1` runs the tagged ones too.
+
 ## Licence
 
 AGPL-3.0-only ([LICENSE](LICENSE)), except `angzarr-build`, which build
