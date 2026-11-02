@@ -114,8 +114,11 @@ fn scaffold_app_writes_the_golden_config_and_main_then_keeps_them() {
     assert_eq!(actions(&angzarr(SCAFFOLD, &root)), each("kept"));
 }
 
+/// The config and main are the user's, written once (item S Q7): a re-run
+/// keeps both as they are, and rewrites only the CLI's build script, which
+/// carries the generated marker.
 #[test]
-fn scaffold_app_keeps_the_users_config_and_rewrites_a_hand_edited_main() {
+fn scaffold_app_keeps_the_users_config_and_main_and_rewrites_the_build_script() {
     let root = empty_dir();
     angzarr(SCAFFOLD, &root);
     let mine = format!(
@@ -123,25 +126,61 @@ fn scaffold_app_keeps_the_users_config_and_rewrites_a_hand_edited_main() {
         std::fs::read_to_string(root.join("angzarr.yaml")).unwrap()
     );
     std::fs::write(root.join("angzarr.yaml"), &mine).unwrap();
-    std::fs::write(root.join("src/main.rs"), "// edited\n").unwrap();
+    let main = format!(
+        "{}\npub mod mine;\n",
+        std::fs::read_to_string(root.join("src/main.rs")).unwrap()
+    );
+    std::fs::write(root.join("src/main.rs"), &main).unwrap();
+    let build = std::fs::read_to_string(root.join("build.rs")).unwrap();
+    std::fs::write(root.join("build.rs"), format!("{build}// edited\n")).unwrap();
     let mut again = SCAFFOLD.to_vec();
     again.extend(["--expose", "table=ip", "--max-retries", "1"]);
     let done = actions(&angzarr(&again, &root));
-    assert!(
-        done.contains(&("angzarr.yaml".to_string(), "kept".to_string())),
-        "{done:?}"
-    );
-    assert!(
-        done.contains(&("src/main.rs".to_string(), "regenerated".to_string())),
-        "{done:?}"
-    );
+    for (path, action) in [
+        ("angzarr.yaml", "kept"),
+        ("src/main.rs", "kept"),
+        ("build.rs", "regenerated"),
+    ] {
+        assert!(
+            done.contains(&(path.to_string(), action.to_string())),
+            "{path}: {done:?}"
+        );
+    }
     assert_eq!(
         std::fs::read_to_string(root.join("angzarr.yaml")).unwrap(),
         mine
     );
     assert_eq!(
         std::fs::read_to_string(root.join("src/main.rs")).unwrap(),
-        golden("src/main.rs")
+        main
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("build.rs")).unwrap(),
+        build
+    );
+}
+
+/// A build script written by hand in the CLI's place, without the
+/// generated marker, is refused with its remedy, never overwritten.
+#[test]
+fn scaffold_app_refuses_a_build_script_without_the_marker() {
+    let root = empty_dir();
+    angzarr(SCAFFOLD, &root);
+    std::fs::write(root.join("build.rs"), "fn main() {}\n").unwrap();
+    let out = angzarr(SCAFFOLD, &root);
+    assert!(!out.status.success());
+    let failure = String::from_utf8_lossy(&out.stderr);
+    let unmarked = angzarr_build::BuildError::GeneratedUnmarked {
+        path: String::new(),
+    };
+    assert!(failure.contains(unmarked.code()), "{failure}");
+    assert!(
+        failure.contains(unmarked.remedy().unwrap().code()),
+        "the remedy: {failure}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("build.rs")).unwrap(),
+        "fn main() {}\n"
     );
 }
 

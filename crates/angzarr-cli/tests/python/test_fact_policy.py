@@ -5,7 +5,7 @@ declares it one (angzarr decision 14.69), and never as a command."""
 from angzarr_client.proto.io.angzarr.v1 import types_pb2 as t
 from angzarr_client.router import pack
 
-from angzarr_policy_table_buy_in import domain
+from angzarr_policy_table_buy_in._gen import domain
 from angzarr_policy_table_buy_in._gen.io.angzarr.examples.v1 import (
     buy_in_pb2,
     table_pb2,

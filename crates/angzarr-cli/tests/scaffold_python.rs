@@ -25,7 +25,7 @@ fn input_mismatch() -> String {
 
 const PLAYER: &str = "io/angzarr/examples/v1/player.proto";
 const IMPL: &str = "src/angzarr_player/logic_impl.py";
-const MAIN: &str = "src/angzarr_player/main.py";
+const MAIN: &str = "src/angzarr_player/_gen/main.py";
 
 /// The spec's protos: the angzarr-project submodule's `proto`.
 fn spec() -> String {
@@ -177,7 +177,8 @@ fn scaffold_python_rewrites_its_own_files_and_never_the_users() {
     scaffold(&root, &[]);
     let mine = "\"\"\"Mine now.\"\"\"\n\n\nclass PlayerLogicImpl:\n    pass\n";
     std::fs::write(root.join(IMPL), mine).unwrap();
-    std::fs::write(root.join(MAIN), "# edited by hand\n").unwrap();
+    let marked = std::fs::read_to_string(root.join(MAIN)).unwrap();
+    std::fs::write(root.join(MAIN), format!("{marked}# edited by hand\n")).unwrap();
     let done = actions(&scaffold(&root, &[]), &root);
     assert_eq!(action_of(&done, IMPL), "kept");
     assert_eq!(action_of(&done, MAIN), "regenerated");
@@ -259,15 +260,16 @@ fn scaffold_python_by_default_generates_the_wire_types_and_the_lock_and_runs_und
         root.join("src/angzarr_player/_gen/io/angzarr/examples/v1/player_pb2.py"),
     )
     .unwrap();
-    assert!(
-        pb2.contains("from angzarr_player._gen.io.angzarr.examples.v1 import cards_pb2"),
-        "{pb2}"
-    );
+    assert!(pb2.contains("from . import cards_pb2 as"), "{pb2}");
+    assert!(angzarr_codegen::is_generated(&pb2), "{pb2}");
     assert!(root.join("uv.lock").exists());
-    assert!(root.join("src/angzarr_player/_version.py").exists());
+    assert!(root.join("src/angzarr_player/_gen/_version.py").exists());
     let out = Command::new("uv")
         .args(["run", "--locked", "python", "-c"])
-        .arg("from angzarr_player.main import host; host()")
+        .arg(
+            "from angzarr_player._gen.main import host; \
+             from angzarr_player.logic_impl import PlayerLogicImpl; host(PlayerLogicImpl())",
+        )
         .current_dir(&root)
         .output()
         .unwrap();
@@ -374,10 +376,7 @@ fn scaffold_python_generates_the_wire_types_from_a_directory_outside_the_project
             root.join("src/angzarr_player/_gen/io/angzarr/examples/v1/player_pb2.py"),
         )
         .unwrap_or_else(|e| panic!("-I {include}: {e}"));
-        assert!(
-            pb2.contains("from angzarr_player._gen.io.angzarr.examples.v1 import cards_pb2"),
-            "{pb2}"
-        );
+        assert!(pb2.contains("from . import cards_pb2 as"), "{pb2}");
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

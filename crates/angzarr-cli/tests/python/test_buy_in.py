@@ -9,8 +9,8 @@ from angzarr_client import ComponentHost, describe
 from angzarr_client.proto.io.angzarr.v1 import types_pb2 as t
 from angzarr_client.router import FactRecord, ProcessManagerDispatch, Rebuilder, pack
 
-from angzarr_buy_in import domain, main
-from angzarr_buy_in._descriptor import DESCRIPTOR
+from angzarr_buy_in._gen import domain, main
+from angzarr_buy_in._gen._descriptor import DESCRIPTOR
 from angzarr_buy_in._gen.io.angzarr.examples.v1 import buy_in_pb2
 from angzarr_buy_in._gen.io.angzarr.examples.v1.buy_in_process_manager_angzarr import (
     new_buy_in_process_manager_dispatch,
@@ -62,7 +62,7 @@ def test_the_generated_dispatch_records_a_fact_and_its_flag():
 
 
 def test_the_generated_host_registers_the_process_manager_by_its_name():
-    assert main.host().descriptor is DESCRIPTOR
+    assert main.host(Logic()).descriptor is DESCRIPTOR
     assert DESCRIPTOR.name == "pmg-buy-in"
     generated = new_buy_in_process_manager_dispatch(Logic())
     starting = [buy_in_pb2.StartBuyIn]

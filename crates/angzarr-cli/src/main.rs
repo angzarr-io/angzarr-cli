@@ -5,7 +5,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
 use angzarr_build::{
-    AppSeed, BuildError, DomainCrate, Existing, Exposure, ProtoInput, PythonApp, RetrySeed,
+    AppSeed, BuildError, DomainCrate, Existing, Exposure, Notes, ProtoInput, PythonApp, RetrySeed,
     Scaffolded, Translate,
 };
 use angzarr_fmt::{Catalog, Failure, Format, Viewable};
@@ -97,7 +97,15 @@ struct ScaffoldArgs {
     /// `python`. Every other command is passed through.
     #[arg(long, value_name = "POLICY:COMMAND=FACT")]
     translate: Vec<String>,
-    /// Add the stubs an existing file lacks, changing nothing else.
+    /// Write the optional refusal callback for one refused command into
+    /// the implementation, by the command's full name, even when the file
+    /// exists: a domain's `on_refused_<command>`, a policy's
+    /// `<command>_refused`. Repeatable; without it a run only reports them.
+    #[arg(long, value_name = "COMMAND")]
+    on_refused: Vec<String>,
+    /// Add the required methods an existing file lacks, changing nothing
+    /// else; optional refusal callbacks are added only by `--translate` and
+    /// `--on-refused`.
     #[arg(long)]
     missing: bool,
     #[command(flatten)]
@@ -189,8 +197,32 @@ struct ScaffoldReport {
 #[derive(Serialize)]
 struct ScaffoldEntry {
     path: String,
-    /// `created`, `completed`, `regenerated` or `kept`.
+    /// `created`, `completed`, `regenerated`, `kept`, `obsolete` (an earlier
+    /// scaffold's file this one no longer writes, the user's to delete) or
+    /// `deleted` (an orphaned generated file).
     action: &'static str,
+    /// A user's file's required methods it lacks.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    lacks: Vec<String>,
+    /// A user's file's methods for a message the protos no longer declare.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    obsolete: Vec<String>,
+    /// The optional refusal callbacks a user's implementation may define and
+    /// does not (`--on-refused` writes one).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    optional: Vec<String>,
+    /// A user's manifest's pins that are not this CLI's: reported, the
+    /// manifest never edited.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    drift: Vec<Drift>,
+}
+
+/// A dependency a manifest pins at another revision than this CLI's.
+#[derive(Serialize)]
+struct Drift {
+    dependency: String,
+    pinned: String,
+    cli: String,
 }
 
 impl Viewable for ScaffoldReport {}
@@ -210,10 +242,15 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
         .map(translate)
         .collect::<Result<Vec<_>, _>>()?;
     let done = match args.lang {
-        Lang::Rust => {
-            angzarr_build::scaffold_into(&args.src, &protos, &includes, &translate, existing)
-                .map_err(CliError::Build)?
-        }
+        Lang::Rust => angzarr_build::scaffold_into(
+            &args.src,
+            &protos,
+            &includes,
+            &translate,
+            &args.on_refused,
+            existing,
+        )
+        .map_err(CliError::Build)?,
         Lang::Python => {
             let python = &args.python;
             let domain = python.domain.clone().ok_or(CliError::DomainRequired)?;
@@ -233,7 +270,13 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
                 rules_version: python.rules_version.clone(),
             };
             let done = angzarr_build::scaffold_python_into(
-                &args.src, &protos, &includes, &app, &translate, existing,
+                &args.src,
+                &protos,
+                &includes,
+                &app,
+                &translate,
+                &args.on_refused,
+                existing,
             )
             .map_err(CliError::Build)?;
             angzarr_build::proto_gen_python(&args.src, &app).map_err(CliError::Build)?;
@@ -318,20 +361,35 @@ fn lexical(path: &Path) -> Vec<String> {
     parts
 }
 
-/// One entry per file, by what was done with it.
+/// One entry per file, by what was done with it, a user's file's notes
+/// beside it.
 fn report(done: Vec<Scaffolded>) -> ScaffoldReport {
     let files = done
         .into_iter()
         .map(|d| {
-            let (path, action) = match d {
-                Scaffolded::Created(path) => (path, "created"),
-                Scaffolded::Completed(path) => (path, "completed"),
-                Scaffolded::Regenerated(path) => (path, "regenerated"),
-                Scaffolded::Kept(path) => (path, "kept"),
+            let (path, action, notes) = match d {
+                Scaffolded::Created(path) => (path, "created", Notes::default()),
+                Scaffolded::Completed { path, notes } => (path, "completed", notes),
+                Scaffolded::Regenerated(path) => (path, "regenerated", Notes::default()),
+                Scaffolded::Kept { path, notes } => (path, "kept", notes),
+                Scaffolded::Obsolete(path) => (path, "obsolete", Notes::default()),
+                Scaffolded::Deleted(path) => (path, "deleted", Notes::default()),
             };
             ScaffoldEntry {
                 path: path.display().to_string(),
                 action,
+                lacks: notes.lacks,
+                obsolete: notes.obsolete,
+                optional: notes.optional,
+                drift: notes
+                    .drift
+                    .into_iter()
+                    .map(|d| Drift {
+                        dependency: d.dependency,
+                        pinned: d.pinned,
+                        cli: d.cli,
+                    })
+                    .collect(),
             }
         })
         .collect();
@@ -538,9 +596,9 @@ impl Failure for CliError {
             CliError::DomainRequired => Some(Report::new(code!("domain-name"))),
             CliError::LanguageMalformed { .. } => Some(Report::new(code!("language-form"))),
             CliError::ProbeNoInput { .. } => Some(Report::new(code!("probe-input-form"))),
+            CliError::Build(error) => error.remedy(),
             CliError::ExposeMalformed { .. }
             | CliError::Lints { .. }
-            | CliError::Build(_)
             | CliError::Host(_)
             | CliError::ProbeNotListed { .. }
             | CliError::ProbePayloadUnreadable { .. }

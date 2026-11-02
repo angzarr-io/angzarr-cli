@@ -7,9 +7,10 @@
 //! python` the player at `player/`. The domain layer is examples-proto's
 //! (`--domain-crate examples_proto`), which agg-table and
 //! table-player-policies are written over, so nothing is converted: the
-//! user's files (`tests/e2e/blackjack`) are the table's interface and
-//! implementation, agg-table's `TableAggregate` and `Table`, the policies'
-//! implementations over table-player-policies, a basic-strategy player, a
+//! table's interface is that domain layer's generated `TableAggregate`, and
+//! the user's files (`tests/e2e/blackjack`) are its implementation,
+//! agg-table's `Table`, the policies' implementations over
+//! table-player-policies, a basic-strategy player, a
 //! driver playing seed 21's hand, and the table's crates added to the
 //! manifest. From the deal the turn crosses to the Python child and back
 //! by the policies alone, until the round settles. The hand is agg-table's

@@ -34,34 +34,66 @@ through the crate's en-US Fluent catalog.
 
 ## Scaffold
 
-`angzarr scaffold rust` writes each component's interface and
-implementation into the crate's `src`, once: `wallet.rs`, a trait over the
-domain types (one method per command, fact and event; a policy's per event it
-reacts to, taking the source stream's root, the event and its `PolicyContext`
-and returning what it sends its target, each with its target root, as the
-domain layer's `<Target>Output` (its commands and the facts it declares,
-each sent in the arm its `(command).fact` declares: angzarr decision 14.69),
-or its `Bug`; a projector's, async, per event it projects, taking the event and
-its `ProjectionContext` and returning its future of `Result<(), Bug>`),
-and `wallet_impl.rs`, its implementation (every body `todo!()`, the state
-the wire type, a projector's `async fn`s holding its projection). Each command takes its `Context` too (the instant
-its events are recorded at, and the router's context of the input as
-`ctx.command`), and so does each fact, which returns its event with no
-`Result`: a fact is recorded, never refused. Appliers stay folds of the
-state and the event. Neither file imports anything from angzarr-embedded
-directly: the context types, `Failed`, `BusinessStatus`,
-`RetryableStatus` and `Bug` are `crate::domain`'s, which re-exports or defines them. An existing file is the user's and is kept. `--missing` adds
-the methods an existing file lacks and changes nothing else, refusing an
-input taken as `cmd` where the proto declares a fact, or as `fact` where it
-declares a command. `--translate <policy>:<command>=<fact>` sets a policy's
-refusal switch to translate that command's refusals into a fact of its
-source, adding a `<command>_refused` method, which takes the refused
-command, its typed refusal if it has one (`Option<T>`, or for a command
-refusing several types `Option<<Command>Refuses>`, the domain layer's choice
-of them its handler refuses with), and the refused command's
-`CommandContext`, and returns `Result<Fact, Bug>`. A policy's `Bug`, a
-diagnostic key and its args, is a defect (a policy reacts to events the
-application's own domains recorded): angzarr-embedded dead-letters it.
+Every file a scaffold writes is one of two kinds. The CLI's is regenerated
+on every run, opens with the generated marker (`@generated`), and lives only
+where generated code goes: `OUT_DIR` in Rust, the package's `_gen/` in
+Python, the one path a project's gates exclude. The user's is written once,
+never rewritten, and holds the business logic alone; it implements a
+generated, typed interface, so the user never edits a generated file to make
+the application work and a run never overwrites business logic. A generated
+path holding a file without the marker (edited by hand, or written in its
+place) is refused, nothing written, naming its remedy: move the change out,
+then restore or delete the file (one an older CLI wrote without the marker
+is safe to delete). A marked file under `_gen/` that a run no longer writes
+is an orphan, and deleted. A file an earlier CLI generated at what is now a
+user's path (its marker says so) becomes the user's, written once. A
+re-run reports each existing user file `kept` with what it `lacks` (required
+methods it does not have), what is `obsolete` (methods for a message the
+protos no longer declare there) and what is `optional` (refusal callbacks
+it may define and does not), a manifest with its pins that `drift` from this
+CLI's (never editing it), and the interface files an earlier CLI wrote
+beside the implementation as `obsolete`, for the user to delete.
+
+`angzarr scaffold rust` writes each component's implementation into the
+crate's `src`, once: `wallet_impl.rs` (every body `todo!()`, the state the
+wire type, a projector's `async fn`s holding its projection). Its
+interface is generated into the domain layer (`markup_domain`), so an
+implementation in another crate implements it: a trait over the domain
+types, one method per command, fact and event; a policy's per event it
+reacts to, taking the source stream's root, the event and its
+`PolicyContext` and returning what it sends its target, each with its target
+root, as the domain layer's `<Target>Output` (its commands and the facts it
+declares, each sent in the arm its `(command).fact` declares: angzarr
+decision 14.69), or its `Bug`; a projector's, async, per event it projects,
+taking the event and its `ProjectionContext` and returning its future of
+`Result<(), Bug>`. A change to the protos reaches the user as a compile error
+on their implementation, never inside the generated layer. Each command takes
+its `Context` too (the instant its events are recorded at, and the router's
+context of the input as `ctx.command`), and so does each fact, which returns
+its event with no `Result`: a fact is recorded, never refused. Appliers stay
+folds of the state and the event. The implementation imports nothing from
+angzarr-embedded directly: the context types, `Failed`, `BusinessStatus`,
+`RetryableStatus`, `Compensation` and `Bug` are `crate::domain`'s, which
+re-exports or defines them. `--missing` adds the required methods an
+existing file lacks and changes nothing else, refusing an input taken as
+`cmd` where the proto declares a fact, or as `fact` where it declares a
+command.
+
+A policy whose source takes facts may translate the refusal of each command
+it sends into one of them: its interface has a `<command>_refused` per
+command, taking the refused command, its typed refusal if it has one
+(`Option<T>`, or for a command refusing several types
+`Option<<Command>Refuses>`, the domain layer's choice of them its handler
+refuses with), and the refused command's `CommandContext`, and returning
+`Result<Option<<Source>Fact>, Bug>`, the domain layer's choice of the
+source's facts. Its default declines (`Ok(None)`): the refusal passes
+through to the source as `CommandRefused`. An implementation overriding it
+translates. Each is optional: `--missing` never adds one; `--translate
+<policy>:<command>=<fact>` (the refusal switch) or `--on-refused <command>`
+writes its stub into the implementation, a new one or an existing one. A
+policy's `Bug`, a diagnostic key and its args, is a defect (a policy reacts
+to events the application's own domains recorded): angzarr-embedded
+dead-letters it.
 
 A handler fails in one of four classes: a business rejection, a "no" the
 command's issuer is told of; an immediate return, "re-read and re-decide";
@@ -123,10 +155,9 @@ hand-written code and its config take the generator's names.
 
 A message named `Context`, `PolicyContext`, `CommandContext`, `Rejection`,
 `Bug`, `Failed`, `BusinessStatus` or `RetryableStatus` (the names the generated domain layers give the
-runtime's types)
-fails generation, naming the message; rename it. Files scaffolded before the
-handlers took their context are not migrated by `--missing`, which takes a
-method taking the same message as present: edit their signatures by hand.
+runtime's types), or a domain type taking a component's interface's name or
+its facts' (`<Component>Fact`), fails generation, naming the message; rename
+it, or name the component.
 
 ```
 $ angzarr scaffold rust -I proto --src src buyin/v1/wallet.proto buyin/v1/buy_in.proto buyin/v1/policies.proto
@@ -137,13 +168,19 @@ CLI's and regenerated every build. `markup_domain` is generated for prost
 types built with `wire`'s settings (bytes as `Vec<u8>`, maps as `BTreeMap`),
 and a prost crate built otherwise fails to compile with
 `angzarr-codegen-wire-bytes` or `angzarr-codegen-wire-map` at the field:
-`markup_domain` (the domain types, their
+`wire` (prost's types, and `angzarr-wire.rs`, their modules nested as their
+packages are, each carrying the allowance prost's output needs, for the
+crate root to `include!`), `markup_domain` (the domain types, their
 `DomainMessage` impls, `Rejection`, `Bug`, the re-exported `Context`,
-`PolicyContext`, `CommandContext`, `Failed`, `BusinessStatus` and `RetryableStatus`, each component's `<Component>Command`
-and `<Component>Event` enums, each with its `Payload`, the domain's payloads),
-`adapters` (each component's angzarr-embedded markup, naming those enums
-(`command = ..`, `event = ..`), named `policy-<input>-<output>` for a policy, delegating to its
-interface; a domain served by a child process is instead its command set,
+`PolicyContext`, `CommandContext`, `Failed`, `BusinessStatus`,
+`RetryableStatus` and `Compensation`, each component's `<Component>Command`
+and `<Component>Event` enums, each with its `Payload`, the domain's payloads,
+a domain's `<Component>Fact`, and each component's interface),
+`adapters` (the module `adapters`, carrying the allowances it needs, so no
+include site does: each component's angzarr-embedded markup, naming those
+enums (`command = ..`, `event = ..`), named `policy-<input>-<output>` for a
+policy, delegating to its interface, a policy's with an `#[on_refused]` per
+command it may translate; a domain served by a child process is instead its command set,
 a `CommandTarget` with `Decides` of each command, and its event set, an
 `EventSource` with `Ingests` of each fact, which a policy names as its
 target or source with no stand-in aggregate),
@@ -173,42 +210,50 @@ a domain (its aggregate or process manager) or a component's name in an
 application: its `component_name`, else its kind's default
 (`policy-<input>-<output>`, `projector-` and its anchor in kebab case), as
 the ledger's `projector-wallet-table-ledger`. The dispatch and the
-descriptor carry that name. The user's files are written once and
-completed with `--missing`: `pyproject.toml` (angzarr-client pinned by
-commit, `CLIENT_PYTHON_REV`), `logic.py`, the logic interface (a
-`typing.Protocol`: `<Domain>Logic` for a domain, per command or fact a
-decision taking the input, the state and its `CommandContext`, per event a
-fold taking the state and the event and returning the next state;
-`<Name>Logic` for a policy, per event a reaction taking the event, its
-source root and its `PageContext` and returning the target's commands and
-facts, each with its root, each sent in the arm the target declares; for a projector, per event a coroutine taking the
-projection, the event and its `PageContext`, the source domain its cover's,
-and returning the next projection) and `logic_impl.py`, its implementation
-(each method a TODO). A decision returns its events as its command's emits
-cardinality declares (one event, a tuple of several, that or None, or a
-list of any of them; a command declaring no emits, a list of any of its
-domain's events, as Rust's `Vec<<Component>Event>`) or one of its typed
-refusals, several to a command,
-answered as the client's `Refused` with the refusal on the wire; a
-refusal's `Reason` enum is its rejection code, and its plain type gives the
-generator's diagnostic `key()` (the Rust domain layer's code for the same
-refusal, `refusal_key`; an unset reason keys as the refusal alone) and
-`args()` (its set fields). A fact's events flag it, recorded as received.
-A refusal of a command a policy sends comes back to the policy's source
-(decision 14.31): a domain's logic gets `on_refused_<command>` per command
-its policies send that declares a `refuses` type (decision 14.73), taking
-the refused command, its typed refusal or None, the state and its
-`CommandContext`, and returning the events that record the pass-through
-`CommandRefused`, as a fact's flag it. `--translate
-<policy>:<command>=<fact>`, as for Rust, gives the policy's logic
-`<command>_refused` instead, taking the refused command, its typed refusal
-or None and the refused command's `CommandContext` and returning the fact
-of its source the refusal becomes, and drops the source's
-`on_refused_<command>`. The generated dispatch is the same either way: it
-registers each with the client's `on_refused` when the logic has it, so the
-user's logic, as the user's interface in Rust, is the switch.
-Both take and return the plain types and import nothing of angzarr or
-protobuf directly: `domain.py` re-exports the context from
+descriptor carry that name. The package's root holds the user's files
+alone, written once: `pyproject.toml` (angzarr-client pinned by commit,
+`CLIENT_PYTHON_REV`; its script is `<package>.__main__:main`),
+`__init__.py`, `__main__.py`, the composition root (it builds the logic, its
+dependencies its constructor's arguments, and hands it to `_gen.main.run`),
+and `logic_impl.py`, the implementation (each method a TODO) of the
+generated interface `_gen/logic.py`: an `abc.ABC` of the required methods
+(`<Domain>Logic` for a domain, per command or fact a decision taking the
+input, the state and its `CommandContext`, per event a fold taking the state
+and the event and returning the next state; `<Name>Logic` for a policy, per
+event a reaction taking the event, its source root and its `PageContext` and
+returning the target's commands and facts, each with its root, each sent in
+the arm the target declares; for a projector, per event a coroutine taking
+the projection, the event and its `PageContext`, the source domain its
+cover's, and returning the next projection), so an implementation lacking
+one fails to instantiate, naming it. A decision returns its events as its
+command's emits cardinality declares (one event, a tuple of several, that or
+None, or a list of any of them; a command declaring no emits, a list of any
+of its domain's events, as Rust's `Vec<<Component>Event>`) or one of its
+typed refusals, several to a command, answered as the client's `Refused`
+with the refusal on the wire; a refusal's `Reason` enum is its rejection
+code, and its plain type gives the generator's diagnostic `key()` (the Rust
+domain layer's code for the same refusal, `refusal_key`; an unset reason
+keys as the refusal alone) and `args()` (its set fields). A fact's events
+flag it, recorded as received. A refusal of a command a policy sends comes
+back to the policy's source (decision 14.31): the refusal callbacks are
+optional, declared in a reference `Protocol` (`<Domain>Refusals`) the
+implementation never subclasses. A domain's `on_refused_<command>`, per
+command its policies send that declares a `refuses` type (decision 14.73),
+takes the refused command, its typed refusal or None, the state and its
+`CommandContext`, and returns the events that record the pass-through
+`CommandRefused`, as a fact's flag it; the implementation is created with
+one per such command but one the refusal switch translates. A policy's
+`<command>_refused`, per command it sends when its source takes facts, takes
+the refused command, its typed refusal or None and the refused command's
+`CommandContext` and returns the fact of its source the refusal becomes;
+the implementation is created with the one `--translate
+<policy>:<command>=<fact>` selects, returning that fact. The generated
+dispatch registers each callback with the client's `on_refused` when the
+logic has it (`hasattr`), so deleting one passes that refusal through, and
+`--missing` never adds one back; `--translate` and `--on-refused <command>`
+write the one each names into an existing implementation. The logic takes
+and returns the plain types and imports nothing of angzarr or protobuf
+directly: `_gen/domain.py` re-exports the context from
 `angzarr_client.router`, with the classes the logic fails with, both
 angzarr-client-python's and each a diagnostic key and its args: `Rejection`
 (a domain's), raised to refuse its command (`raise Rejection("key",
@@ -217,26 +262,30 @@ unless given second, or INVALID_ARGUMENT, NOT_FOUND, ALREADY_EXISTS,
 OUT_OF_RANGE or PERMISSION_DENIED), and `Bug`, raised for a defect (`raise
 Bug("key", name=value)`, answered ROUTER_REASON_UNHANDLED_HANDLER_ERROR with
 the key and args as its cause; angzarr-embedded alerts it and dead-letters
-the command). The CLI's files are rewritten on every run: `domain.py` (the
-messages as frozen dataclasses and integer enums, a map a dict; each event
-a command emits gets a classmethod building it from that command,
-`MoveDecided.from_command(cmd, action=...)`, copying every field the two
-share by name and type and taking the rest as keywords, or
-`from_<command>` per command when several emit it), `_descriptor.py` (the
-component's `ComponentDescriptor`, generated from its protos with
-`--rules-version`, for the child to answer `Describe` with unchanged),
-`buf.gen.yaml`, `main.py`, `__main__.py`, `_version.py` and the dispatch
-under `_gen`, which converts the wire's messages to the plain types and
-back around each call; a projector's coroutines run on the dispatch's one
-event loop. Each generated file stands on angzarr-client-python's public
-API alone (`angzarr_client.router`'s `AggregateDispatch`,
+the command); a process manager's also `Compensation`, its rollback tooling
+(decision 14.74). Everything under `_gen/` is the CLI's, rewritten on every
+run, each import of the project's own relative and none of a user module:
+`domain.py` (the messages as frozen dataclasses and integer enums, a map a
+dict; each event a command emits gets a classmethod building it from that
+command, `MoveDecided.from_command(cmd, action=...)`, copying every field
+the two share by name and type and taking the rest as keywords, or
+`from_<command>` per command when several emit it), `logic.py`,
+`_descriptor.py` (the component's `ComponentDescriptor`, generated from its
+protos with `--rules-version`, for the child to answer `Describe` with
+unchanged), `main.py` (the child's host over the logic it is handed),
+`_version.py`, the dispatch, which converts the wire's messages to the plain
+types and back around each call (a projector's coroutines run on the
+dispatch's one event loop), and buf's message types; so is the project's
+`buf.gen.yaml`. Each generated file stands on angzarr-client-python's
+public API alone (`angzarr_client.router`'s `AggregateDispatch`,
 `ProcessManagerDispatch`, `PolicyDispatch` and `ProjectorDispatch`,
 `ComponentHost.add_<kind>(dispatch, descriptor)`, `run_child`), so a
-hand-written one can take its place; the client's `describe(dispatch)` of a
-generated dispatch is its generated descriptor, so a hand-written one is
-described without the hex. Every run ends with `buf generate`
-(the message types, their imports rerooted, angzarr's own under
-`angzarr_client.proto`) and `uv lock`, so the project is ready for
+hand-written dispatch can be hosted in its place from `__main__.py`; the
+client's `describe(dispatch)` of a generated dispatch is its generated
+descriptor, so a hand-written one is described without the hex. Every run
+ends with `buf generate` (the message types, headed with the generated
+marker, their imports rerooted: angzarr's own under `angzarr_client.proto`,
+the project's relative) and `uv lock`, so the project is ready for
 angzarr-embedded's `uv run --locked angzarr-<name>`, the lock and the
 message types on disk to commit; `--no-lock` skips the lock. `buf generate`
 reads the protos from `--proto-git` at `--proto-ref` (under its `proto`, as
@@ -262,12 +311,15 @@ angzarr-embedded application's startup into the crate root. The user's, written
 once and never rewritten: `angzarr.yaml`, the host config, seeded from the
 flags at the current `schema_version`; `Cargo.toml`, angzarr-embedded's crates pinned at the commit this CLI
 generates for, angzarr-build the directory given or this CLI's repository;
-and `src/driver.rs`, what the application does once it is up. The CLI's,
-rewritten on every run from the protos and the `angzarr.yaml` on disk:
-`build.rs`, one call to `angzarr_build::app`, and `src/main.rs`, the generated
-layer's modules, each in-process component's interface and implementation,
-and an async `main` running the host with the generated `register()`, which
-registers the in-process components the config lists.
+`src/main.rs`, a module per in-process component's implementation, the
+driver's, and an async `main` running the host with the generated
+`register()`, which registers the in-process components the config lists,
+and the user's own modules beside them; and `src/driver.rs`, what the
+application does once it is up. The CLI's, rewritten on every run from the
+protos and the `angzarr.yaml` on disk: `build.rs`, one call to
+`angzarr_build::app`, which writes the generated layer into `OUT_DIR` every
+build, `angzarr-app.rs` (the wire types, the domain layer, the adapters and
+`register()`) among it, and `src/main.rs` includes it.
 
 An application whose domain layer a library crate already generates (its
 build script running angzarr-build's `wire` and `markup_domain`, as
@@ -275,11 +327,11 @@ examples-rust's `examples_proto` does) uses that crate's types rather than
 generating its own: `--domain-crate examples_proto` writes
 `[package.metadata.angzarr.domain]` into the new manifest (`crate`, and
 `wire` from `--domain-wire examples_proto::v1`), and while the manifest on
-disk names one, `src/main.rs` is `pub use examples_proto::domain;` (and
-`pub use examples_proto::v1 as wire;`) in place of the generated modules,
-and `build.rs` calls `angzarr_build::app_without_domain`, which generates the
-adapters, descriptors and `register()` alone. Add the crate to
-`[dependencies]`; it must be generated from the same protos.
+disk names one, `build.rs` calls `angzarr_build::app_without_domain`, which
+generates the adapters, descriptors and `register()` alone, its
+`angzarr-app.rs` `pub use examples_proto::domain;` (and `pub use
+examples_proto::v1 as wire;`) in place of the generated modules. Add the
+crate to `[dependencies]`; it must be generated from the same protos.
 
 The config lists every component, in-process policies and projectors too,
 each by its name from the protos (`component_name`, or its kind's default)

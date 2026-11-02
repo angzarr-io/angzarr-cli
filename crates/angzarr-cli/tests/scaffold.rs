@@ -1,6 +1,7 @@
-//! `angzarr scaffold rust`: each component's interface and implementation
-//! written once into the crate's `src`, never overwritten, and completed
-//! with `--missing`.
+//! `angzarr scaffold rust`: each component's implementation written once
+//! into the crate's `src`, never overwritten, `--missing` adding the
+//! required methods it lacks, and what it lacks, has beyond and may define
+//! reported; the interface is the generated domain layer's.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -80,12 +81,8 @@ fn actions(out: &Output, src: &Path) -> Vec<(String, String)> {
 /// were completed.
 fn all(action: &str, completed: &[&str]) -> Vec<(String, String)> {
     [
-        "buy_in.rs",
         "buy_in_impl.rs",
-        "buy_in_wallet.rs",
         "buy_in_wallet_impl.rs",
-        "wallet.rs",
-        "wallet_buy_in.rs",
         "wallet_buy_in_impl.rs",
         "wallet_impl.rs",
     ]
@@ -101,17 +98,47 @@ fn all(action: &str, completed: &[&str]) -> Vec<(String, String)> {
     .collect()
 }
 
+/// The report's entry for `path` (relative to `src`).
+fn entry(out: &Output, src: &Path, path: &str) -> serde_json::Value {
+    let value: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    value["files"]
+        .as_array()
+        .expect("files")
+        .iter()
+        .find(|f| Path::new(f["path"].as_str().unwrap()) == src.join(path))
+        .cloned()
+        .unwrap_or_else(|| panic!("no {path}: {value}"))
+}
+
 #[test]
 fn scaffold_rust_writes_each_component_once_and_never_overwrites() {
     let src = empty_dir();
     assert_eq!(actions(&scaffold(&src, &[]), &src), all("created", &[]));
-    let mine = "//! Mine now.\n";
-    std::fs::write(src.join("wallet.rs"), mine).unwrap();
-    assert_eq!(actions(&scaffold(&src, &[]), &src), all("kept", &[]));
+    let mine = "//! Mine now.\n\nimpl Wallet for WalletImpl {}\n";
+    std::fs::write(src.join("wallet_impl.rs"), mine).unwrap();
+    let out = scaffold(&src, &[]);
+    assert_eq!(actions(&out, &src), all("kept", &[]));
     assert_eq!(
-        std::fs::read_to_string(src.join("wallet.rs")).unwrap(),
+        std::fs::read_to_string(src.join("wallet_impl.rs")).unwrap(),
         mine
     );
+    // What it lacks is reported, never written.
+    assert_eq!(
+        entry(&out, &src, "wallet_impl.rs")["lacks"],
+        serde_json::json!(["deposit", "hold", "apply_deposited", "apply_held"])
+    );
+}
+
+/// The interface an earlier CLI wrote beside the implementation is the
+/// domain layer's now: reported `obsolete`, the user's to delete.
+#[test]
+fn scaffold_rust_reports_an_earlier_interface_file_as_obsolete() {
+    let src = empty_dir();
+    scaffold(&src, &[]);
+    std::fs::write(src.join("wallet.rs"), "pub trait Wallet {}\n").unwrap();
+    let out = scaffold(&src, &[]);
+    assert_eq!(entry(&out, &src, "wallet.rs")["action"], "obsolete");
+    assert!(src.join("wallet.rs").exists());
 }
 
 #[test]
@@ -125,30 +152,38 @@ fn scaffold_rust_with_translate_writes_the_policys_callback_stub() {
         ],
     );
     assert_eq!(actions(&out, &src), all("created", &[]));
-    let policy = std::fs::read_to_string(src.join("buy_in_wallet.rs")).unwrap();
+    let policy = std::fs::read_to_string(src.join("buy_in_wallet_impl.rs")).unwrap();
     assert!(policy.contains("fn hold_refused("), "{policy}");
-    let other = std::fs::read_to_string(src.join("wallet_buy_in.rs")).unwrap();
+    let other = std::fs::read_to_string(src.join("wallet_buy_in_impl.rs")).unwrap();
     assert!(!other.contains("_refused("), "{other}");
 }
 
+/// `--missing` never adds an optional refusal callback, reporting it;
+/// `--translate` and `--on-refused` add the one each names (item S Q5).
 #[test]
-fn scaffold_rust_missing_with_translate_adds_the_policys_callback_stub() {
+fn scaffold_rust_adds_a_callback_stub_only_when_it_is_selected() {
     let src = empty_dir();
     scaffold(&src, &[]);
+    let out = scaffold(&src, &["--missing"]);
+    assert_eq!(actions(&out, &src), all("kept", &[]));
+    assert_eq!(
+        entry(&out, &src, "buy_in_wallet_impl.rs")["optional"],
+        serde_json::json!(["deposit_refused", "hold_refused"])
+    );
     let out = scaffold(
         &src,
         &[
-            "--missing",
             "--translate",
             "buyin.v1.BuyInWalletPolicy:buyin.v1.Hold=buyin.v1.HoldLost",
         ],
     );
-    assert_eq!(
-        actions(&out, &src),
-        all("kept", &["buy_in_wallet.rs", "buy_in_wallet_impl.rs"])
-    );
-    let policy = std::fs::read_to_string(src.join("buy_in_wallet.rs")).unwrap();
+    assert_eq!(actions(&out, &src), all("kept", &["buy_in_wallet_impl.rs"]));
+    let policy = std::fs::read_to_string(src.join("buy_in_wallet_impl.rs")).unwrap();
     assert!(policy.contains("fn hold_refused("), "{policy}");
+    let out = scaffold(&src, &["--on-refused", "buyin.v1.Deposit"]);
+    assert_eq!(actions(&out, &src), all("kept", &["buy_in_wallet_impl.rs"]));
+    let policy = std::fs::read_to_string(src.join("buy_in_wallet_impl.rs")).unwrap();
+    assert!(policy.contains("fn deposit_refused("), "{policy}");
 }
 
 #[test]
@@ -166,10 +201,10 @@ fn scaffold_rust_refuses_a_malformed_translate() {
 fn scaffold_rust_missing_refuses_an_input_the_proto_contradicts() {
     let src = empty_dir();
     scaffold(&src, &[]);
-    let path = src.join("buy_in.rs");
+    let path = src.join("buy_in_impl.rs");
     let mine = std::fs::read_to_string(&path)
         .unwrap()
-        .replace("fact: &HoldLost", "cmd: &HoldLost");
+        .replace("_fact: &HoldLost", "_cmd: &HoldLost");
     std::fs::write(&path, &mine).unwrap();
     let out = scaffold(&src, &["--missing"]);
     assert!(!out.status.success());

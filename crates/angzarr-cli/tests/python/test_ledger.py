@@ -9,8 +9,8 @@ from angzarr_client import ComponentHost, describe
 from angzarr_client.proto.io.angzarr.v1 import types_pb2 as t
 from angzarr_client.router import ProjectorDispatch, pack
 
-from angzarr_projector_wallet_table_ledger import domain, main
-from angzarr_projector_wallet_table_ledger._descriptor import DESCRIPTOR
+from angzarr_projector_wallet_table_ledger._gen import domain, main
+from angzarr_projector_wallet_table_ledger._gen._descriptor import DESCRIPTOR
 from angzarr_projector_wallet_table_ledger._gen.io.angzarr.examples.v1 import (
     ledger_pb2,
     table_pb2,
@@ -71,7 +71,7 @@ def test_the_generated_dispatch_projects_both_sources():
 
 
 def test_the_generated_host_registers_the_projector_by_its_name():
-    host = main.host()
+    host = main.host(Logic())
     assert host.descriptor is DESCRIPTOR
     assert DESCRIPTOR.name == "projector-wallet-table-ledger"
     generated = new_ledger_projector_dispatch(Logic())

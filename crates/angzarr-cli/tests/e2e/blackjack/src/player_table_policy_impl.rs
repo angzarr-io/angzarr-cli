@@ -6,7 +6,6 @@
 use table_player_policies::{PlayerTable, Policies, TableMove};
 
 use crate::domain::*;
-use crate::player_table_policy::PlayerTablePolicy;
 
 #[derive(Clone, Debug, Default)]
 pub struct PlayerTablePolicyImpl;

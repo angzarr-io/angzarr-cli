@@ -5,7 +5,7 @@ cause."""
 
 from __future__ import annotations
 
-from angzarr_player.domain import (
+from ._gen.domain import (
     Bug,
     CommandContext,
     DecideMove,
@@ -13,7 +13,7 @@ from angzarr_player.domain import (
     PlayerState,
     Rejection,
 )
-from angzarr_player.logic import PlayerLogic
+from ._gen.logic import PlayerLogic
 
 
 class PlayerLogicImpl(PlayerLogic):

@@ -6,8 +6,8 @@ from angzarr_client import ComponentHost, describe
 from angzarr_client.proto.io.angzarr.v1 import types_pb2 as t
 from angzarr_client.router import PolicyDispatch, pack
 
-from angzarr_policy_table_player import domain, main
-from angzarr_policy_table_player._descriptor import DESCRIPTOR
+from angzarr_policy_table_player._gen import domain, main
+from angzarr_policy_table_player._gen._descriptor import DESCRIPTOR
 from angzarr_policy_table_player._gen.io.angzarr.examples.v1 import (
     player_pb2,
     table_pb2,
@@ -50,7 +50,7 @@ def test_the_generated_dispatch_sends_the_targets_commands():
 
 
 def test_the_generated_host_registers_the_policy_by_its_name():
-    assert main.host().descriptor is DESCRIPTOR
+    assert main.host(Logic()).descriptor is DESCRIPTOR
     assert DESCRIPTOR.name == "policy-table-player"
     generated = new_table_player_policy_dispatch(Logic())
     assert describe(generated, rules_version="0.1.0") == DESCRIPTOR

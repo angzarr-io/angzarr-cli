@@ -4,7 +4,6 @@
 use table_player_policies::{Policies, TablePlayer};
 
 use crate::domain::*;
-use crate::table_player_policy::TablePlayerPolicy;
 
 #[derive(Clone, Debug, Default)]
 pub struct TablePlayerPolicyImpl;

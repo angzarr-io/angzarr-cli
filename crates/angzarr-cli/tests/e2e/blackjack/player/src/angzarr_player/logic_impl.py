@@ -5,14 +5,14 @@ from __future__ import annotations
 
 import dataclasses
 
-from angzarr_player.domain import (
+from ._gen.domain import (
     CommandContext,
     DecideMove,
     MoveAction,
     MoveDecided,
     PlayerState,
 )
-from angzarr_player.logic import PlayerLogic
+from ._gen.logic import PlayerLogic
 
 
 def _move(cmd: DecideMove) -> MoveAction:

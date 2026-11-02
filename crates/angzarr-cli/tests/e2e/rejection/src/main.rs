@@ -11,9 +11,7 @@ pub mod domain {
         "/io.angzarr.examples.v1.domain.rs"
     ));
 }
-pub mod adapters {
-    include!(concat!(env!("OUT_DIR"), "/angzarr-adapters.rs"));
-}
+include!(concat!(env!("OUT_DIR"), "/angzarr-adapters.rs"));
 include!(concat!(env!("OUT_DIR"), "/angzarr-register.rs"));
 
 pub mod driver;

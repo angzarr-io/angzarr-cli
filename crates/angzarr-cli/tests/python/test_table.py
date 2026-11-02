@@ -9,8 +9,8 @@ from angzarr_client import describe
 from angzarr_client.proto.io.angzarr.v1 import types_pb2 as t
 from angzarr_client.router import Refused, pack
 
-from angzarr_table import domain
-from angzarr_table._descriptor import DESCRIPTOR
+from angzarr_table._gen import domain
+from angzarr_table._gen._descriptor import DESCRIPTOR
 from angzarr_table._gen.io.angzarr.examples.v1 import table_pb2
 from angzarr_table._gen.io.angzarr.examples.v1.table_aggregate_angzarr import (
     new_table_aggregate_dispatch,
