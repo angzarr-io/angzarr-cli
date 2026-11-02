@@ -254,6 +254,13 @@ fn lint_app_passes_the_generated_config() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
+    // A declaration warning of the protos is shown and fails nothing: the
+    // table-to-wallet policy sends to a domain these protos do not own.
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("angzarr: warning[angzarr-codegen-unowned-target]: "),
+        "{stderr}"
+    );
 }
 
 #[test]

@@ -310,7 +310,14 @@ not list; a listed policy whose source or target domain no listed component
 owns (list the target, with its `launch`, if it runs elsewhere); an exposed
 component that is not an aggregate (a process manager, a policy, a projector
 or an upcaster); a language with no default launch and no `launch`; an empty
-`launch`.
+`launch`. A declaration of the protos the contract forbids is refused (a
+process manager subscribing to another domain or declaring an output
+domain, a policy with none, `starts` on anything but a process manager's
+input, a command refusing with another domain's type). The protos'
+warnings are shown and fail nothing: a command emitting an event its
+component folds none of, a policy whose source or target domain no
+component of the protos owns, a component naming nothing it handles, a
+process manager nothing starts.
 
 ## Probing a child
 

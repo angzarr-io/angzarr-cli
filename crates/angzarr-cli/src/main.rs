@@ -70,6 +70,8 @@ enum LintWhat {
 struct LintReport {
     config: String,
     lints: usize,
+    /// The protos' declaration warnings, which do not fail the command.
+    warnings: usize,
 }
 
 impl Viewable for LintReport {}
@@ -336,33 +338,42 @@ fn report(done: Vec<Scaffolded>) -> ScaffoldReport {
     ScaffoldReport { files }
 }
 
-/// `angzarr lint app`: each lint a warning on stderr, and a failure when
-/// there is any.
+/// `angzarr lint app`: each lint of the config and each of the protos'
+/// declaration warnings on stderr, and a failure when there is any lint.
 fn lint(args: LintArgs, catalog: &Catalog) -> Result<LintReport, Box<dyn Failure>> {
     let LintWhat::App = args.what;
     let protos: Vec<&str> = args.protos.iter().map(String::as_str).collect();
     let includes: Vec<&str> = args.includes.iter().map(String::as_str).collect();
-    let lints =
+    let linted =
         angzarr_build::lint_app(&args.config, &protos, &includes).map_err(CliError::Build)?;
-    // angzarr-fmt has no warning of its own: each lint is one line, its
-    // code and its message.
-    for lint in &lints {
+    // angzarr-fmt has no warning of its own: each lint and each warning is
+    // one line, its code and its message. A declaration warning leaves the
+    // exit status as it is; a lint of the config fails it.
+    for lint in &linted.lints {
         eprintln!(
             "angzarr: warning[{}]: {}",
             lint.code(),
             catalog.render(lint)
         );
     }
-    if !lints.is_empty() {
+    for warning in &linted.warnings {
+        eprintln!(
+            "angzarr: warning[{}]: {}",
+            warning.code(),
+            catalog.render(warning)
+        );
+    }
+    if !linted.lints.is_empty() {
         return Err(CliError::Lints {
             config: args.config.display().to_string(),
-            count: lints.len(),
+            count: linted.lints.len(),
         }
         .into());
     }
     Ok(LintReport {
         config: args.config.display().to_string(),
         lints: 0,
+        warnings: linted.warnings.len(),
     })
 }
 

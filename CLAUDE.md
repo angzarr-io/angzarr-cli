@@ -47,8 +47,11 @@ Write a non-ASCII character in a literal as an escape.
 commit) with cucumber, as one test of `just test`. Every scenario is bound
 or tagged in `tests/spec/tags.rs`, by ID or outline row (`C-0517#2`), with
 its why: `divergence_*` (the cli does otherwise, deliberately),
-`unsupported_*` (no such surface: the generator reports no warnings, and
-checks some declaration rules not at all) or `unbound*` (no binding yet).
+`unsupported_*` (no such surface) or `unbound*` (no binding yet). "The
+protos are linted" is `angzarr lint app`'s reading of them
+(`angzarr_codegen::warnings`): its errors refuse, its warnings (each this
+crate's code; the tier's `ANZ100` to `ANZ103` labels map onto them in the
+binding) leave the exit status 0.
 An untagged scenario that fails, or whose step matches no binding, fails
 the run. A difference found is a tag there, never prose elsewhere. Each
 scenario's protos are written to a `TestDir` (test-support/test_dir.rs),
