@@ -40,7 +40,7 @@ def test_the_generated_dispatch_sends_the_targets_commands():
     response = new_table_player_policy_dispatch(Logic()).handle(turn(2))
     [reaction] = response.reactions
     assert reaction.trigger_sequence == 3
-    [command] = reaction.commands
+    [command] = reaction.outputs
     assert command.cover.domain == "player"
     assert command.cover.root.value == b"p" * 16
     decided = player_pb2.DecideMove()
@@ -69,4 +69,4 @@ def test_a_hand_written_dispatch_takes_the_generated_ones_place():
     host = ComponentHost(rules_version="0.1.0").add_policy(hand, described)
     assert host.descriptor is described
     [reaction] = hand.handle(turn(1)).reactions
-    assert len(reaction.commands) == 1
+    assert len(reaction.outputs) == 1
