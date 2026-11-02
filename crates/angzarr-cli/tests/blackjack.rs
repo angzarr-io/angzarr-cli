@@ -203,7 +203,7 @@ fn the_e2e_players_decision_builds_its_event_with_from_command() {
     )
     .unwrap();
     assert!(
-        logic.contains("return MoveDecided.from_command(cmd, action=_move(cmd))"),
+        logic.contains("return [MoveDecided.from_command(cmd, action=_move(cmd))]"),
         "{logic}"
     );
 }
