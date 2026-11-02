@@ -48,7 +48,7 @@ const PROTOS: &[&str] = &[
 /// where agg-table implements the table's generated interface over
 /// examples-proto's generated domain layer, and has seed 21's hand as test
 /// support.
-const EXAMPLES_RUST_REV: &str = "73621e6f8a202321b7e21e9672dad926df22c665";
+const EXAMPLES_RUST_REV: &str = "e10d8919a0d659e0d25dddf0d691c6e41806bc39";
 /// Where [`EXAMPLES_RUST_REV`] is fetched from.
 const EXAMPLES_RUST_GIT: &str = "https://github.com/angzarr-io/angzarr-examples-rust";
 
