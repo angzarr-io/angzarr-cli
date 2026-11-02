@@ -1,12 +1,13 @@
-"""pmg-buy-in's generated project under the real angzarr-client: a command
-decided and folded, a fact recorded as received with its flag, and a
-hand-written dispatch on the client's public API in its place."""
+"""pmg-buy-in's generated project under the real angzarr-client: its starting
+fact recorded and folded, a fact recorded as received with its flag, and a
+hand-written dispatch on the client's public API in its place. Every input of
+the buy-in is a fact (angzarr decision 14.69)."""
 
 import dataclasses
 
 from angzarr_client import ComponentHost, describe
 from angzarr_client.proto.io.angzarr.v1 import types_pb2 as t
-from angzarr_client.router import ProcessManagerDispatch, Rebuilder, pack
+from angzarr_client.router import FactRecord, ProcessManagerDispatch, Rebuilder, pack
 
 from angzarr_buy_in import domain, main
 from angzarr_buy_in._descriptor import DESCRIPTOR
@@ -25,8 +26,8 @@ def request(arm, message):
 
 
 class Logic(BuyInLogicImpl):
-    def start_buy_in(self, cmd, state, ctx):
-        return domain.BuyInStarted.from_command(cmd)
+    def start_buy_in(self, fact, state, ctx):
+        return domain.BuyInStarted.from_command(fact)
 
     def apply_buy_in_started(self, state, event):
         phase = domain.BuyInStatePhase.AWAITING_HOLD
@@ -39,11 +40,12 @@ class Logic(BuyInLogicImpl):
         return dataclasses.replace(state, failure_reason=event.reason)
 
 
-def test_the_generated_dispatch_decides_and_folds_a_command():
+def test_the_generated_dispatch_records_and_folds_its_starting_fact():
     dispatch = new_buy_in_process_manager_dispatch(Logic())
-    resp = dispatch.handle(request("command", buy_in_pb2.StartBuyIn(buy_in_id=b"b")))
-    [page] = resp.events.pages
-    assert page.payload.type_url.endswith("BuyInStarted")
+    resp = dispatch.handle(request("fact", buy_in_pb2.StartBuyIn(buy_in_id=b"b")))
+    recorded, started = resp.events.pages
+    assert recorded.payload.type_url.endswith("StartBuyIn")
+    assert started.payload.type_url.endswith("BuyInStarted")
     state = buy_in_pb2.BuyInState()
     resp.events.snapshot.state.Unpack(state)
     assert state.buy_in_id == b"b"
@@ -70,19 +72,17 @@ def test_the_generated_host_registers_the_process_manager_by_its_name():
 
 
 def test_a_hand_written_dispatch_takes_the_generated_ones_place():
-    def start(cmd, state, ctx):
-        book = t.EventBook()
-        book.pages.add().payload.CopyFrom(pack(buy_in_pb2.BuyInStarted()))
-        return book
+    def start(payload, state, ctx):
+        return FactRecord(payload, (buy_in_pb2.BuyInStarted(),))
 
     hand = ProcessManagerDispatch(
         "pmg-buy-in", "buy-in", Rebuilder(buy_in_pb2.BuyInState)
-    ).on_command("io.angzarr.examples.v1.StartBuyIn", start)
+    ).on_fact("io.angzarr.examples.v1.StartBuyIn", start)
     described = describe(
         hand, rules_version="0.1.0", starting_types=[buy_in_pb2.StartBuyIn]
     )
     assert described == DESCRIPTOR
     host = ComponentHost(rules_version="0.1.0").add_process_manager(hand, described)
     assert host.descriptor is described
-    resp = hand.handle(request("command", buy_in_pb2.StartBuyIn()))
-    assert len(resp.events.pages) == 1
+    resp = hand.handle(request("fact", buy_in_pb2.StartBuyIn()))
+    assert len(resp.events.pages) == 2

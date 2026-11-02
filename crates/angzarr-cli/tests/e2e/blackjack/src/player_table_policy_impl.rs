@@ -17,12 +17,12 @@ impl PlayerTablePolicy for PlayerTablePolicyImpl {
         _source: &[u8],
         event: &MoveDecided,
         _ctx: &PolicyContext,
-    ) -> Result<Vec<(Vec<u8>, TableAggregateCommand)>, Bug> {
+    ) -> Result<Vec<(Vec<u8>, TableAggregateOutput)>, Bug> {
         let to = Policies.move_decided(event);
         let command = match to.command {
-            TableMove::Hit(c) => TableAggregateCommand::Hit(c),
-            TableMove::Stand(c) => TableAggregateCommand::Stand(c),
-            TableMove::DoubleDown(c) => TableAggregateCommand::DoubleDown(c),
+            TableMove::Hit(c) => TableAggregateOutput::Hit(c),
+            TableMove::Stand(c) => TableAggregateOutput::Stand(c),
+            TableMove::DoubleDown(c) => TableAggregateOutput::DoubleDown(c),
         };
         Ok(vec![(to.root, command)])
     }

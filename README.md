@@ -38,8 +38,10 @@ through the crate's en-US Fluent catalog.
 implementation into the crate's `src`, once: `wallet.rs`, a trait over the
 domain types (one method per command, fact and event; a policy's per event it
 reacts to, taking the source stream's root, the event and its `PolicyContext`
-and returning the commands to send, each with its target root, or its
-`Bug`; a projector's, async, per event it projects, taking the event and
+and returning what it sends its target, each with its target root, as the
+domain layer's `<Target>Output` (its commands and the facts it declares,
+each sent in the arm its `(command).fact` declares: angzarr decision 14.69),
+or its `Bug`; a projector's, async, per event it projects, taking the event and
 its `ProjectionContext` and returning its future of `Result<(), Bug>`),
 and `wallet_impl.rs`, its implementation (every body `todo!()`, the state
 the wire type, a projector's `async fn`s holding its projection). Each command takes its `Context` too (the instant
@@ -178,8 +180,8 @@ commit, `CLIENT_PYTHON_REV`), `logic.py`, the logic interface (a
 decision taking the input, the state and its `CommandContext`, per event a
 fold taking the state and the event and returning the next state;
 `<Name>Logic` for a policy, per event a reaction taking the event, its
-source root and its `PageContext` and returning the target's commands, each
-with its root; for a projector, per event a coroutine taking the
+source root and its `PageContext` and returning the target's commands and
+facts, each with its root, each sent in the arm the target declares; for a projector, per event a coroutine taking the
 projection, the event and its `PageContext`, the source domain its cover's,
 and returning the next projection) and `logic_impl.py`, its implementation
 (each method a TODO). A decision returns its events as its command's emits
@@ -194,8 +196,8 @@ refusal, `refusal_key`; an unset reason keys as the refusal alone) and
 `args()` (its set fields). A fact's events flag it, recorded as received.
 A refusal of a command a policy sends comes back to the policy's source
 (decision 14.31): a domain's logic gets `on_refused_<command>` per command
-its policies send, taking the refused command, its typed refusal or None
-(where the command refuses with types), the state and its
+its policies send that declares a `refuses` type (decision 14.73), taking
+the refused command, its typed refusal or None, the state and its
 `CommandContext`, and returning the events that record the pass-through
 `CommandRefused`, as a fact's flag it. `--translate
 <policy>:<command>=<fact>`, as for Rust, gives the policy's logic

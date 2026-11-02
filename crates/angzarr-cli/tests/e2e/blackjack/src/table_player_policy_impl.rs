@@ -15,11 +15,11 @@ impl TablePlayerPolicy for TablePlayerPolicyImpl {
         source: &[u8],
         event: &TurnStarted,
         _ctx: &PolicyContext,
-    ) -> Result<Vec<(Vec<u8>, PlayerAggregateCommand)>, Bug> {
+    ) -> Result<Vec<(Vec<u8>, PlayerAggregateOutput)>, Bug> {
         let ask = Policies.turn_started(source, event);
         Ok(vec![(
             ask.root,
-            PlayerAggregateCommand::DecideMove(ask.command),
+            PlayerAggregateOutput::DecideMove(ask.command),
         )])
     }
 }
