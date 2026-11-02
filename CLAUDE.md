@@ -50,8 +50,9 @@ its why: `divergence_*` (the cli does otherwise, deliberately),
 `unsupported_*` (no such surface: the generator reports no warnings, and
 checks some declaration rules not at all) or `unbound*` (no binding yet).
 An untagged scenario that fails, or whose step matches no binding, fails
-the run. A difference found is a tag there, never prose elsewhere. The
-runner's protos go under cargo's tmpdir for tests, each run's removed.
+the run. A difference found is a tag there, never prose elsewhere. Each
+scenario's protos are written to a `TestDir` (test-support/test_dir.rs),
+removed once compiled.
 
 ## Use `just`
 
