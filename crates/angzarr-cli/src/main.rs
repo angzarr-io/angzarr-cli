@@ -578,6 +578,7 @@ fn catalog() -> Catalog {
         angzarr_embedded_host::EN_US.1,
         angzarr_embedded_host::angzarr_embedded_host_config::angzarr_yaml::EN_US.1,
         angzarr_proto::REASONS_EN_US.1,
+        angzarr_proto_transport_embedded::REASONS_EN_US.1,
         EN_US,
     ] {
         catalog

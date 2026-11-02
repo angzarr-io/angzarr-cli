@@ -19,8 +19,10 @@ angzarr-diagnostic.workspace = true
 # `probe`: the host's child conformance probe, and its config's reader
 # (the owner's ruling, 2026-11-01).
 angzarr-embedded-host.workspace = true
-# The spec's en-US catalog of the framework keys a probe's failures carry.
+# The spec's en-US catalogs of the framework keys a probe's failures carry:
+# core's, and the local-process transport's (a child's; decision 14.64).
 angzarr-proto.workspace = true
+angzarr-proto-transport-embedded.workspace = true
 clap.workspace = true
 serde.workspace = true
 

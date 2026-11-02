@@ -245,9 +245,11 @@ impl FailureView {
 }
 
 /// The catalogs a probe's failures are in: the spec's, for a framework
-/// key, and the host's, for the host's own codes.
-const CATALOGS: [&str; 2] = [
+/// key (core's, and the local-process transport's for a child's; decision
+/// 14.64), and the host's, for the host's own codes.
+const CATALOGS: [&str; 3] = [
     angzarr_proto::REASONS_EN_US.1,
+    angzarr_proto_transport_embedded::REASONS_EN_US.1,
     angzarr_embedded_host::EN_US.1,
 ];
 
