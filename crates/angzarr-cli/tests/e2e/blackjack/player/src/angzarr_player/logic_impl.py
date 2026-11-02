@@ -8,9 +8,12 @@ import dataclasses
 from ._gen.domain import (
     CommandContext,
     DecideMove,
+    DecideMoveRefused,
     MoveAction,
     MoveDecided,
+    MoveRefused,
     PlayerState,
+    RecordMoveRefused,
 )
 from ._gen.logic import PlayerLogic
 
@@ -33,8 +36,16 @@ def _move(cmd: DecideMove) -> MoveAction:
 class PlayerLogicImpl(PlayerLogic):
     def decide_move(
         self, cmd: DecideMove, state: PlayerState, ctx: CommandContext
-    ) -> MoveDecided:
-        return MoveDecided.from_command(cmd, action=_move(cmd))
+    ) -> list[MoveDecided] | DecideMoveRefused:
+        return [MoveDecided.from_command(cmd, action=_move(cmd))]
+
+    def record_move_refused(
+        self, fact: RecordMoveRefused, state: PlayerState, ctx: CommandContext
+    ) -> list[MoveRefused]:
+        return [MoveRefused(seat=fact.seat, action=fact.action, reason=fact.reason)]
+
+    def apply_move_refused(self, state: PlayerState, event: MoveRefused) -> PlayerState:
+        return state
 
     def apply_move_decided(self, state: PlayerState, event: MoveDecided) -> PlayerState:
         return dataclasses.replace(

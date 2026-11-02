@@ -92,19 +92,21 @@ struct ScaffoldArgs {
     /// project's root.
     #[arg(long, default_value = "src")]
     src: PathBuf,
-    /// The refusal switch, set to translate for one command of one policy:
-    /// `<policy>:<command>=<fact>`, each fully qualified, for `rust` and
-    /// `python`. Every other command is passed through.
+    /// The fact a policy's refusal callback for one command returns in its
+    /// scaffolded stub: `<policy>:<command>=<fact>`, each fully qualified.
+    /// Every command of a policy's target has a required callback
+    /// (decision 14.76); the Python stub of one this names returns that
+    /// fact, any other the source's fact choice.
     #[arg(long, value_name = "POLICY:COMMAND=FACT")]
     translate: Vec<String>,
-    /// Write the optional refusal callback for one refused command into
-    /// the implementation, by the command's full name, even when the file
-    /// exists: a domain's `on_refused_<command>`, a policy's
-    /// `<command>_refused`. Repeatable; without it a run only reports them.
+    /// Write a Python domain's optional refusal handler for one refused
+    /// command (`on_refused_<command>`) into the implementation, by the
+    /// command's full name, even when the file exists. Repeatable; without
+    /// it a run only reports them. A Rust implementation has none.
     #[arg(long, value_name = "COMMAND")]
     on_refused: Vec<String>,
     /// Add the required methods an existing file lacks, changing nothing
-    /// else; optional refusal callbacks are added only by `--translate` and
+    /// else; a domain's optional refusal handlers are added only by
     /// `--on-refused`.
     #[arg(long)]
     missing: bool,
@@ -242,15 +244,10 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
         .map(translate)
         .collect::<Result<Vec<_>, _>>()?;
     let done = match args.lang {
-        Lang::Rust => angzarr_build::scaffold_into(
-            &args.src,
-            &protos,
-            &includes,
-            &translate,
-            &args.on_refused,
-            existing,
-        )
-        .map_err(CliError::Build)?,
+        Lang::Rust => {
+            angzarr_build::scaffold_into(&args.src, &protos, &includes, &translate, existing)
+                .map_err(CliError::Build)?
+        }
         Lang::Python => {
             let python = &args.python;
             let domain = python.domain.clone().ok_or(CliError::DomainRequired)?;

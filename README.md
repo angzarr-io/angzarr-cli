@@ -49,8 +49,8 @@ is an orphan, and deleted. A file an earlier CLI generated at what is now a
 user's path (its marker says so) becomes the user's, written once. A
 re-run reports each existing user file `kept` with what it `lacks` (required
 methods it does not have), what is `obsolete` (methods for a message the
-protos no longer declare there) and what is `optional` (refusal callbacks
-it may define and does not), a manifest with its pins that `drift` from this
+protos no longer declare there) and what is `optional` (a Python domain's
+refusal handlers it may define and does not), a manifest with its pins that `drift` from this
 CLI's (never editing it), and the interface files an earlier CLI wrote
 beside the implementation as `obsolete`, for the user to delete.
 
@@ -70,7 +70,7 @@ taking the event and its `ProjectionContext` and returning its future of
 on their implementation, never inside the generated layer. Each command takes
 its `Context` too (the instant its events are recorded at, and the router's
 context of the input as `ctx.command`), and so does each fact, which returns
-its event with no `Result`: a fact is recorded, never refused. Appliers stay
+its events with no `Result`: a fact is recorded, never refused. Appliers stay
 folds of the state and the event. The implementation imports nothing from
 angzarr-embedded directly: the context types, `Failed`, `BusinessStatus`,
 `RetryableStatus`, `Compensation` and `Bug` are `crate::domain`'s, which
@@ -79,19 +79,21 @@ existing file lacks and changes nothing else, refusing an input taken as
 `cmd` where the proto declares a fact, or as `fact` where it declares a
 command.
 
-A policy whose source takes facts may translate the refusal of each command
-it sends into one of them: its interface has a `<command>_refused` per
+Every command a policy sends has a refusal path (angzarr decision 14.76): a
+policy translates the refusal of each command of its target into one of its
+source's facts. Its interface has a required `<command>_refused` per
 command, taking the refused command, its typed refusal if it has one
 (`Option<T>`, or for a command refusing several types
 `Option<<Command>Refuses>`, the domain layer's choice of them its handler
 refuses with), and the refused command's `CommandContext`, and returning
-`Result<Option<<Source>Fact>, Bug>`, the domain layer's choice of the
-source's facts. Its default declines (`Ok(None)`): the refusal passes
-through to the source as `CommandRefused`. An implementation overriding it
-translates. Each is optional: `--missing` never adds one; `--translate
-<policy>:<command>=<fact>` (the refusal switch) or `--on-refused <command>`
-writes its stub into the implementation, a new one or an existing one. A
-policy's `Bug`, a diagnostic key and its args, is a defect (a policy reacts
+`Result<<Source>Fact, Bug>`, the domain layer's choice of the source's
+facts, or a `Bug` (for a command it never sends): it cannot decline. So a
+command of a policy's target that names no `refuses` type, or a policy
+whose source takes no fact, fails generation and `angzarr lint`. Each is
+written with the implementation, and `--missing` adds one an existing file
+lacks. The domain layer's `<Target>Output` is a `markup::CommandTarget` too
+(its domain and its commands): what a process manager's `Compensation` step
+names as its destination. A policy's `Bug`, a diagnostic key and its args, is a defect (a policy reacts
 to events the application's own domains recorded): angzarr-embedded
 dead-letters it.
 
@@ -117,13 +119,9 @@ now; `DeadlineExceeded` means resend only if the call is idempotent, since
 the work may have happened (a command is, by its `command_id`);
 `ResourceExhausted` means wait longer before resending, a quota or a
 capacity limit was hit. A policy's bug is its `Bug`.
-Its `Ok` follows the input's `emits_cardinality` (decision 14.50): ONE, the
-default, is one event of each emits type, the event or a tuple
-(`(TableCreated, ShoeShuffled)`); OPTIONAL is that or nothing (`Option<E>`,
-`Option<(A, B)>`); MANY is any number of any of its events,
-`Vec<<Component>Event>`, and is what an input with no emits takes. ONE or
-OPTIONAL with no emits, or with more than four (the markup's widest tuple),
-fails generation. A fact returns the same shapes, unwrapped.
+Its `Ok` is a list of the component's events, `Vec<<Component>Event>`,
+empty, one or many (decision 14.75): there is no emits cardinality. A fact
+returns the same list, unwrapped.
 
 A typed refusal is a diagnostic: its code is `refusal_key` of its full name
 and, when it holds a nested `Reason` enum as `reason`, the reason's wire name
@@ -180,7 +178,7 @@ a domain's `<Component>Fact`, and each component's interface),
 include site does: each component's angzarr-embedded markup, naming those
 enums (`command = ..`, `event = ..`), named `policy-<input>-<output>` for a
 policy, delegating to its interface, a policy's with an `#[on_refused]` per
-command it may translate; a domain served by a child process is instead its command set,
+command of its target, each translating; a domain served by a child process is instead its command set,
 a `CommandTarget` with `Decides` of each command, and its event set, an
 `EventSource` with `Ingests` of each fact, which a policy names as its
 target or source with no stand-in aggregate),
@@ -225,33 +223,31 @@ returning the target's commands and facts, each with its root, each sent in
 the arm the target declares; for a projector, per event a coroutine taking
 the projection, the event and its `PageContext`, the source domain its
 cover's, and returning the next projection), so an implementation lacking
-one fails to instantiate, naming it. A decision returns its events as its
-command's emits cardinality declares (one event, a tuple of several, that or
-None, or a list of any of them; a command declaring no emits, a list of any
-of its domain's events, as Rust's `Vec<<Component>Event>`) or one of its
-typed refusals, several to a command, answered as the client's `Refused`
+one fails to instantiate, naming it. A decision returns a list of its events
+(decision 14.75: of its emits types, or, declaring none, of any of its
+domain's events) or one of its typed refusals, several to a command, answered as the client's `Refused`
 with the refusal on the wire; a refusal's `Reason` enum is its rejection
 code, and its plain type gives the generator's diagnostic `key()` (the Rust
 domain layer's code for the same refusal, `refusal_key`; an unset reason
 keys as the refusal alone) and `args()` (its set fields). A fact's events
 flag it, recorded as received. A refusal of a command a policy sends comes
-back to the policy's source (decision 14.31): the refusal callbacks are
-optional, declared in a reference `Protocol` (`<Domain>Refusals`) the
-implementation never subclasses. A domain's `on_refused_<command>`, per
-command its policies send that declares a `refuses` type (decision 14.73),
-takes the refused command, its typed refusal or None, the state and its
-`CommandContext`, and returns the events that record the pass-through
-`CommandRefused`, as a fact's flag it; the implementation is created with
-one per such command but one the refusal switch translates. A policy's
-`<command>_refused`, per command it sends when its source takes facts, takes
-the refused command, its typed refusal or None and the refused command's
-`CommandContext` and returns the fact of its source the refusal becomes;
-the implementation is created with the one `--translate
-<policy>:<command>=<fact>` selects, returning that fact. The generated
-dispatch registers each callback with the client's `on_refused` when the
-logic has it (`hasattr`), so deleting one passes that refusal through, and
-`--missing` never adds one back; `--translate` and `--on-refused <command>`
-write the one each names into an existing implementation. The logic takes
+back to the policy's source (decision 14.31). A policy's
+`<command>_refused`, per command of its target (decision 14.76), takes the
+refused command, its typed refusal or None and the refused command's
+`CommandContext` and returns the fact of its source the refusal becomes; it
+is an abstract method of the interface, required, and the dispatch
+registers each with the client's `on_refused`. The implementation is
+created with each, the one `--translate <policy>:<command>=<fact>` names
+returning that fact. A domain's `on_refused_<command>`, per command its
+policies send (decision 14.73), takes the refused command, its typed
+refusal or None, the state and its `CommandContext`, and returns the events
+that record a hand-written policy's pass-through `CommandRefused`, as a
+fact's flag it; it is optional, declared in a reference `Protocol`
+(`<Domain>Refusals`) the implementation never subclasses, and registered
+when the logic has it (`hasattr`), so deleting one declines that refusal.
+The implementation is created with one per such command but one
+`--translate` names; `--missing` never adds one back, and `--on-refused
+<command>` writes the one it names into an existing implementation. The logic takes
 and returns the plain types and imports nothing of angzarr or protobuf
 directly: `_gen/domain.py` re-exports the context from
 `angzarr_client.router`, with the classes the logic fails with, both

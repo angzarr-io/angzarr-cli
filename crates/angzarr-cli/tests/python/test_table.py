@@ -27,7 +27,7 @@ class Logic(TableLogicImpl):
         return domain.TableRefused(reason=reason, seat=cmd.seat)
 
     def request_seat(self, cmd, state, ctx):
-        return None
+        return []
 
 
 def request(message):

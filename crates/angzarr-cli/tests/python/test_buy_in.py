@@ -27,14 +27,14 @@ def request(arm, message):
 
 class Logic(BuyInLogicImpl):
     def start_buy_in(self, fact, state, ctx):
-        return domain.BuyInStarted.from_command(fact)
+        return [domain.BuyInStarted.from_command(fact)]
 
     def apply_buy_in_started(self, state, event):
         phase = domain.BuyInStatePhase.AWAITING_HOLD
         return dataclasses.replace(state, buy_in_id=event.buy_in_id, phase=phase)
 
     def seat_confirmation_refused(self, fact, state, ctx):
-        return domain.BuyInSeatLost(buy_in_id=fact.buy_in_id, reason=fact.reason)
+        return [domain.BuyInSeatLost(buy_in_id=fact.buy_in_id, reason=fact.reason)]
 
     def apply_buy_in_seat_lost(self, state, event):
         return dataclasses.replace(state, failure_reason=event.reason)

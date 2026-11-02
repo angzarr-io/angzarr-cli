@@ -1,7 +1,7 @@
 //! `angzarr scaffold python` of every component kind, run under uv against
 //! the real angzarr-client: the ledger projector (two sources, async), the
 //! table-to-player policy, the buy-in process manager (with its fact) and
-//! the table (typed refusals, emits cardinality). Each project gets the
+//! the table (typed refusals, every handling a list). Each project gets the
 //! pytest module of `tests/python` beside its own tests: the generated
 //! dispatch answering a delivery, its generated descriptor the client's
 //! `describe` of it, and a hand-written dispatch built on the client's
@@ -16,9 +16,9 @@ use std::process::Command;
 mod test_dir;
 use test_dir::TestDir;
 
-/// The spec draft whose protos the projects generate from (decision 14.50):
-/// the angzarr-project submodule's commit.
-const SPEC_REV: &str = "7597d23465ba9af449f7b405b34099f77fc38bde";
+/// The spec draft whose protos the projects generate from (decisions 14.75
+/// and 14.76): the angzarr-project submodule's commit.
+const SPEC_REV: &str = "d5b9c65019c7f7223dc5171b9a6efc8905ed2ba7";
 
 fn here() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
