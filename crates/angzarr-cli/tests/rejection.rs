@@ -24,13 +24,16 @@ mod common;
 
 use common::{angzarr, copy_dir, here, overlay};
 
+#[path = "../../../test-support/test_dir.rs"]
+mod test_dir;
+use test_dir::TestDir;
+
 const PLAYER: &str = "io/angzarr/examples/v1/player.proto";
 
 #[test]
 #[ignore = "needs the network (buf.build, GitHub) and uv"]
 fn a_python_rejection_reaches_the_host_as_a_business_refusal_with_its_key_and_args() {
-    let app = std::env::temp_dir().join(format!("angzarr-cli-rejection-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&app);
+    let app = TestDir::new("angzarr-cli-rejection");
     copy_dir(
         &here().join("../../angzarr-project/proto/io/angzarr"),
         &app.join("proto/io/angzarr"),
@@ -75,5 +78,4 @@ fn a_python_rejection_reaches_the_host_as_a_business_refusal_with_its_key_and_ar
         "stderr:\n{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    std::fs::remove_dir_all(&app).unwrap();
 }

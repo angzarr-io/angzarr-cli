@@ -4,7 +4,10 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[path = "../../../test-support/test_dir.rs"]
+mod test_dir;
+use test_dir::TestDir;
 
 const PLAYER: &str = "io/angzarr/examples/v1/player.proto";
 const IMPL: &str = "src/angzarr_player/logic_impl.py";
@@ -25,20 +28,13 @@ fn golden(path: &str) -> String {
     std::fs::read_to_string(&golden).unwrap_or_else(|_| panic!("{}", golden.display()))
 }
 
-fn empty_dir() -> PathBuf {
-    static RUN: AtomicUsize = AtomicUsize::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "angzarr-cli-scaffold-python-test-{}-{}",
-        std::process::id(),
-        RUN.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn empty_dir() -> TestDir {
+    TestDir::new("angzarr-cli-scaffold-python-test")
 }
 
 /// A directory holding a `buf` that generates nothing, for a run offline:
 /// first on the PATH, it stands in for buf's remote plugins.
-fn offline_buf() -> PathBuf {
+fn offline_buf() -> TestDir {
     let dir = empty_dir();
     let buf = dir.join("buf");
     std::fs::write(&buf, "#!/bin/sh\nexit 0\n").unwrap();
@@ -51,12 +47,11 @@ fn offline_buf() -> PathBuf {
 fn offline(command: &mut Command) -> Output {
     let buf = offline_buf();
     let path = std::env::var_os("PATH").unwrap_or_default();
-    let path =
-        std::env::join_paths(std::iter::once(buf.clone()).chain(std::env::split_paths(&path)))
-            .unwrap();
-    let out = command.arg("--no-lock").env("PATH", path).output().unwrap();
-    std::fs::remove_dir_all(&buf).unwrap();
-    out
+    let path = std::env::join_paths(
+        std::iter::once(buf.to_path_buf()).chain(std::env::split_paths(&path)),
+    )
+    .unwrap();
+    command.arg("--no-lock").env("PATH", path).output().unwrap()
 }
 
 /// `angzarr scaffold python` for the player into `root`, offline, with
@@ -145,7 +140,8 @@ fn action_of<'a>(actions: &'a [(String, String)], path: &str) -> &'a str {
 
 #[test]
 fn scaffold_python_writes_the_golden_project() {
-    let root = empty_dir().join("player");
+    let project = empty_dir();
+    let root = project.join("player");
     let done = actions(&scaffold(&root, &[]), &root);
     assert!(
         done.iter().all(|(_, action)| action == "created"),
@@ -159,7 +155,6 @@ fn scaffold_python_writes_the_golden_project() {
         );
     }
     assert_eq!(done.len(), 17, "{done:?}");
-    std::fs::remove_dir_all(root.parent().unwrap()).unwrap();
 }
 
 #[test]
@@ -177,7 +172,6 @@ fn scaffold_python_rewrites_its_own_files_and_never_the_users() {
         std::fs::read_to_string(root.join(MAIN)).unwrap(),
         golden(MAIN)
     );
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -198,7 +192,6 @@ fn scaffold_python_missing_adds_the_absent_methods_only() {
         std::fs::read_to_string(root.join(IMPL)).unwrap(),
         format!("{mine}{applier}")
     );
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -219,7 +212,6 @@ fn scaffold_python_missing_refuses_a_command_taken_as_a_fact() {
         "{failure}"
     );
     assert_eq!(std::fs::read_to_string(root.join(IMPL)).unwrap(), mine);
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -239,7 +231,6 @@ fn scaffold_python_needs_a_domain() {
         "{failure}"
     );
     assert!(std::fs::read_dir(&root).unwrap().next().is_none());
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 /// The default run, as a user runs it, ends with the project ready for
@@ -274,13 +265,12 @@ fn scaffold_python_by_default_generates_the_wire_types_and_the_lock_and_runs_und
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 /// A protos directory of its own, outside any project: the blackjack
 /// protos and angzarr's, the spec's, as a user's checkout of the spec's
 /// `proto` holds them (angzarr-proto's beneath, for any the spec lacks).
-fn proto_dir() -> PathBuf {
+fn proto_dir() -> TestDir {
     let dir = empty_dir();
     angzarr_proto::protos::write_include_dir(&dir).unwrap();
     for protos in ["io/angzarr/examples/v1", "io/angzarr/v1"] {
@@ -334,7 +324,6 @@ fn scaffold_python_names_a_relative_directory_from_the_project_root() {
             )),
             "-I {include} --src {src}:\n{buf}"
         );
-        std::fs::remove_dir_all(&cwd).unwrap();
     }
 }
 
@@ -354,8 +343,6 @@ fn scaffold_python_names_an_absolute_directory_as_given() {
         )),
         "{buf}"
     );
-    std::fs::remove_dir_all(&protos).unwrap();
-    std::fs::remove_dir_all(&root).unwrap();
 }
 
 /// buf generates the message types from a protos directory outside the
@@ -382,6 +369,4 @@ fn scaffold_python_generates_the_wire_types_from_a_directory_outside_the_project
         );
         std::fs::remove_dir_all(&root).unwrap();
     }
-    std::fs::remove_dir_all(&protos).unwrap();
-    std::fs::remove_dir_all(&base).unwrap();
 }

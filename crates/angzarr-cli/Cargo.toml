@@ -16,11 +16,15 @@ angzarr-build.workspace = true
 angzarr-codegen.workspace = true
 angzarr-fmt.workspace = true
 angzarr-diagnostic.workspace = true
+# `probe`: the host's child conformance probe, and its config's reader
+# (the owner's ruling, 2026-11-01).
+angzarr-embedded-host.workspace = true
+# The spec's en-US catalog of the framework keys a probe's failures carry.
+angzarr-proto.workspace = true
 clap.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
-angzarr-proto.workspace = true
 serde_json.workspace = true
 
 [lints]
