@@ -18,7 +18,7 @@ use test_dir::TestDir;
 
 /// The spec draft whose protos the projects generate from (decisions 14.75
 /// and 14.76): the angzarr-project submodule's commit.
-const SPEC_REV: &str = "d5b9c65019c7f7223dc5171b9a6efc8905ed2ba7";
+const SPEC_REV: &str = "32139250b6c910cea1b52da01ea48952be5e1b4e";
 
 fn here() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
