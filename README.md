@@ -304,7 +304,7 @@ the protos, as `scaffold app` does before it writes anything (a config with
 lints is refused, and nothing is written). It reads the config through
 angzarr-embedded-host-config, the schema angzarr-embedded-host runs: a newer
 `schema_version`, an unknown key or value, or a component with no `kind`, is
-refused, naming its key path; a file with no stamp reads as version 1. The lints: a listed domain or policy no component of the
+refused, naming its key path; a file with no stamp, or stamped version 1, reads as the current version 2, each key it leaves out its default. The lints: a listed domain or policy no component of the
 protos is; a component listed twice; a domain of the protos the config does
 not list; a listed policy whose source or target domain no listed component
 owns (list the target, with its `launch`, if it runs elsewhere); an exposed
