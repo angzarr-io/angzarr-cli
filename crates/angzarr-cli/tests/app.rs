@@ -10,6 +10,9 @@ use std::process::{Command, Output};
 mod test_dir;
 use test_dir::TestDir;
 
+use angzarr_codegen::{AppError, AppLint, Warning};
+use angzarr_diagnostic::{Diagnostic, code};
+
 const BLACKJACK: &[&str] = &[
     "io/angzarr/examples/v1/table.proto",
     "io/angzarr/examples/v1/player.proto",
@@ -34,7 +37,7 @@ fn golden(path: &str) -> String {
 }
 
 fn empty_dir() -> TestDir {
-    TestDir::new("angzarr-cli-app-test")
+    TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-app-test"))
 }
 
 fn angzarr(args: &[&str], root: &Path) -> Output {
@@ -224,7 +227,8 @@ fn scaffold_app_refuses_exposing_a_policy_and_writes_nothing() {
     let out = angzarr(&args, &root);
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("angzarr-codegen-app-refused"), "{stderr}");
+    let refused = AppError::Refused { lints: Vec::new() };
+    assert!(stderr.contains(refused.code()), "{stderr}");
     assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
 }
 
@@ -238,7 +242,7 @@ fn scaffold_app_refuses_a_malformed_expose() {
         assert!(!out.status.success(), "{value}");
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert!(
-            stderr.contains("angzarr-cli-expose-malformed"),
+            stderr.contains(code!("expose-malformed")),
             "{value}: {stderr}"
         );
     }
@@ -257,8 +261,12 @@ fn lint_app_passes_the_generated_config() {
     // A declaration warning of the protos is shown and fails nothing: the
     // table-to-wallet policy sends to a domain these protos do not own.
     let stderr = String::from_utf8_lossy(&out.stderr);
+    let unowned = Warning::UnownedTarget {
+        policy: String::new(),
+        domain: String::new(),
+    };
     assert!(
-        stderr.contains("angzarr: warning[angzarr-codegen-unowned-target]: "),
+        stderr.contains(&format!("angzarr: warning[{}]: ", unowned.code())),
         "{stderr}"
     );
 }
@@ -290,12 +298,25 @@ fn lint_app_reports_each_lint_and_fails() {
     let out = angzarr(&["lint", "app"], &root);
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
+    let s = String::new;
     for code in [
-        "angzarr-codegen-app-empty-launch",
-        "angzarr-codegen-app-not-exposable",
-        "angzarr-codegen-app-unknown-component",
-        "angzarr-codegen-app-unknown-language",
-        "angzarr-cli-lints",
+        AppLint::EmptyLaunch { name: s() }.code(),
+        AppLint::NotExposable {
+            name: s(),
+            kind: s(),
+        }
+        .code(),
+        AppLint::UnknownComponent {
+            name: s(),
+            kind: s(),
+        }
+        .code(),
+        AppLint::UnknownLanguage {
+            name: s(),
+            language: s(),
+        }
+        .code(),
+        code!("lints"),
     ] {
         assert!(stderr.contains(code), "{code}:\n{stderr}");
     }
@@ -327,7 +348,7 @@ fn scaffold_app_refuses_a_malformed_language_and_the_python_flag_is_gone() {
         assert!(!out.status.success(), "{value}");
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert!(
-            stderr.contains("angzarr-cli-language-malformed"),
+            stderr.contains(code!("language-malformed")),
             "{value}: {stderr}"
         );
     }

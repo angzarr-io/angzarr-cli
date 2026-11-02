@@ -3,7 +3,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use angzarr_diagnostic::{Arg, Diagnostic};
+use angzarr_diagnostic::{Arg, Diagnostic, code};
 
 /// How a result is written.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,7 +71,7 @@ impl std::error::Error for UnknownFormat {}
 
 impl Diagnostic for UnknownFormat {
     fn code(&self) -> &'static str {
-        "angzarr-fmt-unknown-format"
+        code!("unknown-format")
     }
 
     fn args(&self) -> Vec<(&'static str, Arg)> {
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn an_unknown_name_is_refused_with_the_name_as_an_arg() {
         let err = "xml".parse::<Format>().unwrap_err();
-        assert_eq!(err.code(), "angzarr-fmt-unknown-format");
+        assert_eq!(err.code(), code!("unknown-format"));
         assert!(matches!(&err.args()[0], ("name", Arg::Str(s)) if s == "xml"));
     }
 }

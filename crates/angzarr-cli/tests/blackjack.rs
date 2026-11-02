@@ -54,7 +54,7 @@ const EXAMPLES_RUST_GIT: &str = "https://github.com/angzarr-io/angzarr-examples-
 #[test]
 #[ignore = "needs the network (buf.build, GitHub) and uv"]
 fn a_scaffolded_blackjack_app_plays_seed_21_to_settlement_with_the_python_player() {
-    let app = TestDir::new("angzarr-cli-blackjack");
+    let app = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-blackjack"));
     copy_dir(
         &here().join("../../angzarr-project/proto/io/angzarr"),
         &app.join("proto/io/angzarr"),
@@ -145,7 +145,7 @@ fn scaffold(app: &std::path::Path, build: &str) {
 fn patch_manifest(app: &std::path::Path, build: &str) -> TestDir {
     // Beside the app, not in it: a path dependency under the app's
     // directory would be a member of its workspace.
-    let embedded = TestDir::new("angzarr-cli-blackjack-embedded");
+    let embedded = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-blackjack-embedded"));
     let into = embedded.display().to_string();
     git(app, &["clone", "--quiet", ANGZARR_EMBEDDED_GIT, &into]);
     git(&embedded, &["checkout", "--quiet", ANGZARR_EMBEDDED_REV]);

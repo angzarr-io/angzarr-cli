@@ -18,6 +18,18 @@ use std::process::{Command, Output};
 mod test_dir;
 use test_dir::TestDir;
 
+use angzarr_diagnostic::{Diagnostic, code};
+use angzarr_embedded_host::{HandshakeError, HostError};
+
+/// The host's failure to start a child whose handshake failed: its code is
+/// the host's, whatever the cause.
+fn handshake() -> HostError {
+    HostError::Handshake {
+        domain: String::new(),
+        cause: HandshakeError::Closed,
+    }
+}
+
 /// `angzarr probe <args>` in `dir`.
 fn probe(dir: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_angzarr"))
@@ -30,7 +42,7 @@ fn probe(dir: &Path, args: &[&str]) -> Output {
 
 /// A directory holding `config` as its `angzarr.yaml`.
 fn app(config: &str) -> TestDir {
-    let dir = TestDir::new("angzarr-cli-probe");
+    let dir = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-probe"));
     std::fs::write(dir.join("angzarr.yaml"), config).unwrap();
     dir
 }
@@ -110,14 +122,19 @@ fn a_child_that_cannot_start_fails_the_launch_step() {
     assert_eq!(report["passed"], false);
     assert_eq!(outcomes(&report), failed_after(0));
     let failure = &report["steps"][0]["failure"];
-    assert_eq!(failure["code"], "angzarr-embedded-host-spawn");
+    let spawn = HostError::Spawn {
+        domain: String::new(),
+        program: String::new(),
+        kind: String::new(),
+    };
+    assert_eq!(failure["code"], spawn.code());
     assert_eq!(failure["args"]["program"], "/nonexistent/angzarr-player");
     assert_eq!(
         failure["message"],
         "component \"player\": could not start \"/nonexistent/angzarr-player\" (NotFound)"
     );
     let stderr = String::from_utf8(out.stderr).unwrap();
-    assert!(stderr.contains("angzarr-cli-probe-failed"), "{stderr}");
+    assert!(stderr.contains(code!("probe-failed")), "{stderr}");
 }
 
 /// A malformed handshake fails the handshake step under the spec's key,
@@ -133,7 +150,7 @@ fn a_malformed_handshake_fails_the_handshake_step_under_the_specs_key() {
     let report = json(&out);
     assert_eq!(outcomes(&report), failed_after(1));
     let failure = &report["steps"][1]["failure"];
-    assert_eq!(failure["code"], "angzarr-embedded-host-handshake");
+    assert_eq!(failure["code"], handshake().code());
     let cause = &failure["args"]["cause"];
     assert_eq!(cause["code"], "HOST_REASON_HANDSHAKE_MALFORMED");
     assert_eq!(
@@ -167,8 +184,11 @@ fn a_child_whose_stdout_ends_first_fails_the_handshake_step() {
             "Passed: false",
             "Step       Outcome  Detail",
             "launch     passed",
-            "handshake  failed   component \"player\": stdout closed before a handshake \
-             [angzarr-embedded-host-handshake]",
+            &format!(
+                "handshake  failed   component \"player\": stdout closed before a handshake \
+                 [{}]",
+                handshake().code()
+            ),
             "health     not-run",
             "describe   not-run",
             "handle     not-run",
@@ -192,26 +212,27 @@ fn a_component_not_listed_or_given_no_input_is_refused() {
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert!(out.stdout.is_empty());
     let failure: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
-    assert_eq!(failure["error"]["code"], "angzarr-cli-probe-not-listed");
+    assert_eq!(failure["error"]["code"], code!("probe-not-listed"));
     assert_eq!(failure["error"]["args"]["component"], "dealer");
     let out = probe(&dir, &["player"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let failure: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
-    assert_eq!(failure["error"]["code"], "angzarr-cli-probe-no-input");
-    assert_eq!(failure["remedy"]["code"], "angzarr-cli-probe-input-form");
+    assert_eq!(failure["error"]["code"], code!("probe-no-input"));
+    assert_eq!(failure["remedy"]["code"], code!("probe-input-form"));
 }
 
 /// A config that cannot be read is the host's own failure to read it.
 #[test]
 fn a_config_that_cannot_be_read_is_refused() {
-    let dir = TestDir::new("angzarr-cli-probe");
+    let dir = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-probe"));
     let out = probe(&dir, &["player", "--command", "/x.SitDown"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let failure: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
-    assert_eq!(
-        failure["error"]["code"],
-        "angzarr-embedded-host-config-unreadable"
-    );
+    let unreadable = HostError::ConfigUnreadable {
+        path: String::new(),
+        kind: String::new(),
+    };
+    assert_eq!(failure["error"]["code"], unreadable.code());
     assert_eq!(
         failure["error"]["message"],
         "the config angzarr.yaml could not be read (NotFound)"

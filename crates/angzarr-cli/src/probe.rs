@@ -281,6 +281,8 @@ impl fmt::Display for English<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use angzarr_diagnostic::code;
+    use angzarr_embedded_host::{HandshakeError, HostError};
 
     /// A probe that took its first `passed` steps, failed the next with
     /// `failure`, and ran none after.
@@ -308,15 +310,13 @@ mod tests {
         }
     }
 
+    /// The host's own error for a handshake that timed out, so no code of
+    /// the host's is spelled here.
     fn timed_out() -> Report {
-        Report::new("angzarr-embedded-host-handshake")
-            .arg("domain", "player")
-            .arg(
-                "cause",
-                Arg::nested(
-                    &Report::new("HOST_REASON_HANDSHAKE_TIMEOUT").arg("timeout_ms", 500u64),
-                ),
-            )
+        Report::of(&HostError::Handshake {
+            domain: "player".to_string(),
+            cause: HandshakeError::Timeout { timeout_ms: 500 },
+        })
     }
 
     /// A failed step is its code, its args (a cause nested, of the same
@@ -325,6 +325,7 @@ mod tests {
     fn a_failed_step_is_its_code_args_and_english() {
         let report = ProbeReport::of("player", &probed(1, timed_out()));
         let json = serde_json::to_value(&report).unwrap();
+        let handshake = timed_out();
         assert_eq!(json["component"], "player");
         assert_eq!(json["passed"], false);
         assert_eq!(
@@ -337,7 +338,7 @@ mod tests {
                 "step": "handshake",
                 "outcome": "failed",
                 "failure": {
-                    "code": "angzarr-embedded-host-handshake",
+                    "code": handshake.code(),
                     "message": "component \"player\": no handshake within 500 ms",
                     "args": {
                         "cause": {
@@ -372,7 +373,7 @@ mod tests {
         let failure = verdict(&failed).expect("a failure");
         assert_eq!(
             failure.to_string(),
-            "angzarr-cli-probe-failed component=player step=handle"
+            concat!(code!("probe-failed"), " component=player step=handle")
         );
         let passed = ProbeReport::of("player", &probed(6, timed_out()));
         assert!(verdict(&passed).is_none());
@@ -392,7 +393,11 @@ mod tests {
             [
                 "handshake",
                 "failed",
-                "component \"player\": no handshake within 500 ms [angzarr-embedded-host-handshake]"
+                format!(
+                    "component \"player\": no handshake within 500 ms [{}]",
+                    timed_out().code()
+                )
+                .as_str()
             ]
         );
         assert_eq!(rows[0], ["launch", "passed", ""]);
@@ -471,7 +476,11 @@ mod tests {
     /// A payload file is the input's message, as it is.
     #[test]
     fn a_payload_file_is_the_inputs_message() {
-        let dir = std::env::temp_dir().join(format!("angzarr-cli-payload-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "{}-payload-{}",
+            env!("CARGO_PKG_NAME"),
+            std::process::id()
+        ));
         std::fs::write(&dir, [8u8, 3]).unwrap();
         let path = dir.display().to_string();
         let domain = component(ComponentKindConfig::Domain, "python");

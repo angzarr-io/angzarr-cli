@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use angzarr_diagnostic::{Arg, Diagnostic};
+use angzarr_diagnostic::{Arg, Diagnostic, code};
 
 use crate::failure::Failure;
 
@@ -39,9 +39,9 @@ impl std::error::Error for FmtError {}
 impl Diagnostic for FmtError {
     fn code(&self) -> &'static str {
         match self {
-            FmtError::Serialize { .. } => "angzarr-fmt-serialize",
-            FmtError::Write { .. } => "angzarr-fmt-write",
-            FmtError::CatalogParse { .. } => "angzarr-fmt-catalog-parse",
+            FmtError::Serialize { .. } => code!("serialize"),
+            FmtError::Write { .. } => code!("write"),
+            FmtError::CatalogParse { .. } => code!("catalog-parse"),
         }
     }
 
@@ -75,9 +75,9 @@ mod tests {
     /// The message ids of this crate's catalog.
     fn messages() -> Vec<&'static str> {
         let mut ids: Vec<&str> = EN_US
+            .1
             .lines()
             .filter_map(|line| line.split_once(" = ").map(|(id, _)| id))
-            .filter(|id| id.starts_with("angzarr-fmt-"))
             .collect();
         ids.sort_unstable();
         ids
@@ -95,8 +95,8 @@ mod tests {
     /// 14.37), and core's catalog check agrees with the catalog.
     #[test]
     fn every_error_displays_as_its_code_and_args() {
-        let problems =
-            angzarr_diagnostic::catalog::check("angzarr-fmt", EN_US, &diagnostic_samples());
+        let (krate, ftl) = EN_US;
+        let problems = angzarr_diagnostic::catalog::check(krate, ftl, &diagnostic_samples());
         assert_eq!(problems, Vec::new());
     }
 }

@@ -115,7 +115,7 @@ mod tests {
 
     fn catalog() -> Catalog {
         let mut c = Catalog::en_us();
-        c.add(crate::catalog::EN_US).unwrap();
+        c.add(crate::catalog::EN_US.1).unwrap();
         c.add("test-refused = { $name } is refused\ntest-fix = use { $name }\n")
             .unwrap();
         c

@@ -12,7 +12,7 @@ use angzarr_fmt::{Catalog, Failure, Format, Viewable};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::Serialize;
 
-use angzarr_diagnostic::{Arg, Diagnostic, Report};
+use angzarr_diagnostic::{Arg, Diagnostic, Report, code};
 
 mod output;
 mod probe;
@@ -484,17 +484,17 @@ impl std::error::Error for CliError {}
 impl Diagnostic for CliError {
     fn code(&self) -> &str {
         match self {
-            CliError::TranslateMalformed { .. } => "angzarr-cli-translate-malformed",
-            CliError::DomainRequired => "angzarr-cli-domain-required",
-            CliError::ExposeMalformed { .. } => "angzarr-cli-expose-malformed",
-            CliError::LanguageMalformed { .. } => "angzarr-cli-language-malformed",
-            CliError::Lints { .. } => "angzarr-cli-lints",
+            CliError::TranslateMalformed { .. } => code!("translate-malformed"),
+            CliError::DomainRequired => code!("domain-required"),
+            CliError::ExposeMalformed { .. } => code!("expose-malformed"),
+            CliError::LanguageMalformed { .. } => code!("language-malformed"),
+            CliError::Lints { .. } => code!("lints"),
             CliError::Build(error) => error.code(),
             CliError::Host(error) => error.code(),
-            CliError::ProbeNotListed { .. } => "angzarr-cli-probe-not-listed",
-            CliError::ProbeNoInput { .. } => "angzarr-cli-probe-no-input",
-            CliError::ProbePayloadUnreadable { .. } => "angzarr-cli-probe-payload-unreadable",
-            CliError::ProbeFailed { .. } => "angzarr-cli-probe-failed",
+            CliError::ProbeNotListed { .. } => code!("probe-not-listed"),
+            CliError::ProbeNoInput { .. } => code!("probe-no-input"),
+            CliError::ProbePayloadUnreadable { .. } => code!("probe-payload-unreadable"),
+            CliError::ProbeFailed { .. } => code!("probe-failed"),
         }
     }
 
@@ -534,10 +534,10 @@ impl Diagnostic for CliError {
 impl Failure for CliError {
     fn remedy(&self) -> Option<Report> {
         match self {
-            CliError::TranslateMalformed { .. } => Some(Report::new("angzarr-cli-translate-form")),
-            CliError::DomainRequired => Some(Report::new("angzarr-cli-domain-name")),
-            CliError::LanguageMalformed { .. } => Some(Report::new("angzarr-cli-language-form")),
-            CliError::ProbeNoInput { .. } => Some(Report::new("angzarr-cli-probe-input-form")),
+            CliError::TranslateMalformed { .. } => Some(Report::new(code!("translate-form"))),
+            CliError::DomainRequired => Some(Report::new(code!("domain-name"))),
+            CliError::LanguageMalformed { .. } => Some(Report::new(code!("language-form"))),
+            CliError::ProbeNoInput { .. } => Some(Report::new(code!("probe-input-form"))),
             CliError::ExposeMalformed { .. }
             | CliError::Lints { .. }
             | CliError::Build(_)
@@ -555,8 +555,12 @@ impl From<CliError> for Box<dyn Failure> {
     }
 }
 
-/// This crate's en-US messages.
-const EN_US: &str = include_str!("../locales/en-US/angzarr-cli.ftl");
+/// This crate's en-US messages: its package name, and its catalog, each id
+/// under that name (written by the build, `angzarr_diagnostic::build`).
+const EN_US: (&str, &str) = (
+    env!("CARGO_PKG_NAME"),
+    include_str!(concat!(env!("OUT_DIR"), "/en-US.ftl")),
+);
 
 /// Which build of the CLI this is.
 #[derive(Serialize)]
@@ -581,16 +585,16 @@ fn version() -> Version {
 fn catalog() -> Catalog {
     let mut catalog = Catalog::en_us();
     for ftl in [
-        angzarr_fmt::EN_US,
-        angzarr_codegen::EN_US,
-        angzarr_build::EN_US,
+        angzarr_fmt::EN_US.1,
+        angzarr_codegen::EN_US.1,
+        angzarr_build::EN_US.1,
         // The probe's refusals to start: the host's own, a config's
         // reader's, and the spec's keys.
         angzarr_embedded_host::EN_US.1,
         angzarr_embedded_host::angzarr_embedded_host_config::angzarr_yaml::EN_US.1,
         angzarr_proto::REASONS_EN_US.1,
         angzarr_proto_transport_embedded::REASONS_EN_US.1,
-        EN_US,
+        EN_US.1,
     ] {
         catalog
             .add(ftl)
@@ -626,6 +630,15 @@ mod tests {
         let remedy = malformed.remedy().expect("a remedy");
         let domain = CliError::DomainRequired;
         let domain_remedy = domain.remedy().expect("a remedy");
+        let language = CliError::LanguageMalformed {
+            value: "x".to_string(),
+        };
+        let language_remedy = language.remedy().expect("a remedy");
+        let no_input = CliError::ProbeNoInput {
+            component: "player".to_string(),
+            kind: "domain".to_string(),
+        };
+        let no_input_remedy = no_input.remedy().expect("a remedy");
         vec![
             Box::new(malformed),
             Box::new(remedy),
@@ -634,10 +647,8 @@ mod tests {
             Box::new(CliError::ExposeMalformed {
                 value: "x".to_string(),
             }),
-            Box::new(CliError::LanguageMalformed {
-                value: "x".to_string(),
-            }),
-            Box::new(Report::new("angzarr-cli-language-form")),
+            Box::new(language),
+            Box::new(language_remedy),
             Box::new(CliError::Lints {
                 config: "x".to_string(),
                 count: 2,
@@ -646,11 +657,8 @@ mod tests {
                 component: "dealer".to_string(),
                 config: "angzarr.yaml".to_string(),
             }),
-            Box::new(CliError::ProbeNoInput {
-                component: "player".to_string(),
-                kind: "domain".to_string(),
-            }),
-            Box::new(Report::new("angzarr-cli-probe-input-form")),
+            Box::new(no_input),
+            Box::new(no_input_remedy),
             Box::new(CliError::ProbePayloadUnreadable {
                 path: "move.bin".to_string(),
                 kind: "NotFound".to_string(),
@@ -664,7 +672,7 @@ mod tests {
 
     #[test]
     fn every_error_has_a_catalog_message_with_its_args() {
-        let problems = angzarr_fmt::check(EN_US, &diagnostic_samples());
+        let problems = angzarr_fmt::check(EN_US.1, &diagnostic_samples());
         assert!(problems.is_empty(), "{problems:#?}");
     }
 
@@ -673,8 +681,8 @@ mod tests {
     /// error displays as that error.
     #[test]
     fn every_error_displays_as_its_code_and_args() {
-        let problems =
-            angzarr_diagnostic::catalog::check("angzarr-cli", EN_US, &diagnostic_samples());
+        let (krate, ftl) = EN_US;
+        let problems = angzarr_diagnostic::catalog::check(krate, ftl, &diagnostic_samples());
         assert_eq!(problems, Vec::new());
         let build = BuildError::Uv {
             detail: "x".to_string(),

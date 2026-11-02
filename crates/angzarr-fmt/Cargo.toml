@@ -17,5 +17,10 @@ serde.workspace = true
 serde_json.workspace = true
 unic-langid.workspace = true
 
+# The build writes the catalog's source under the crate's name
+# (angzarr_diagnostic::build): no catalog spells its crate's name.
+[build-dependencies]
+angzarr-diagnostic = { workspace = true, features = ["build"] }
+
 [lints]
 workspace = true

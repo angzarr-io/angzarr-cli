@@ -25,7 +25,10 @@ fn here() -> PathBuf {
 }
 
 fn scratch(name: &str) -> TestDir {
-    TestDir::new(&format!("angzarr-cli-scaffold-python-kinds-{name}"))
+    TestDir::new(&format!(
+        "{}-scaffold-python-kinds-{name}",
+        env!("CARGO_PKG_NAME")
+    ))
 }
 
 /// Scaffolds `proto` as `domain` (a domain or a component name) into a

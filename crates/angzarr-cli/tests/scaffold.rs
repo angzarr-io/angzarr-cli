@@ -9,6 +9,20 @@ use std::process::{Command, Output};
 mod test_dir;
 use test_dir::TestDir;
 
+use angzarr_diagnostic::Diagnostic;
+
+/// The generator's code for an input of the wrong kind, from its error.
+fn input_mismatch() -> String {
+    angzarr_codegen::UseError::InputMismatch {
+        path: String::new(),
+        message: String::new(),
+        expected: String::new(),
+        found: String::new(),
+    }
+    .code()
+    .to_string()
+}
+
 const BUYIN: &[&str] = &[
     "buyin/v1/wallet.proto",
     "buyin/v1/buy_in.proto",
@@ -23,7 +37,7 @@ fn fixtures() -> String {
 }
 
 fn empty_dir() -> TestDir {
-    TestDir::new("angzarr-cli-scaffold-test")
+    TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-scaffold-test"))
 }
 
 /// `angzarr scaffold rust` over the buy-in protos into `src`, with `extra`.
@@ -160,11 +174,6 @@ fn scaffold_rust_missing_refuses_an_input_the_proto_contradicts() {
     let out = scaffold(&src, &["--missing"]);
     assert!(!out.status.success());
     let failure: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
-    assert!(
-        failure
-            .to_string()
-            .contains("angzarr-codegen-input-mismatch"),
-        "{failure}"
-    );
+    assert!(failure.to_string().contains(&input_mismatch()), "{failure}");
     assert_eq!(std::fs::read_to_string(&path).unwrap(), mine);
 }

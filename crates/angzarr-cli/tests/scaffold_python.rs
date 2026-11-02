@@ -9,6 +9,20 @@ use std::process::{Command, Output};
 mod test_dir;
 use test_dir::TestDir;
 
+use angzarr_diagnostic::Diagnostic;
+
+/// The generator's code for an input of the wrong kind, from its error.
+fn input_mismatch() -> String {
+    angzarr_codegen::UseError::InputMismatch {
+        path: String::new(),
+        message: String::new(),
+        expected: String::new(),
+        found: String::new(),
+    }
+    .code()
+    .to_string()
+}
+
 const PLAYER: &str = "io/angzarr/examples/v1/player.proto";
 const IMPL: &str = "src/angzarr_player/logic_impl.py";
 const MAIN: &str = "src/angzarr_player/main.py";
@@ -29,7 +43,7 @@ fn golden(path: &str) -> String {
 }
 
 fn empty_dir() -> TestDir {
-    TestDir::new("angzarr-cli-scaffold-python-test")
+    TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-scaffold-python-test"))
 }
 
 /// A directory holding a `buf` that generates nothing, for a run offline:
@@ -205,12 +219,7 @@ fn scaffold_python_missing_refuses_a_command_taken_as_a_fact() {
     let out = scaffold(&root, &["--missing"]);
     assert!(!out.status.success());
     let failure: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
-    assert!(
-        failure
-            .to_string()
-            .contains("angzarr-codegen-input-mismatch"),
-        "{failure}"
-    );
+    assert!(failure.to_string().contains(&input_mismatch()), "{failure}");
     assert_eq!(std::fs::read_to_string(root.join(IMPL)).unwrap(), mine);
 }
 
@@ -227,7 +236,9 @@ fn scaffold_python_needs_a_domain() {
     assert!(!out.status.success());
     let failure: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
     assert!(
-        failure.to_string().contains("angzarr-cli-domain-required"),
+        failure
+            .to_string()
+            .contains(angzarr_diagnostic::code!("domain-required")),
         "{failure}"
     );
     assert!(std::fs::read_dir(&root).unwrap().next().is_none());

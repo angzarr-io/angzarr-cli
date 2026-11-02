@@ -13,8 +13,12 @@ use unic_langid::LanguageIdentifier;
 
 use crate::error::FmtError;
 
-/// This crate's en-US messages.
-pub const EN_US: &str = include_str!("../locales/en-US/angzarr-fmt.ftl");
+/// This crate's en-US messages: its package name, and its catalog, each id
+/// under that name (written by the build, `angzarr_diagnostic::build`).
+pub const EN_US: (&str, &str) = (
+    env!("CARGO_PKG_NAME"),
+    include_str!(concat!(env!("OUT_DIR"), "/en-US.ftl")),
+);
 
 /// Messages for one language, gathered from every crate's catalog.
 pub struct Catalog {
@@ -160,7 +164,7 @@ mod tests {
     #[test]
     fn this_crates_catalog_covers_every_diagnostic_with_exactly_its_args() {
         assert_eq!(
-            check(EN_US, &crate::error::diagnostic_samples()),
+            check(EN_US.1, &crate::error::diagnostic_samples()),
             Vec::<String>::new()
         );
     }

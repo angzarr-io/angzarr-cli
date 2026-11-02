@@ -45,7 +45,7 @@ fn fixtures() -> String {
 }
 
 fn empty_dir() -> TestDir {
-    TestDir::new("angzarr-cli-error-output-test")
+    TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-error-output-test"))
 }
 
 /// `angzarr <args> --format <format>` in a fresh directory holding

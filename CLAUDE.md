@@ -27,10 +27,17 @@ angzarr-fmt's `Catalog` (`output::finish`), and a build script through
 - Codes are stable and never reused: kebab-case, starting with the crate's
   name (`angzarr-fmt-unknown-format`). A code whose meaning changes gets a new
   code.
+- No code or catalog spells its crate's name: a code is `code!("suffix")`
+  (angzarr-diagnostic's macro, prefixing `CARGO_PKG_NAME`), and another
+  crate's code is taken from its typed error (`HostError::Spawn { .. }.code()`)
+  or matched by variant, never written out. Tests compare the typed variant.
 - Args carry data, never pre-formatted English.
-- A new code needs an en-US message in `crates/<crate>/locales/en-US/<crate>.ftl`
-  using exactly its args, and a sample in the crate's `diagnostic_samples()`;
-  the catalog test (`angzarr_fmt::check`) fails otherwise.
+- A new code needs an en-US message in `crates/<crate>/locales/en-US/messages.ftl`,
+  its id the code's suffix, using exactly its args, and a sample in the
+  crate's `diagnostic_samples()`; the catalog test (`angzarr_fmt::check`)
+  fails otherwise. The crate's build script (`angzarr_diagnostic::build::catalogs`)
+  writes the catalog under the crate's name, exported as
+  `EN_US = (CARGO_PKG_NAME, catalog)`.
 - A failure that the user can act on names its remedy, itself a coded
   message.
 
