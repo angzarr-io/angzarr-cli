@@ -26,7 +26,7 @@ class Logic(TableLogicImpl):
             reason = domain.TableRefusedReason.ALREADY_BET
         return domain.TableRefused(reason=reason, seat=cmd.seat)
 
-    def release_seat(self, cmd, state, ctx):
+    def request_seat(self, cmd, state, ctx):
         return None
 
 
@@ -63,8 +63,10 @@ def test_a_refusal_goes_out_under_its_codes_marked_status():
 
 
 def test_an_optional_decision_may_emit_nothing():
+    # RequestSeat is OPTIONAL (ReleaseSeat, once the example, is a fact now:
+    # angzarr decision 14.69).
     dispatch = new_table_aggregate_dispatch(Logic())
-    resp = dispatch.handle(request(table_pb2.ReleaseSeat()))
+    resp = dispatch.handle(request(table_pb2.RequestSeat()))
     assert len(resp.events.pages) == 0
 
 
