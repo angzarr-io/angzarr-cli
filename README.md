@@ -444,7 +444,7 @@ branch, with a warning, but not to main. No hook runs mutation testing:
 CI) judges each crate against its `mutation_thresholds` (justfile).
 
 A test's scratch directory, under the temporary directory, is a `TestDir`
-(`test-support/test_dir.rs`, which every crate's tests include): it is
+(angzarr core's `angzarr-test-dir`, every crate's dev-dependency): it is
 removed when the test ends, passing or failing. To keep a failing test's
 directory for debugging, set `ANGZARR_KEEP_TEST_DIRS=1`; the test's stderr
 names it.

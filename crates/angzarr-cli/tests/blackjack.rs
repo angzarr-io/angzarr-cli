@@ -34,9 +34,7 @@ mod common;
 use angzarr_codegen::{ANGZARR_EMBEDDED_GIT, ANGZARR_EMBEDDED_REV};
 use common::{angzarr, copy_dir, here, overlay};
 
-#[path = "../../../test-support/test_dir.rs"]
-mod test_dir;
-use test_dir::TestDir;
+use angzarr_test_dir::TestDir;
 
 const PROTOS: &[&str] = &[
     "io/angzarr/examples/v1/table.proto",

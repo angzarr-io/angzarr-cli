@@ -28,6 +28,7 @@ clap.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+angzarr-test-dir.workspace = true
 serde_json.workspace = true
 
 # The build writes the catalog's source under the crate's name
