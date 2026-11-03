@@ -7,9 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-#[path = "../../../test-support/test_dir.rs"]
-mod test_dir;
-use test_dir::TestDir;
+use angzarr_test_dir::TestDir;
 
 const BLACKJACK: &[&str] = &[
     "io/angzarr/examples/v1/table.proto",

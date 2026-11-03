@@ -24,9 +24,7 @@ mod common;
 
 use common::{angzarr, copy_dir, here, overlay};
 
-#[path = "../../../test-support/test_dir.rs"]
-mod test_dir;
-use test_dir::TestDir;
+use angzarr_test_dir::TestDir;
 
 const PLAYER: &str = "io/angzarr/examples/v1/player.proto";
 

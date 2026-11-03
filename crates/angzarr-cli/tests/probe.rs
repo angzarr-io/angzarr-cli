@@ -14,9 +14,7 @@
 use std::path::Path;
 use std::process::{Command, Output};
 
-#[path = "../../../test-support/test_dir.rs"]
-mod test_dir;
-use test_dir::TestDir;
+use angzarr_test_dir::TestDir;
 
 use angzarr_diagnostic::{Diagnostic, code};
 use angzarr_embedded_host::{HandshakeError, HostError};

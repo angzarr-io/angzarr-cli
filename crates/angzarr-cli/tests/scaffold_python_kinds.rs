@@ -12,9 +12,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-#[path = "../../../test-support/test_dir.rs"]
-mod test_dir;
-use test_dir::TestDir;
+use angzarr_test_dir::TestDir;
 
 /// The spec draft whose protos the projects generate from (decisions 14.75
 /// and 14.76): the angzarr-project submodule's commit.

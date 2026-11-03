@@ -61,7 +61,7 @@ crate's code; the tier's `ANZ100` to `ANZ103` labels map onto them in the
 binding) leave the exit status 0.
 An untagged scenario that fails, or whose step matches no binding, fails
 the run. A difference found is a tag there, never prose elsewhere. Each
-scenario's protos are written to a `TestDir` (test-support/test_dir.rs),
+scenario's protos are written to a `TestDir` (angzarr core's angzarr-test-dir),
 removed once compiled.
 
 ## Use `just`
