@@ -22,7 +22,7 @@ Every error and diagnostic implements `angzarr_diagnostic::Diagnostic` (angzarr 
 and its `Display` is code and args (`angzarr_diagnostic::display`), never English
 (decision 14.37). English is rendered only where a person reads it: the cli through
 angzarr-fmt's `Catalog` (`output::finish`), and a build script through
-`angzarr_diagnostic::catalog::render` in angzarr-build.
+`angzarr_diagnostic::catalog::render` in angzarr-build (its repository).
 
 - Codes are stable and never reused: kebab-case, starting with the crate's
   name (`angzarr-fmt-unknown-format`). A code whose meaning changes gets a new
@@ -47,26 +47,29 @@ The workspace denies `invisible_characters`, `unicode_not_nfc` and
 `non_ascii_literal`; every crate opts in with `[lints] workspace = true`.
 Write a non-ASCII character in a literal as an escape.
 
-## The codegen tier is run, and its tags are where the cli parts from it
+## The generator is angzarr-build's
 
-`crates/angzarr-codegen/tests/spec.rs` runs the spec's codegen tier (the
-`angzarr-project` submodule's `features/codegen`, at the submodule's
-commit) with cucumber, as one test of `just test`. Every scenario is bound
-or tagged in `tests/spec/tags.rs`, by ID or outline row (`C-0517#2`), with
-its why: `divergence_*` (the cli does otherwise, deliberately),
-`unsupported_*` (no such surface) or `unbound*` (no binding yet). "The
-protos are linted" is `angzarr lint app`'s reading of them
-(`angzarr_codegen::warnings`): its errors refuse, its warnings (each this
-crate's code; the tier's `ANZ100` to `ANZ103` labels map onto them in the
-binding) leave the exit status 0.
-An untagged scenario that fails, or whose step matches no binding, fails
-the run. A difference found is a tag there, never prose elsewhere. Each
-scenario's protos are written to a `TestDir` (angzarr core's angzarr-test-dir),
-removed once compiled.
+`angzarr-codegen` and `angzarr-build` live in
+`github.com/angzarr-io/angzarr-build`, pinned in `Cargo.toml` by full
+commit, never copied here. Their tests, the spec's codegen tier among them,
+run there. This repository tests the binary: its tests run `angzarr` over
+the spec's protos (the `angzarr-project` submodule at the commit the
+generator is built against) and the fixtures and golden files under
+`crates/angzarr-cli/tests`, whose goldens are the generator's output for
+them. Moving the pin means refreshing the goldens from the generator's, and
+nothing the generator documents is restated here. The CLI names no default
+component name: a component's name is the protos' `component_name`.
+
+The manifests `scaffold app` writes name angzarr-build as a git dependency
+on that repository at the revision the workspace manifest pins
+(`ANGZARR_BUILD_REV`, read from `Cargo.toml` by the crate's build script),
+or `--angzarr-build-path`.
 
 ## Use `just`
 
 `just test` and `just lint` are the checks; both must pass before a commit.
+This repository is the Rust `angzarr` CLI; the Go CLI is preserved on the
+branch `go-final`.
 
 ## `angzarr probe` runs the host's probe
 
