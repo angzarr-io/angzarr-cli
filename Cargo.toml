@@ -10,23 +10,25 @@ license = "AGPL-3.0-only WITH LicenseRef-angzarr-cli-generated-output-exception"
 publish = false
 
 [workspace.dependencies]
-angzarr-build = { path = "crates/angzarr-build" }
-angzarr-codegen = { path = "crates/angzarr-codegen" }
+# angzarr-build and angzarr-codegen live in their own repository, pinned by
+# full commit; bumps are deliberate commits.
+angzarr-build = { git = "https://github.com/angzarr-io/angzarr-build", rev = "ea9f15d8cac62d91dc0a8b938150ea2c7183a0f9" }
+angzarr-codegen = { git = "https://github.com/angzarr-io/angzarr-build", rev = "ea9f15d8cac62d91dc0a8b938150ea2c7183a0f9" }
 angzarr-fmt = { path = "crates/angzarr-fmt" }
 # angzarr core's localizable-error trait, pinned by full commit at the rev
 # angzarr-embedded's crates name; bumps are deliberate commits.
-angzarr-diagnostic = { git = "https://github.com/angzarr-io/angzarr", rev = "dd59566a017474732a344caf3d1c8fc26d90481b" }
+angzarr-diagnostic = { git = "https://github.com/angzarr-io/angzarr", rev = "44143e65f0c61fa7720b0ca5a3fe25eaf4f7eb9d" }
 # angzarr-embedded is pinned by full commit; bumps are deliberate commits.
-angzarr-embedded-host-config = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "9db929911aa1b06db9ea68321a0bc91c49ff108e" }
-angzarr-embedded-host = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "9db929911aa1b06db9ea68321a0bc91c49ff108e" }
+angzarr-embedded-host-config = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "e3e22db85b0bdb806a8a31267e1915a3a7cef809" }
+angzarr-embedded-host = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "e3e22db85b0bdb806a8a31267e1915a3a7cef809" }
 # angzarr's wire contract, pinned by full commit; bumps are deliberate commits.
-angzarr-proto = { version = "0.1", git = "https://github.com/angzarr-io/angzarr", rev = "dd59566a017474732a344caf3d1c8fc26d90481b" }
+angzarr-proto = { version = "0.1", git = "https://github.com/angzarr-io/angzarr", rev = "44143e65f0c61fa7720b0ca5a3fe25eaf4f7eb9d" }
 # The local-process transport's keys (a child's failures) and their English
 # (decision 14.64), at angzarr-proto's core rev.
-angzarr-proto-transport-embedded = { git = "https://github.com/angzarr-io/angzarr", rev = "dd59566a017474732a344caf3d1c8fc26d90481b" }
+angzarr-proto-transport-embedded = { git = "https://github.com/angzarr-io/angzarr", rev = "44143e65f0c61fa7720b0ca5a3fe25eaf4f7eb9d" }
 # The tests' scratch directories (angzarr core's one guard, std alone), a
 # dev-dependency only, at the core rev the crates above are.
-angzarr-test-dir = { git = "https://github.com/angzarr-io/angzarr", rev = "dd59566a017474732a344caf3d1c8fc26d90481b" }
+angzarr-test-dir = { git = "https://github.com/angzarr-io/angzarr", rev = "44143e65f0c61fa7720b0ca5a3fe25eaf4f7eb9d" }
 clap = { version = "4.5", features = ["derive"] }
 fluent-bundle = "0.15"
 fluent-syntax = "0.11"

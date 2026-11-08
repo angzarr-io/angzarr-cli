@@ -185,8 +185,7 @@ impl ProbeReport {
 fn step_name(step: Step) -> &'static str {
     match step {
         Step::Launch => "launch",
-        Step::Handshake => "handshake",
-        Step::Health => "health",
+        Step::Serving => "serving",
         Step::Describe => "describe",
         Step::Handle => "handle",
         Step::Shutdown => "shutdown",
@@ -282,15 +281,14 @@ impl fmt::Display for English<'_> {
 mod tests {
     use super::*;
     use angzarr_diagnostic::code;
-    use angzarr_embedded_host::{HandshakeError, HostError};
+    use angzarr_embedded_host::HostError;
 
     /// A probe that took its first `passed` steps, failed the next with
     /// `failure`, and ran none after.
     fn probed(passed: usize, failure: Report) -> Probed {
         let steps = [
             Step::Launch,
-            Step::Handshake,
-            Step::Health,
+            Step::Serving,
             Step::Describe,
             Step::Handle,
             Step::Shutdown,
@@ -310,12 +308,13 @@ mod tests {
         }
     }
 
-    /// The host's own error for a handshake that timed out, so no code of
-    /// the host's is spelled here.
+    /// The host's own error for a child not serving within the limit, so
+    /// no code of the host's is spelled here.
     fn timed_out() -> Report {
-        Report::of(&HostError::Handshake {
-            domain: "player".to_string(),
-            cause: HandshakeError::Timeout { timeout_ms: 500 },
+        Report::of(&HostError::NotServing {
+            component: "player".to_string(),
+            status: "none".to_string(),
+            timeout_ms: 500,
         })
     }
 
@@ -325,7 +324,7 @@ mod tests {
     fn a_failed_step_is_its_code_args_and_english() {
         let report = ProbeReport::of("player", &probed(1, timed_out()));
         let json = serde_json::to_value(&report).unwrap();
-        let handshake = timed_out();
+        let serving = timed_out();
         assert_eq!(json["component"], "player");
         assert_eq!(json["passed"], false);
         assert_eq!(
@@ -335,25 +334,22 @@ mod tests {
         assert_eq!(
             json["steps"][1],
             serde_json::json!({
-                "step": "handshake",
+                "step": "serving",
                 "outcome": "failed",
                 "failure": {
-                    "code": handshake.code(),
-                    "message": "component \"player\": no handshake within 500 ms",
+                    "code": serving.code(),
+                    "message": "component \"player\" did not report its health SERVING within 500 ms (last none)",
                     "args": {
-                        "cause": {
-                            "code": "HOST_REASON_HANDSHAKE_TIMEOUT",
-                            "message": "no handshake within 500 ms",
-                            "args": {"timeout_ms": 500},
-                        },
-                        "domain": "player",
+                        "component": "player",
+                        "status": "none",
+                        "timeout_ms": 500,
                     },
                 },
             })
         );
         assert_eq!(
             json["steps"][2],
-            serde_json::json!({"step": "health", "outcome": "not-run"})
+            serde_json::json!({"step": "describe", "outcome": "not-run"})
         );
     }
 
@@ -369,13 +365,13 @@ mod tests {
     /// that passed every step does not.
     #[test]
     fn a_failed_step_fails_the_command() {
-        let failed = ProbeReport::of("player", &probed(4, timed_out()));
+        let failed = ProbeReport::of("player", &probed(3, timed_out()));
         let failure = verdict(&failed).expect("a failure");
         assert_eq!(
             failure.to_string(),
             concat!(code!("probe-failed"), " component=player step=handle")
         );
-        let passed = ProbeReport::of("player", &probed(6, timed_out()));
+        let passed = ProbeReport::of("player", &probed(5, timed_out()));
         assert!(verdict(&passed).is_none());
     }
 
@@ -391,17 +387,17 @@ mod tests {
         assert_eq!(
             rows[1],
             [
-                "handshake",
+                "serving",
                 "failed",
                 format!(
-                    "component \"player\": no handshake within 500 ms [{}]",
+                    "component \"player\" did not report its health SERVING within 500 ms (last none) [{}]",
                     timed_out().code()
                 )
                 .as_str()
             ]
         );
         assert_eq!(rows[0], ["launch", "passed", ""]);
-        assert_eq!(rows[5], ["shutdown", "not-run", ""]);
+        assert_eq!(rows[4], ["shutdown", "not-run", ""]);
     }
 
     fn args(argv: &[&str]) -> ProbeArgs {
@@ -431,7 +427,7 @@ mod tests {
     fn cover_domain(input: &Input) -> String {
         match input {
             Input::Command(c) => c
-                .command
+                .input
                 .as_ref()
                 .unwrap()
                 .cover
@@ -492,7 +488,7 @@ mod tests {
         let Ok(Input::Command(command)) = given else {
             panic!("a command");
         };
-        let page = command.command.unwrap().page.unwrap();
+        let page = command.input.unwrap().page.unwrap();
         let Some(angzarr_proto::v1::command_page::Body::Command(c)) = page.body else {
             panic!("a command page");
         };

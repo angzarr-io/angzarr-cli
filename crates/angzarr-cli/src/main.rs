@@ -6,7 +6,7 @@ use std::process::ExitCode;
 
 use angzarr_build::{
     AppSeed, BuildError, DomainCrate, Existing, Exposure, Notes, ProtoInput, PythonApp, RetrySeed,
-    Scaffolded, Translate,
+    Scaffolded,
 };
 use angzarr_fmt::{Catalog, Failure, Format, Viewable};
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -92,22 +92,8 @@ struct ScaffoldArgs {
     /// project's root.
     #[arg(long, default_value = "src")]
     src: PathBuf,
-    /// The fact a policy's refusal callback for one command returns in its
-    /// scaffolded stub: `<policy>:<command>=<fact>`, each fully qualified.
-    /// Every command of a policy's target has a required callback
-    /// (decision 14.76); the Python stub of one this names returns that
-    /// fact, any other the source's fact choice.
-    #[arg(long, value_name = "POLICY:COMMAND=FACT")]
-    translate: Vec<String>,
-    /// Write a Python domain's optional refusal handler for one refused
-    /// command (`on_refused_<command>`) into the implementation, by the
-    /// command's full name, even when the file exists. Repeatable; without
-    /// it a run only reports them. A Rust implementation has none.
-    #[arg(long, value_name = "COMMAND")]
-    on_refused: Vec<String>,
     /// Add the required methods an existing file lacks, changing nothing
-    /// else; a domain's optional refusal handlers are added only by
-    /// `--on-refused`.
+    /// else.
     #[arg(long)]
     missing: bool,
     #[command(flatten)]
@@ -144,7 +130,8 @@ struct AppArgs {
     #[arg(long)]
     in_memory: bool,
     /// App: the manifest's angzarr-build is this directory's, else the
-    /// angzarr-cli repository at the commit this binary was built from.
+    /// angzarr-build repository at the revision this binary is built
+    /// against.
     #[arg(long, value_name = "DIR")]
     angzarr_build_path: Option<PathBuf>,
     /// App: the library crate whose domain layer the application uses
@@ -237,17 +224,9 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
     } else {
         Existing::Keep
     };
-    let translate = args
-        .translate
-        .iter()
-        .map(String::as_str)
-        .map(translate)
-        .collect::<Result<Vec<_>, _>>()?;
     let done = match args.lang {
-        Lang::Rust => {
-            angzarr_build::scaffold_into(&args.src, &protos, &includes, &translate, existing)
-                .map_err(CliError::Build)?
-        }
+        Lang::Rust => angzarr_build::scaffold_into(&args.src, &protos, &includes, existing)
+            .map_err(CliError::Build)?,
         Lang::Python => {
             let python = &args.python;
             let domain = python.domain.clone().ok_or(CliError::DomainRequired)?;
@@ -266,16 +245,9 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
                 protos: protos_input,
                 rules_version: python.rules_version.clone(),
             };
-            let done = angzarr_build::scaffold_python_into(
-                &args.src,
-                &protos,
-                &includes,
-                &app,
-                &translate,
-                &args.on_refused,
-                existing,
-            )
-            .map_err(CliError::Build)?;
+            let done =
+                angzarr_build::scaffold_python_into(&args.src, &protos, &includes, &app, existing)
+                    .map_err(CliError::Build)?;
             angzarr_build::proto_gen_python(&args.src, &app).map_err(CliError::Build)?;
             if !python.no_lock {
                 angzarr_build::lock_python(&args.src).map_err(CliError::Build)?;
@@ -309,7 +281,6 @@ fn scaffold(args: ScaffoldArgs) -> Result<ScaffoldReport, Box<dyn Failure>> {
                 in_memory: args.app.in_memory,
                 angzarr_build: Some(angzarr_build_dependency(
                     args.app.angzarr_build_path.as_deref(),
-                    option_env!("ANGZARR_COMMIT"),
                 )),
                 domain: args.app.domain_crate.clone().map(|path| DomainCrate {
                     path,
@@ -432,21 +403,19 @@ fn lint(args: LintArgs, catalog: &Catalog) -> Result<LintReport, Box<dyn Failure
     })
 }
 
-/// The generated manifest's angzarr-build: the directory given, else the
-/// angzarr-cli repository at `commit` when it is one (hex, not `-dirty`),
-/// else its default branch.
-fn angzarr_build_dependency(path: Option<&Path>, commit: Option<&str>) -> String {
-    match (path, commit) {
-        (Some(path), _) => format!("{{ path = {:?} }}", path.display().to_string()),
-        (None, Some(commit))
-            if !commit.is_empty() && commit.chars().all(|c| c.is_ascii_hexdigit()) =>
-        {
-            format!(
-                "{{ git = \"{}\", rev = \"{commit}\" }}",
-                angzarr_build::ANGZARR_BUILD_GIT
-            )
-        }
-        _ => format!("{{ git = \"{}\" }}", angzarr_build::ANGZARR_BUILD_GIT),
+/// The repository angzarr-build is fetched from.
+const ANGZARR_BUILD_GIT: &str = "https://github.com/angzarr-io/angzarr-build";
+
+/// The generated manifest's angzarr-build: the directory given, else this
+/// binary's own pin of it ([`ANGZARR_BUILD_GIT`] at the revision the
+/// workspace manifest pins, which the build script reads).
+fn angzarr_build_dependency(path: Option<&Path>) -> String {
+    match path {
+        Some(path) => format!("{{ path = {:?} }}", path.display().to_string()),
+        None => format!(
+            "{{ git = \"{ANGZARR_BUILD_GIT}\", rev = \"{}\" }}",
+            env!("ANGZARR_BUILD_REV")
+        ),
     }
 }
 
@@ -479,28 +448,9 @@ fn language(value: &str) -> Result<(String, String), CliError> {
     }
 }
 
-/// `<policy>:<command>=<fact>` as a translate selection.
-fn translate(value: &str) -> Result<Translate, CliError> {
-    let malformed = || CliError::TranslateMalformed {
-        value: value.to_string(),
-    };
-    let (policy, rest) = value.split_once(':').ok_or_else(malformed)?;
-    let (command, fact) = rest.split_once('=').ok_or_else(malformed)?;
-    if [policy, command, fact].iter().any(|part| part.is_empty()) {
-        return Err(malformed());
-    }
-    Ok(Translate {
-        policy: policy.to_string(),
-        command: command.to_string(),
-        fact: fact.to_string(),
-    })
-}
-
 /// Why a command failed.
 #[derive(Debug)]
 enum CliError {
-    /// A `--translate` value not of the form `<policy>:<command>=<fact>`.
-    TranslateMalformed { value: String },
     /// `scaffold python` without `--domain`.
     DomainRequired,
     /// An `--expose` value not of the form `<domain>=loopback|ip`.
@@ -539,7 +489,6 @@ impl std::error::Error for CliError {}
 impl Diagnostic for CliError {
     fn code(&self) -> &str {
         match self {
-            CliError::TranslateMalformed { .. } => code!("translate-malformed"),
             CliError::DomainRequired => code!("domain-required"),
             CliError::ExposeMalformed { .. } => code!("expose-malformed"),
             CliError::LanguageMalformed { .. } => code!("language-malformed"),
@@ -555,7 +504,6 @@ impl Diagnostic for CliError {
 
     fn args(&self) -> Vec<(&str, Arg)> {
         match self {
-            CliError::TranslateMalformed { value } => vec![("value", value.as_str().into())],
             CliError::DomainRequired => Vec::new(),
             CliError::ExposeMalformed { value } | CliError::LanguageMalformed { value } => {
                 vec![("value", value.as_str().into())]
@@ -589,7 +537,6 @@ impl Diagnostic for CliError {
 impl Failure for CliError {
     fn remedy(&self) -> Option<Report> {
         match self {
-            CliError::TranslateMalformed { .. } => Some(Report::new(code!("translate-form"))),
             CliError::DomainRequired => Some(Report::new(code!("domain-name"))),
             CliError::LanguageMalformed { .. } => Some(Report::new(code!("language-form"))),
             CliError::ProbeNoInput { .. } => Some(Report::new(code!("probe-input-form"))),
@@ -679,10 +626,6 @@ mod tests {
 
     /// One of every diagnostic this crate raises, for the catalog check.
     fn diagnostic_samples() -> Vec<Box<dyn Diagnostic>> {
-        let malformed = CliError::TranslateMalformed {
-            value: "x".to_string(),
-        };
-        let remedy = malformed.remedy().expect("a remedy");
         let domain = CliError::DomainRequired;
         let domain_remedy = domain.remedy().expect("a remedy");
         let language = CliError::LanguageMalformed {
@@ -695,8 +638,6 @@ mod tests {
         };
         let no_input_remedy = no_input.remedy().expect("a remedy");
         vec![
-            Box::new(malformed),
-            Box::new(remedy),
             Box::new(domain),
             Box::new(domain_remedy),
             Box::new(CliError::ExposeMalformed {
@@ -754,43 +695,33 @@ mod tests {
     }
 
     #[test]
-    fn translate_parses_policy_command_and_fact() {
-        let parsed = translate("p.Policy:t.Cmd=s.Fact").unwrap();
+    fn the_manifests_angzarr_build_is_the_path_else_the_pinned_revision() {
         assert_eq!(
-            (parsed.policy, parsed.command, parsed.fact),
-            (
-                "p.Policy".to_string(),
-                "t.Cmd".to_string(),
-                "s.Fact".to_string()
-            )
-        );
-        for malformed in [
-            "t.Cmd",
-            "p.Policy:t.Cmd",
-            ":t.Cmd=s.Fact",
-            "p.Policy:=s.Fact",
-        ] {
-            assert!(translate(malformed).is_err(), "{malformed}");
-        }
-    }
-
-    #[test]
-    fn the_manifests_angzarr_build_is_the_path_else_the_commit_else_the_repository() {
-        let git = angzarr_build::ANGZARR_BUILD_GIT;
-        assert_eq!(
-            angzarr_build_dependency(Some(Path::new("/x/angzarr-build")), Some("abc123")),
+            angzarr_build_dependency(Some(Path::new("/x/angzarr-build"))),
             "{ path = \"/x/angzarr-build\" }"
         );
         assert_eq!(
-            angzarr_build_dependency(None, Some("0123456789ab")),
-            format!("{{ git = \"{git}\", rev = \"0123456789ab\" }}")
+            angzarr_build_dependency(None),
+            format!(
+                "{{ git = \"{ANGZARR_BUILD_GIT}\", rev = \"{}\" }}",
+                env!("ANGZARR_BUILD_REV")
+            )
         );
-        for commit in [None, Some(""), Some("0123456789ab-dirty")] {
-            assert_eq!(
-                angzarr_build_dependency(None, commit),
-                format!("{{ git = \"{git}\" }}"),
-                "{commit:?}"
-            );
-        }
+    }
+
+    /// The revision a generated manifest names is the one this binary is
+    /// built against: the workspace manifest's pin, a full commit.
+    #[test]
+    fn the_pinned_revision_is_the_workspaces_angzarr_build_pin() {
+        let rev = env!("ANGZARR_BUILD_REV");
+        assert_eq!(rev.len(), 40, "{rev}");
+        assert!(rev.chars().all(|c| c.is_ascii_hexdigit()), "{rev}");
+        let manifest = include_str!("../../../Cargo.toml");
+        let pin = manifest
+            .lines()
+            .find(|l| l.starts_with("angzarr-build = "))
+            .expect("the workspace pins angzarr-build");
+        assert!(pin.contains(&format!("rev = \"{rev}\"")), "{pin}");
+        assert!(pin.contains(ANGZARR_BUILD_GIT), "{pin}");
     }
 }

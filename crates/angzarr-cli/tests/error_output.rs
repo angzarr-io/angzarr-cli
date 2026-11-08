@@ -30,10 +30,7 @@ fn spec() -> String {
 }
 
 fn fixtures() -> String {
-    here()
-        .join("../angzarr-codegen/tests/fixtures")
-        .display()
-        .to_string()
+    here().join("tests/fixtures").display().to_string()
 }
 
 fn empty_dir() -> TestDir {

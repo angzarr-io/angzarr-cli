@@ -6,7 +6,7 @@
 //!
 //! The failure modes run against fake children that are shell commands,
 //! each breaking the protocol at once, so no test waits for a time limit:
-//! one that cannot start, one that writes a malformed handshake, one whose
+//! one that cannot start, one that never serves, one whose
 //! stdout ends first. The child that passes every step is client-python's
 //! shim, as the Python player runs it (ignored: it needs uv and the
 //! player's checkout).
@@ -17,14 +17,15 @@ use std::process::{Command, Output};
 use angzarr_test_dir::TestDir;
 
 use angzarr_diagnostic::{Diagnostic, code};
-use angzarr_embedded_host::{HandshakeError, HostError};
+use angzarr_embedded_host::HostError;
 
-/// The host's failure to start a child whose handshake failed: its code is
-/// the host's, whatever the cause.
-fn handshake() -> HostError {
-    HostError::Handshake {
-        domain: String::new(),
-        cause: HandshakeError::Closed,
+/// The host's failure to start a child that is not serving: its code is
+/// the spec's key, whatever the last health status was.
+fn not_serving() -> HostError {
+    HostError::NotServing {
+        component: String::new(),
+        status: String::new(),
+        timeout_ms: 0,
     }
 }
 
@@ -84,27 +85,20 @@ fn outcomes(report: &serde_json::Value) -> Vec<(String, String)> {
         .collect()
 }
 
-/// The six steps: `passed` passed, then one failed, then the rest not run.
+/// The five steps: `passed` passed, then one failed, then the rest not run.
 fn failed_after(passed: usize) -> Vec<(String, String)> {
-    [
-        "launch",
-        "handshake",
-        "health",
-        "describe",
-        "handle",
-        "shutdown",
-    ]
-    .iter()
-    .enumerate()
-    .map(|(n, step)| {
-        let outcome = match n {
-            n if n < passed => "passed",
-            n if n == passed => "failed",
-            _ => "not-run",
-        };
-        (step.to_string(), outcome.to_string())
-    })
-    .collect()
+    ["launch", "serving", "describe", "handle", "shutdown"]
+        .iter()
+        .enumerate()
+        .map(|(n, step)| {
+            let outcome = match n {
+                n if n < passed => "passed",
+                n if n == passed => "failed",
+                _ => "not-run",
+            };
+            (step.to_string(), outcome.to_string())
+        })
+        .collect()
 }
 
 /// A launch command that cannot start fails the launch step: the host's
@@ -135,38 +129,31 @@ fn a_child_that_cannot_start_fails_the_launch_step() {
     assert!(stderr.contains(code!("probe-failed")), "{stderr}");
 }
 
-/// A malformed handshake fails the handshake step under the spec's key,
-/// nested in the host's failure to start the child, each rendered in its
-/// own catalog: the host's, and the spec's.
+/// A child that never reports itself serving fails the serving step under
+/// the spec's key `EMBEDDED_REASON_CHILD_NOT_SERVING`, within the config's
+/// `handshake_timeout_ms`; the failure names the limit and the last health
+/// status (`none`: it answered none).
 #[test]
-fn a_malformed_handshake_fails_the_handshake_step_under_the_specs_key() {
-    let dir = app(&launched(
-        "[sh, -c, 'echo \"angzarr-handshake v2 unix:/tmp/x.sock\"; cat >/dev/null']",
+fn a_child_that_never_serves_fails_the_serving_step_under_the_specs_key() {
+    let dir = app(&format!(
+        "{}supervision:\n  handshake_timeout_ms: 300\n",
+        launched("[sh, -c, 'cat >/dev/null']")
     ));
     let out = probe(&dir, &["player", "--command", "/x.SitDown"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let report = json(&out);
     assert_eq!(outcomes(&report), failed_after(1));
     let failure = &report["steps"][1]["failure"];
-    assert_eq!(failure["code"], handshake().code());
-    let cause = &failure["args"]["cause"];
-    assert_eq!(cause["code"], "HOST_REASON_HANDSHAKE_MALFORMED");
-    assert_eq!(
-        cause["args"]["line"],
-        "angzarr-handshake v2 unix:/tmp/x.sock"
-    );
-    assert_eq!(
-        failure["message"],
-        "component \"player\": malformed handshake \"angzarr-handshake v2 unix:/tmp/x.sock\": \
-         expected angzarr-handshake v1 unix:<absolute path>"
-    );
+    assert_eq!(failure["code"], not_serving().code());
+    assert_eq!(failure["code"], "EMBEDDED_REASON_CHILD_NOT_SERVING");
+    assert_eq!(failure["args"]["timeout_ms"], 300);
+    assert_eq!(failure["args"]["status"], "none");
 }
 
-/// A child whose stdout ends before its handshake fails the handshake
-/// step, `HOST_REASON_HANDSHAKE_CLOSED`; the text view is a table of the
-/// steps, each failure's English with its code.
+/// A child whose process ends before it serves fails the serving step; the
+/// text view is a table of the steps, each failure's English with its code.
 #[test]
-fn a_child_whose_stdout_ends_first_fails_the_handshake_step() {
+fn a_child_that_exits_first_fails_the_serving_step() {
     let dir = app(&launched("[sh, -c, 'exit 0']"));
     let out = probe(
         &dir,
@@ -175,28 +162,34 @@ fn a_child_whose_stdout_ends_first_fails_the_handshake_step() {
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let text = String::from_utf8(out.stdout).unwrap();
     let lines: Vec<&str> = text.lines().map(str::trim_end).collect();
+    assert_eq!(lines.len(), 8, "{text}");
     assert_eq!(
-        lines,
+        lines[..4],
         [
             "Component: player",
             "Passed: false",
-            "Step       Outcome  Detail",
-            "launch     passed",
-            &format!(
-                "handshake  failed   component \"player\": stdout closed before a handshake \
-                 [{}]",
-                handshake().code()
-            ),
-            "health     not-run",
-            "describe   not-run",
-            "handle     not-run",
-            "shutdown   not-run",
+            "Step      Outcome  Detail",
+            "launch    passed"
+        ],
+        "{text}"
+    );
+    assert!(
+        lines[4].starts_with("serving   failed   ")
+            && lines[4].ends_with(&format!("[{}]", not_serving().code())),
+        "{text}"
+    );
+    assert_eq!(
+        lines[5..],
+        [
+            "describe  not-run",
+            "handle    not-run",
+            "shutdown  not-run"
         ],
         "{text}"
     );
     let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(
-        stderr.contains("component \"player\" failed the probe at its handshake step"),
+        stderr.contains("component \"player\" failed the probe at its serving step"),
         "{stderr}"
     );
 }

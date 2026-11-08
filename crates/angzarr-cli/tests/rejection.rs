@@ -29,7 +29,7 @@ use angzarr_test_dir::TestDir;
 const PLAYER: &str = "io/angzarr/examples/v1/player.proto";
 
 #[test]
-#[ignore = "needs the network (buf.build, GitHub) and uv"]
+#[ignore = "needs the network (buf.build, GitHub) and uv; its app is written to the wire API before the current family"]
 fn a_python_rejection_reaches_the_host_as_a_business_refusal_with_its_key_and_args() {
     let app = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-rejection"));
     copy_dir(

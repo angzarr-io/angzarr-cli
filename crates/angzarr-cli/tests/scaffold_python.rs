@@ -35,7 +35,7 @@ fn spec() -> String {
 
 fn golden(path: &str) -> String {
     let golden = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../angzarr-codegen/tests/golden/python/player")
+        .join("tests/golden/python/player")
         .join(path);
     std::fs::read_to_string(&golden).unwrap_or_else(|_| panic!("{}", golden.display()))
 }

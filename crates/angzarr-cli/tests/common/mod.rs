@@ -59,18 +59,26 @@ pub fn copy_dir(from: &Path, to: &Path) {
 // generator writes against.
 use angzarr_codegen::{ANGZARR_EMBEDDED_GIT, ANGZARR_EMBEDDED_REV};
 
+/// The manifest value of the angzarr-build dependency: the repository at
+/// the revision the CLI is built against.
+pub const ANGZARR_BUILD_DEPENDENCY: &str = concat!(
+    "{ git = \"https://github.com/angzarr-io/angzarr-build\", rev = \"",
+    env!("ANGZARR_BUILD_REV"),
+    "\" }"
+);
+
 /// The application `name`'s Cargo.toml, written into `app`: angzarr-embedded,
 /// its markup and host at [`ANGZARR_EMBEDDED_REV`] (the kernel re-exports
 /// the diagnostics), prost,
 /// tokio (the App is async, on the caller's runtime; already in the graph
 /// through angzarr-embedded-host),
-/// `dependencies` (TOML lines), and this workspace's angzarr-build for its
-/// build script. A workspace of its own, wherever the temporary directory
+/// `dependencies` (TOML lines), and angzarr-build, at the revision the
+/// workspace pins, for its build script. A workspace of its own, wherever the temporary directory
 /// is.
 pub fn manifest(app: &Path, name: &str, dependencies: &str) {
     let embedded =
         format!("{{ git = \"{ANGZARR_EMBEDDED_GIT}\", rev = \"{ANGZARR_EMBEDDED_REV}\" }}");
-    let build = here().join("../angzarr-build").display().to_string();
+    let build = ANGZARR_BUILD_DEPENDENCY;
     let manifest = format!(
         "[package]\nname = {name:?}\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n\
          [dependencies]\n\
@@ -80,7 +88,7 @@ pub fn manifest(app: &Path, name: &str, dependencies: &str) {
          prost = \"0.14\"\n\
          tokio = {{ version = \"1\", features = [\"macros\", \"rt-multi-thread\"] }}\n\
          {dependencies}\n\
-         [build-dependencies]\nangzarr-build = {{ path = {build:?} }}\n\n\
+         [build-dependencies]\nangzarr-build = {build}\n\n\
          [workspace]\n"
     );
     std::fs::write(app.join("Cargo.toml"), manifest).unwrap();

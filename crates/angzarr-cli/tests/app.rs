@@ -3,6 +3,8 @@
 //! written once; build.rs and main.rs the CLI's, rewritten every run), and
 //! the host config checked against the protos.
 
+mod common;
+
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -28,7 +30,7 @@ fn spec() -> String {
 fn golden(path: &str) -> String {
     std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../angzarr-codegen/tests/golden/app/blackjack")
+            .join("tests/golden/app/blackjack")
             .join(path),
     )
     .unwrap()
@@ -99,9 +101,24 @@ fn scaffold_app_writes_the_golden_config_and_main_then_keeps_them() {
     let root = empty_dir();
     assert_eq!(actions(&angzarr(SCAFFOLD, &root)), each("created"));
     // The golden build script names the include `proto`, as the user
-    // would; this run named the spec's absolute path, and its manifest's
-    // angzarr-build is this binary's commit: only the config, main and
-    // driver are compared.
+    // would; this run named the spec's absolute path, so it is not compared.
+    // The golden manifest is compared but for its angzarr-build line, which
+    // is this binary's pin of it.
+    let manifest = std::fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    let not_build = |text: &str| -> String {
+        text.lines()
+            .filter(|l| !l.starts_with("angzarr-build = "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    assert_eq!(not_build(&manifest), not_build(&golden("Cargo.toml")));
+    assert!(
+        manifest.contains(&format!(
+            "angzarr-build = {}\n",
+            common::ANGZARR_BUILD_DEPENDENCY
+        )),
+        "{manifest}"
+    );
     for path in ["angzarr.yaml", "src/main.rs", "src/driver.rs"] {
         assert_eq!(
             std::fs::read_to_string(root.join(path)).unwrap(),
@@ -222,7 +239,7 @@ fn scaffold_app_over_a_domain_crate_writes_the_golden_main_importing_it() {
     let over = |path: &str| {
         std::fs::read_to_string(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../angzarr-codegen/tests/golden/app/blackjack-domain-crate")
+                .join("tests/golden/app/blackjack-domain-crate")
                 .join(path),
         )
         .unwrap()
