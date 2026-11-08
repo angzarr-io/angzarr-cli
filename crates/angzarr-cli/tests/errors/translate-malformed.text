@@ -1,2 +1,0 @@
-Error: --translate buyin.v1.Hold is not <policy>:<command>=<fact>
-Fix: write --translate as <policy>:<command>=<fact>, each a fully qualified message name, e.g. buyin.v1.BuyInWalletPolicy:buyin.v1.Hold=buyin.v1.HoldLost

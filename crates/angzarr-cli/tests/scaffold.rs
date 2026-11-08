@@ -147,17 +147,11 @@ fn scaffold_rust_reports_an_earlier_interface_file_as_obsolete() {
 }
 
 /// Every refusal callback of a policy is required (decision 14.76): each
-/// is written with the implementation, `--translate` or not.
+/// is written with the implementation.
 #[test]
 fn scaffold_rust_writes_every_policys_callback_stub() {
     let src = empty_dir();
-    let out = scaffold(
-        &src,
-        &[
-            "--translate",
-            "buyin.v1.BuyInWalletPolicy:buyin.v1.Hold=buyin.v1.HoldLost",
-        ],
-    );
+    let out = scaffold(&src, &[]);
     assert_eq!(actions(&out, &src), all("created", &[]));
     let policy = std::fs::read_to_string(src.join("buy_in_wallet_impl.rs")).unwrap();
     for callback in ["fn hold_refused(", "fn deposit_refused("] {
@@ -190,15 +184,26 @@ fn scaffold_rust_missing_adds_an_absent_callback_stub() {
     assert!(policy.contains("fn hold_refused("), "{policy}");
 }
 
+/// The refusal callback's fact is chosen in the protos (a refusal message's
+/// `refusal_status`), not on the command line: `--translate` and
+/// `--on-refused` are unknown options, refused by the parser (exit 2) before
+/// anything is written.
 #[test]
-fn scaffold_rust_refuses_a_malformed_translate() {
-    let src = empty_dir();
-    let out = scaffold(&src, &["--translate", "buyin.v1.Hold"]);
-    assert!(!out.status.success());
-    assert!(
-        std::fs::read_dir(&src).unwrap().next().is_none(),
-        "nothing written"
-    );
+fn scaffold_rust_has_no_translate_or_on_refused_option() {
+    for flag in [
+        &["--translate", "buyin.v1.P:buyin.v1.Hold=buyin.v1.HoldLost"][..],
+        &["--on-refused", "buyin.v1.Hold"][..],
+    ] {
+        let src = empty_dir();
+        let out = scaffold(&src, flag);
+        assert_eq!(out.status.code(), Some(2), "{flag:?}");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains("unexpected argument"), "{stderr}");
+        assert!(
+            std::fs::read_dir(&src).unwrap().next().is_none(),
+            "nothing written"
+        );
+    }
 }
 
 #[test]

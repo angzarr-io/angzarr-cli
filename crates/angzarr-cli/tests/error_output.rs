@@ -15,12 +15,6 @@ const BLACKJACK: &[&str] = &[
     "io/angzarr/examples/v1/policies.proto",
 ];
 
-const BUYIN: &[&str] = &[
-    "buyin/v1/wallet.proto",
-    "buyin/v1/buy_in.proto",
-    "buyin/v1/policies.proto",
-];
-
 const FORMATS: [&str; 2] = ["text", "json"];
 
 fn here() -> PathBuf {
@@ -119,12 +113,6 @@ fn strs(args: &[String]) -> Vec<&str> {
 
 #[test]
 fn a_cli_error_with_a_remedy() {
-    check(
-        "translate-malformed",
-        &strs(&rust(&["--translate", "buyin.v1.Hold"])),
-        BUYIN,
-        &[],
-    );
     let spec = spec();
     check(
         "domain-required",
@@ -153,12 +141,6 @@ fn a_cli_error_without_a_remedy() {
 #[test]
 fn a_build_error_and_the_generators_nested_in_one() {
     check("protoc", &strs(&rust(&[])), &["buyin/v1/absent.proto"], &[]);
-    check(
-        "translate-unknown-policy",
-        &strs(&rust(&["--translate", "x.Y:a.B=c.D"])),
-        BUYIN,
-        &[],
-    );
     check(
         "app-refused",
         &strs(&app(&[
