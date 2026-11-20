@@ -12,32 +12,32 @@ publish = false
 [workspace.dependencies]
 # angzarr-build and angzarr-codegen live in their own repository, pinned by
 # full commit; bumps are deliberate commits.
-angzarr-build = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
-angzarr-codegen = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+angzarr-build = { git = "https://github.com/angzarr-io/angzarr", rev = "71b453a4c0ee43bf9de3659f1a9339c110f6ae59" }
+angzarr-codegen = { git = "https://github.com/angzarr-io/angzarr", rev = "71b453a4c0ee43bf9de3659f1a9339c110f6ae59" }
 angzarr-fmt = { path = "crates/angzarr-fmt" }
 # angzarr core's localizable-error trait, pinned by full commit at the rev
 # angzarr-embedded's crates name; bumps are deliberate commits.
-angzarr-diagnostic = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+angzarr-diagnostic = { git = "https://github.com/angzarr-io/angzarr", rev = "71b453a4c0ee43bf9de3659f1a9339c110f6ae59" }
 # angzarr core's driving-edge presentation (the output formats, the message
 # catalog and the failure's envelope), at the core rev the crates above are:
 # cli-support renders through it, so the lock holds one core.
-angzarr-presentation = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+angzarr-presentation = { git = "https://github.com/angzarr-io/angzarr", rev = "71b453a4c0ee43bf9de3659f1a9339c110f6ae59" }
 # rust-support, shared with ctxloom, taskloom and cherenkov: the CLI's exit
 # codes (the exit-code convention), its failure and the printers of failures
 # and notices, and the argument readers. Pinned by full commit; it is on the
 # angzarr core above.
-cli-support = { git = "https://github.com/benjaminabbitt/rust-support", rev = "ad7f37de79fe31916ce87c605dc2ec1f104d56aa" }
+cli-support = { git = "https://github.com/benjaminabbitt/rust-support", rev = "d543b4e903371d89e87e504d9ebb8ea212330673" }
 # angzarr-embedded is pinned by full commit; bumps are deliberate commits.
-angzarr-embedded-host-config = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
-angzarr-embedded-host = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+angzarr-embedded-host-config = { git = "https://github.com/angzarr-io/angzarr", rev = "71b453a4c0ee43bf9de3659f1a9339c110f6ae59" }
+angzarr-embedded-host = { git = "https://github.com/angzarr-io/angzarr", rev = "71b453a4c0ee43bf9de3659f1a9339c110f6ae59" }
 # angzarr's wire contract, pinned by full commit; bumps are deliberate commits.
-angzarr-proto = { version = "0.1", git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+angzarr-proto = { version = "0.1", git = "https://github.com/angzarr-io/angzarr", rev = "71b453a4c0ee43bf9de3659f1a9339c110f6ae59" }
 # The local-process transport's keys (a child's failures) and their English
 # (decision 14.64), at angzarr-proto's core rev.
-angzarr-proto-transport-embedded = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+angzarr-proto-transport-embedded = { git = "https://github.com/angzarr-io/angzarr", rev = "71b453a4c0ee43bf9de3659f1a9339c110f6ae59" }
 # The tests' scratch directories (angzarr core's one guard, std alone), a
 # dev-dependency only, at the core rev the crates above are.
-angzarr-test-dir = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+angzarr-test-dir = { git = "https://github.com/angzarr-io/angzarr", rev = "71b453a4c0ee43bf9de3659f1a9339c110f6ae59" }
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 # preserve_order keeps a struct's field order in every rendered format.
