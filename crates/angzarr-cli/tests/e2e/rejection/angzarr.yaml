@@ -1,0 +1,10 @@
+# The host config: the player a Python child, the store in memory.
+schema_version: 1
+component:
+  - name: player
+    language: python
+    kind: domain
+    dir: player
+    entry: [angzarr-player]
+store:
+  in_memory: true

@@ -1,0 +1,7 @@
+{
+  "code": "angzarr-fmt-write",
+  "args": {
+    "detail": "No space left on device (os error 28)"
+  },
+  "message": "the output could not be written: No space left on device (os error 28)"
+}

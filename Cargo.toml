@@ -1,0 +1,61 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+authors = ["Benjamin Abbitt"]
+rust-version = "1.96"
+license = "Apache-2.0 OR BSD-3-Clause"
+publish = false
+
+[workspace.dependencies]
+# angzarr-build and angzarr-codegen live in their own repository, pinned by
+# full commit; bumps are deliberate commits.
+angzarr-build = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+angzarr-codegen = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+angzarr-fmt = { path = "crates/angzarr-fmt" }
+# angzarr core's localizable-error trait, pinned by full commit at the rev
+# angzarr-embedded's crates name; bumps are deliberate commits.
+angzarr-diagnostic = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+# angzarr core's driving-edge presentation (the output formats, the message
+# catalog and the failure's envelope), at the core rev the crates above are:
+# cli-support renders through it, so the lock holds one core.
+angzarr-presentation = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+# rust-support, shared with ctxloom, taskloom and cherenkov: the CLI's exit
+# codes (the exit-code convention), its failure and the printers of failures
+# and notices, and the argument readers. Pinned by full commit; it is on the
+# angzarr core above.
+cli-support = { git = "https://github.com/benjaminabbitt/rust-support", rev = "ad7f37de79fe31916ce87c605dc2ec1f104d56aa" }
+# angzarr-embedded is pinned by full commit; bumps are deliberate commits.
+angzarr-embedded-host-config = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+angzarr-embedded-host = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+# angzarr's wire contract, pinned by full commit; bumps are deliberate commits.
+angzarr-proto = { version = "0.1", git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+# The local-process transport's keys (a child's failures) and their English
+# (decision 14.64), at angzarr-proto's core rev.
+angzarr-proto-transport-embedded = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+# The tests' scratch directories (angzarr core's one guard, std alone), a
+# dev-dependency only, at the core rev the crates above are.
+angzarr-test-dir = { git = "https://github.com/angzarr-io/angzarr", rev = "52d48ccf4005da563fcf63c4e7babe66e281e53b" }
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+# preserve_order keeps a struct's field order in every rendered format.
+serde_json = { version = "1", features = ["preserve_order"] }
+
+# Every crate opts in with `[lints] workspace = true`.
+[workspace.lints.clippy]
+# Zero-width and other invisible characters in source: never intended.
+invisible_characters = "deny"
+# A literal in another normalization form than NFC reads the same as its NFC
+# twin and compares unequal.
+unicode_not_nfc = "deny"
+# Non-ASCII in a literal is written as an escape, so what the code holds is
+# visible.
+non_ascii_literal = "deny"
+# Complexity (architecture-fixes G2; taskloom's gate), at clippy's defaults
+# (cognitive complexity 25, 100 lines) except nesting, whose threshold is in
+# clippy.toml. `just lint` denies warnings, and pre-commit runs it.
+cognitive_complexity = "warn"
+too_many_lines = "warn"
+excessive_nesting = "warn"

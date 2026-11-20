@@ -1,0 +1,157 @@
+//! angzarr-fmt and cli-support for clap, the one place they meet. The root
+//! command flattens [`FormatArgs`], resolves the format once, and ends every
+//! command through [`finish`], which writes the result to stdout or the
+//! failure to stderr (cli-support's [`Failure`]) and picks the exit status
+//! (the exit-code convention's).
+
+use std::io::{self, IsTerminal};
+use std::process::ExitCode;
+
+use angzarr_fmt::{FmtError, Viewable};
+use angzarr_presentation::{Catalog, Format};
+use clap::builder::PossibleValue;
+use clap::{Args, ValueEnum};
+use cli_support::{Exit, Failure};
+
+/// The program's name, as a failure's text is prefixed with it.
+pub const PROG: &str = "angzarr";
+
+/// The help text for `--format`.
+const FORMAT_HELP: &str =
+    "Output format: json or text [default: text on a terminal, json otherwise]";
+
+/// A [`Format`] as a clap value, completed and validated against exactly
+/// the formats there are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FormatChoice(pub Format);
+
+const CHOICES: [FormatChoice; 2] = [FormatChoice(Format::Json), FormatChoice(Format::Text)];
+
+impl ValueEnum for FormatChoice {
+    fn value_variants<'a>() -> &'a [Self] {
+        &CHOICES
+    }
+
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        Some(PossibleValue::new(match self.0 {
+            Format::Json => "json",
+            Format::Text => "text",
+        }))
+    }
+}
+
+/// One global `--format` for a command tree. Unset follows the terminal.
+#[derive(Args, Clone, Debug, Default)]
+pub struct FormatArgs {
+    #[arg(long, global = true, value_enum, value_name = "FORMAT", help = FORMAT_HELP)]
+    pub format: Option<FormatChoice>,
+}
+
+impl FormatArgs {
+    /// The format this invocation writes in: the flag when given, text when
+    /// stdout is a terminal, json otherwise.
+    pub fn resolve(&self) -> Format {
+        Format::choose(false, self.format.map(|c| c.0), io::stdout().is_terminal())
+    }
+}
+
+/// Ends a command: the result to stdout in `format`, or the failure to
+/// stderr in `format`, and the exit status the failure names.
+pub fn finish<T: Viewable>(
+    format: Format,
+    catalog: &Catalog,
+    result: Result<T, Failure>,
+) -> ExitCode {
+    finish_shown(format, catalog, result, |_| None)
+}
+
+/// [`finish`] for a command whose result is shown however it went: the
+/// result to stdout; then, when `failed` (the result's own verdict on
+/// itself) names a failure, that failure to stderr and its exit status.
+pub fn finish_shown<T: Viewable>(
+    format: Format,
+    catalog: &Catalog,
+    result: Result<T, Failure>,
+    failed: impl FnOnce(&T) -> Option<Failure>,
+) -> ExitCode {
+    let failure = match result {
+        Ok(value) => match angzarr_fmt::render(&mut io::stdout().lock(), format, &value) {
+            Ok(()) => match failed(&value) {
+                None => return ExitCode::SUCCESS,
+                Some(failure) => failure,
+            },
+            Err(e) => unwritten(e),
+        },
+        Err(f) => f,
+    };
+    say(&failure, format, catalog);
+    failure.exit.process(false)
+}
+
+/// The failure of a result that could not be written.
+fn unwritten(error: FmtError) -> Failure {
+    Failure::new(error, Exit::FAILED)
+}
+
+/// `failure` on stderr in `format`. A failure that cannot be written in the
+/// selected format still reaches the user, as text.
+fn say(failure: &Failure, format: Format, catalog: &Catalog) {
+    let mut stderr = io::stderr().lock();
+    if failure.say(PROG, format, catalog, &mut stderr).is_err() {
+        let _ = failure.say(PROG, Format::Text, catalog, &mut stderr);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::{CommandFactory, Parser};
+
+    #[derive(Parser)]
+    struct Prog {
+        #[command(flatten)]
+        format: FormatArgs,
+        #[command(subcommand)]
+        command: Option<Sub>,
+    }
+
+    #[derive(clap::Subcommand)]
+    enum Sub {
+        Child,
+    }
+
+    #[test]
+    fn format_is_one_global_flag_offering_exactly_the_supported_formats() {
+        let cmd = Prog::command();
+        let arg = cmd
+            .get_arguments()
+            .find(|a| a.get_id() == "format")
+            .unwrap();
+        assert!(arg.is_global_set());
+        let offered: Vec<String> = arg
+            .get_possible_values()
+            .iter()
+            .map(|v| v.get_name().to_string())
+            .collect();
+        assert_eq!(offered, ["json", "text"]);
+    }
+
+    #[test]
+    fn the_flag_is_accepted_after_a_subcommand() {
+        let prog = Prog::try_parse_from(["prog", "child", "--format", "text"]).unwrap();
+        assert_eq!(prog.format.format, Some(FormatChoice(Format::Text)));
+    }
+
+    #[test]
+    fn an_unknown_format_is_refused_by_the_parser() {
+        assert!(Prog::try_parse_from(["prog", "--format", "xml"]).is_err());
+    }
+
+    #[test]
+    fn an_explicit_flag_resolves_regardless_of_the_terminal() {
+        let args = FormatArgs {
+            format: Some(FormatChoice(Format::Text)),
+        };
+        assert_eq!(args.resolve(), Format::Text);
+    }
+}

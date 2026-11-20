@@ -1,0 +1,1 @@
+angzarr: the host config does not read as one: angzarr-host-config document angzarr.yaml: `component`: expected a sequence, found a scalar

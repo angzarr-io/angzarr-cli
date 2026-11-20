@@ -1,0 +1,7 @@
+{
+  "code": "angzarr-cli-expose-malformed",
+  "args": {
+    "value": "table"
+  },
+  "message": "--expose table is not <domain>=loopback or <domain>=ip"
+}

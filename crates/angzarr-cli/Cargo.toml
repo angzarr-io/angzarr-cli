@@ -1,0 +1,42 @@
+[package]
+name = "angzarr-cli"
+version = "0.1.0"
+description = "The angzarr command line."
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "angzarr"
+path = "src/main.rs"
+
+[dependencies]
+angzarr-build.workspace = true
+angzarr-codegen.workspace = true
+angzarr-fmt.workspace = true
+angzarr-diagnostic.workspace = true
+angzarr-presentation.workspace = true
+# `probe`: the host's child conformance probe, and its config's reader
+# (the owner's ruling, 2026-11-01).
+angzarr-embedded-host.workspace = true
+# The spec's en-US catalogs of the framework keys a probe's failures carry:
+# core's, and the local-process transport's (a child's; decision 14.64).
+angzarr-proto.workspace = true
+angzarr-proto-transport-embedded.workspace = true
+cli-support.workspace = true
+clap.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+angzarr-test-dir.workspace = true
+serde_json.workspace = true
+
+# The build writes the catalog's source under the crate's name
+# (angzarr_diagnostic::build): no catalog spells its crate's name.
+[build-dependencies]
+angzarr-diagnostic = { workspace = true, features = ["build"] }
+
+[lints]
+workspace = true

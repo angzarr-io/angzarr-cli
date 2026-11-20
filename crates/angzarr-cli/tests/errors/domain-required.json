@@ -1,0 +1,6 @@
+{
+  "code": "angzarr-cli-domain-required",
+  "args": {},
+  "message": "scaffold python needs --domain",
+  "fix": "name the domain or the component the project serves, e.g. --domain player or --domain policy-table-player"
+}

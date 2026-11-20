@@ -1,0 +1,8 @@
+{
+  "code": "angzarr-cli-language-malformed",
+  "args": {
+    "value": "player"
+  },
+  "message": "--language player is not <name>=<language>",
+  "fix": "write --language as <name>=<language>, the component by its name in the application, e.g. --language player=python or --language policy-table-player=python"
+}
