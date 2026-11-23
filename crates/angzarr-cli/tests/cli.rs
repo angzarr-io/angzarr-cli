@@ -51,3 +51,48 @@ fn help_is_printed_and_succeeds() {
     assert_eq!(out.status.code(), Some(0));
     assert!(String::from_utf8(out.stdout).unwrap().contains("Usage:"));
 }
+
+#[test]
+fn test_a_success_exits_0_without_the_detailed_exitcode_flag() {
+    assert_eq!(angzarr(&["version"]).status.code(), Some(0));
+}
+
+#[test]
+fn test_a_success_exits_16_with_the_detailed_exitcode_flag() {
+    assert_eq!(
+        angzarr(&["version", "--detailed-exitcode"]).status.code(),
+        Some(16)
+    );
+}
+
+#[test]
+fn test_the_detailed_exitcode_flag_is_global_before_the_subcommand_too() {
+    assert_eq!(
+        angzarr(&["--detailed-exitcode", "version"]).status.code(),
+        Some(16)
+    );
+}
+
+#[test]
+fn test_a_refusal_exits_48_with_or_without_the_detailed_exitcode_flag() {
+    for flag in [&[][..], &["--detailed-exitcode"]] {
+        let mut args = vec!["version", "--format", "xml"];
+        args.extend(flag);
+        assert_eq!(angzarr(&args).status.code(), Some(48), "{flag:?}");
+    }
+}
+
+#[test]
+fn test_a_failure_exits_32_with_the_detailed_exitcode_flag() {
+    use std::process::Stdio;
+    let full = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_angzarr"))
+        .args(["version", "--detailed-exitcode"])
+        .stdout(Stdio::from(full))
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(32));
+}

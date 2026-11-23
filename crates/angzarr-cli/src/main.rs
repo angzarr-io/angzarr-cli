@@ -11,8 +11,10 @@ use angzarr_build::{
 use angzarr_codegen::{ANGZARR_BUILD_GIT, ANGZARR_BUILD_REV};
 use angzarr_fmt::Viewable;
 use angzarr_presentation::{Catalog, CatalogError, Format};
-use clap::{Args, Parser, Subcommand, ValueEnum};
-use cli_support::{Exit, ExitClass, Failure, say_notices, usage_exit};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
+use cli_support::{
+    Exit, ExitClass, Failure, detailed_exitcode, detailed_exitcode_arg, say_notices, usage_exit,
+};
 use serde::Serialize;
 
 use angzarr_diagnostic::{Arg, Diagnostic, code};
@@ -599,29 +601,46 @@ fn catalog() -> Result<Catalog, CatalogError> {
 }
 
 fn main() -> ExitCode {
-    let cli = match Cli::try_parse() {
-        Ok(cli) => cli,
+    let matches = match Cli::command()
+        .arg(detailed_exitcode_arg())
+        .try_get_matches()
+    {
+        Ok(matches) => matches,
         Err(e) => {
             let _ = e.print();
             return usage_exit(&e).process(false);
+        }
+    };
+    let detailed = detailed_exitcode(&matches);
+    let cli = match Cli::from_arg_matches(&matches) {
+        Ok(cli) => cli,
+        Err(e) => {
+            let _ = e.print();
+            return usage_exit(&e).process(detailed);
         }
     };
     let catalog = match catalog() {
         Ok(catalog) => catalog,
         Err(e) => {
             eprintln!("{PROG}: {e}");
-            return Exit::FAILED.process(false);
+            return Exit::FAILED.process(detailed);
         }
     };
     let format = cli.format.resolve();
     match cli.command {
-        Command::Version => finish(format, &catalog, Ok(version())),
-        Command::Scaffold(args) => finish(format, &catalog, scaffold(*args)),
+        Command::Version => finish(format, detailed, &catalog, Ok(version())),
+        Command::Scaffold(args) => finish(format, detailed, &catalog, scaffold(*args)),
         Command::Lint(args) => {
             let result = lint(args, format, &catalog);
-            finish(format, &catalog, result)
+            finish(format, detailed, &catalog, result)
         }
-        Command::Probe(args) => finish_shown(format, &catalog, probe::run(*args), probe::verdict),
+        Command::Probe(args) => finish_shown(
+            format,
+            detailed,
+            &catalog,
+            probe::run(*args),
+            probe::verdict,
+        ),
     }
 }
 

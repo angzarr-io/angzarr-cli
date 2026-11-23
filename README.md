@@ -50,6 +50,13 @@ forbids it: a malformed `--expose` or `--language`, a missing `--domain`, a
 usage error of the argument parser, a probe of a component the config does
 not list); 21 `lint app` found lints in the config.
 
+## Exit status
+
+A success exits 0. With the global `--detailed-exitcode` (before or after
+the subcommand) it exits 16; no command has a success that says more than
+ok. A failure exits 32, a refusal (a usage error too) 48, and fatal findings
+49, with or without the flag.
+
 ## Scaffold
 
 Every file a scaffold writes is one of two kinds. The CLI's is regenerated

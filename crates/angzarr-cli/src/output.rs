@@ -56,13 +56,15 @@ impl FormatArgs {
 }
 
 /// Ends a command: the result to stdout in `format`, or the failure to
-/// stderr in `format`, and the exit status the failure names.
+/// stderr in `format`, and the exit status the failure names (a success
+/// exits 0, or 16 when the line asked for `--detailed-exitcode`).
 pub fn finish<T: Viewable>(
     format: Format,
+    detailed: bool,
     catalog: &Catalog,
     result: Result<T, Failure>,
 ) -> ExitCode {
-    finish_shown(format, catalog, result, |_| None)
+    finish_shown(format, detailed, catalog, result, |_| None)
 }
 
 /// [`finish`] for a command whose result is shown however it went: the
@@ -70,6 +72,7 @@ pub fn finish<T: Viewable>(
 /// itself) names a failure, that failure to stderr and its exit status.
 pub fn finish_shown<T: Viewable>(
     format: Format,
+    detailed: bool,
     catalog: &Catalog,
     result: Result<T, Failure>,
     failed: impl FnOnce(&T) -> Option<Failure>,
@@ -77,7 +80,7 @@ pub fn finish_shown<T: Viewable>(
     let failure = match result {
         Ok(value) => match angzarr_fmt::render(&mut io::stdout().lock(), format, &value) {
             Ok(()) => match failed(&value) {
-                None => return ExitCode::SUCCESS,
+                None => return Exit::OK.process(detailed),
                 Some(failure) => failure,
             },
             Err(e) => unwritten(e),
@@ -85,7 +88,7 @@ pub fn finish_shown<T: Viewable>(
         Err(f) => f,
     };
     say(&failure, format, catalog);
-    failure.exit.process(false)
+    failure.exit.process(detailed)
 }
 
 /// The failure of a result that could not be written.
