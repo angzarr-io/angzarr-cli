@@ -11,7 +11,7 @@ use angzarr_fmt::{FmtError, Viewable};
 use angzarr_presentation::{Catalog, Format};
 use clap::builder::PossibleValue;
 use clap::{Args, ValueEnum};
-use cli_support::{Exit, Failure};
+use cli_support::{Exit, ExitStatuses, Failure};
 
 /// The program's name, as a failure's text is prefixed with it.
 pub const PROG: &str = "angzarr";
@@ -57,14 +57,14 @@ impl FormatArgs {
 
 /// Ends a command: the result to stdout in `format`, or the failure to
 /// stderr in `format`, and the exit status the failure names (a success
-/// exits 0, or 16 when the line asked for `--detailed-exitcode`).
+/// exits 0, or 16 under the line's `--detailed-exitcode`, as `statuses` has it).
 pub fn finish<T: Viewable>(
     format: Format,
-    detailed: bool,
+    statuses: ExitStatuses,
     catalog: &Catalog,
     result: Result<T, Failure>,
 ) -> ExitCode {
-    finish_shown(format, detailed, catalog, result, |_| None)
+    finish_shown(format, statuses, catalog, result, |_| None)
 }
 
 /// [`finish`] for a command whose result is shown however it went: the
@@ -72,7 +72,7 @@ pub fn finish<T: Viewable>(
 /// itself) names a failure, that failure to stderr and its exit status.
 pub fn finish_shown<T: Viewable>(
     format: Format,
-    detailed: bool,
+    statuses: ExitStatuses,
     catalog: &Catalog,
     result: Result<T, Failure>,
     failed: impl FnOnce(&T) -> Option<Failure>,
@@ -80,7 +80,7 @@ pub fn finish_shown<T: Viewable>(
     let failure = match result {
         Ok(value) => match angzarr_fmt::render(&mut io::stdout().lock(), format, &value) {
             Ok(()) => match failed(&value) {
-                None => return Exit::OK.process(detailed),
+                None => return statuses.process(Exit::OK),
                 Some(failure) => failure,
             },
             Err(e) => unwritten(e),
@@ -88,7 +88,7 @@ pub fn finish_shown<T: Viewable>(
         Err(f) => f,
     };
     say(&failure, format, catalog);
-    failure.exit.process(detailed)
+    statuses.process(failure.exit)
 }
 
 /// The failure of a result that could not be written.

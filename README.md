@@ -44,11 +44,11 @@ catalog has the message `<code>-fix`), `angzarr: message` and an indented
 `fix:` line in text. Each diagnostic has a stable code and named args
 (angzarr core's `angzarr-diagnostic`), rendered through the en-US Fluent
 catalogs (`angzarr-presentation`). The exit status is the exit-code
-convention's: 0 ok; 10 failed (something broke: a build, a host config that
-does not read, a failed probe step); 20 refused (the line or the state
+convention's: 0 ok; 32 failed (something broke: a build, a host config that
+does not read, a failed probe step); 48 refused (the line or the state
 forbids it: a malformed `--expose` or `--language`, a missing `--domain`, a
 usage error of the argument parser, a probe of a component the config does
-not list); 21 `lint app` found lints in the config.
+not list); 49 fatal findings (`lint app` found lints in the config).
 
 ## Exit status
 

@@ -13,7 +13,8 @@ use angzarr_fmt::Viewable;
 use angzarr_presentation::{Catalog, CatalogError, Format};
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use cli_support::{
-    Exit, ExitClass, Failure, detailed_exitcode, detailed_exitcode_arg, say_notices, usage_exit,
+    Exit, ExitClass, ExitStatuses, Failure, detailed_exitcode_arg, exit_statuses, say_notices,
+    usage_exit,
 };
 use serde::Serialize;
 
@@ -608,35 +609,35 @@ fn main() -> ExitCode {
         Ok(matches) => matches,
         Err(e) => {
             let _ = e.print();
-            return usage_exit(&e).process(false);
+            return ExitStatuses::new(false).process(usage_exit(&e));
         }
     };
-    let detailed = detailed_exitcode(&matches);
+    let statuses = exit_statuses(&matches);
     let cli = match Cli::from_arg_matches(&matches) {
         Ok(cli) => cli,
         Err(e) => {
             let _ = e.print();
-            return usage_exit(&e).process(detailed);
+            return statuses.process(usage_exit(&e));
         }
     };
     let catalog = match catalog() {
         Ok(catalog) => catalog,
         Err(e) => {
             eprintln!("{PROG}: {e}");
-            return Exit::FAILED.process(detailed);
+            return statuses.process(Exit::FAILED);
         }
     };
     let format = cli.format.resolve();
     match cli.command {
-        Command::Version => finish(format, detailed, &catalog, Ok(version())),
-        Command::Scaffold(args) => finish(format, detailed, &catalog, scaffold(*args)),
+        Command::Version => finish(format, statuses, &catalog, Ok(version())),
+        Command::Scaffold(args) => finish(format, statuses, &catalog, scaffold(*args)),
         Command::Lint(args) => {
             let result = lint(args, format, &catalog);
-            finish(format, detailed, &catalog, result)
+            finish(format, statuses, &catalog, result)
         }
         Command::Probe(args) => finish_shown(
             format,
-            detailed,
+            statuses,
             &catalog,
             probe::run(*args),
             probe::verdict,
