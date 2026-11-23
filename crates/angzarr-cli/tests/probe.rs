@@ -108,7 +108,7 @@ fn failed_after(passed: usize) -> Vec<(String, String)> {
 fn a_child_that_cannot_start_fails_the_launch_step() {
     let dir = app(&launched("[/nonexistent/angzarr-player]"));
     let out = probe(&dir, &["player", "--command", "/x.SitDown"]);
-    assert_eq!(out.status.code(), Some(10), "{out:?}");
+    assert_eq!(out.status.code(), Some(32), "{out:?}");
     let report = json(&out);
     assert_eq!(report["component"], "player");
     assert_eq!(report["passed"], false);
@@ -140,7 +140,7 @@ fn a_child_that_never_serves_fails_the_serving_step_under_the_specs_key() {
         launched("[sh, -c, 'cat >/dev/null']")
     ));
     let out = probe(&dir, &["player", "--command", "/x.SitDown"]);
-    assert_eq!(out.status.code(), Some(10), "{out:?}");
+    assert_eq!(out.status.code(), Some(32), "{out:?}");
     let report = json(&out);
     assert_eq!(outcomes(&report), failed_after(1));
     let failure = &report["steps"][1]["failure"];
@@ -159,7 +159,7 @@ fn a_child_that_exits_first_fails_the_serving_step() {
         &dir,
         &["player", "--command", "/x.SitDown", "--format", "text"],
     );
-    assert_eq!(out.status.code(), Some(10), "{out:?}");
+    assert_eq!(out.status.code(), Some(32), "{out:?}");
     let text = String::from_utf8(out.stdout).unwrap();
     let lines: Vec<&str> = text.lines().map(str::trim_end).collect();
     assert_eq!(lines.len(), 8, "{text}");
@@ -200,13 +200,13 @@ fn a_child_that_exits_first_fails_the_serving_step() {
 fn a_component_not_listed_or_given_no_input_is_refused() {
     let dir = app(&launched("[/nonexistent/angzarr-player]"));
     let out = probe(&dir, &["dealer", "--command", "/x.SitDown"]);
-    assert_eq!(out.status.code(), Some(20), "{out:?}");
+    assert_eq!(out.status.code(), Some(48), "{out:?}");
     assert!(out.stdout.is_empty());
     let failure: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
     assert_eq!(failure["code"], code!("probe-not-listed"));
     assert_eq!(failure["args"]["component"], "dealer");
     let out = probe(&dir, &["player"]);
-    assert_eq!(out.status.code(), Some(20), "{out:?}");
+    assert_eq!(out.status.code(), Some(48), "{out:?}");
     let failure: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
     assert_eq!(failure["code"], code!("probe-no-input"));
     assert!(
@@ -223,7 +223,7 @@ fn a_component_not_listed_or_given_no_input_is_refused() {
 fn a_config_that_cannot_be_read_is_refused() {
     let dir = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-probe"));
     let out = probe(&dir, &["player", "--command", "/x.SitDown"]);
-    assert_eq!(out.status.code(), Some(10), "{out:?}");
+    assert_eq!(out.status.code(), Some(32), "{out:?}");
     let failure: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
     let unreadable = HostError::ConfigUnreadable {
         path: String::new(),

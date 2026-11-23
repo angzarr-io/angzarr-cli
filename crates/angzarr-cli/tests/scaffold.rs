@@ -191,7 +191,7 @@ fn scaffold_rust_missing_adds_an_absent_callback_stub() {
 
 /// The refusal callback's fact is chosen in the protos (a refusal message's
 /// `refusal_status`), not on the command line: `--translate` and
-/// `--on-refused` are unknown options, refused by the parser (exit 20, the
+/// `--on-refused` are unknown options, refused by the parser (exit 48, the
 /// convention's refusal, never clap's own 2) before
 /// anything is written.
 #[test]
@@ -202,7 +202,7 @@ fn scaffold_rust_has_no_translate_or_on_refused_option() {
     ] {
         let src = empty_dir();
         let out = scaffold(&src, flag);
-        assert_eq!(out.status.code(), Some(20), "{flag:?}");
+        assert_eq!(out.status.code(), Some(48), "{flag:?}");
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert!(stderr.contains("unexpected argument"), "{stderr}");
         assert!(

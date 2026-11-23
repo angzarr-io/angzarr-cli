@@ -235,10 +235,10 @@ In json the result is `{"component", "passed", "steps": [{"step",
 "outcome", "failure": {"code", "message", "args"}}]}`, `failure` only on
 a failed step. Any failed step fails the command: the result is written to
 stdout, then `angzarr-cli-probe-failed` (the component, the first step that
-failed) to stderr, and the exit status is 10. A config that cannot be read,
+failed) to stderr, and the exit status is 32. A config that cannot be read,
 a component it does not list, a domain or policy given no input, and a
 payload file that cannot be read fail before anything starts (the second and
-third with 20, refused).
+third with 48, refused).
 
 ## Building
 

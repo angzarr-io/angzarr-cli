@@ -41,7 +41,7 @@ fn the_format_flag_works_before_the_subcommand_too() {
 #[test]
 fn an_unknown_format_fails_before_running_anything() {
     let out = angzarr(&["version", "--format", "xml"]);
-    assert_eq!(out.status.code(), Some(20));
+    assert_eq!(out.status.code(), Some(48));
     assert!(out.stdout.is_empty());
 }
 

@@ -53,8 +53,8 @@ fn run(args: &[&str], format: &str, files: &[(&str, &str)], stdout: Stdio) -> Ou
         .unwrap()
 }
 
-/// `out` failed with `exit` (the exit-code convention's: 10 failed, 20
-/// declined, 21 fatal findings), and its stderr is the golden `case.format`.
+/// `out` failed with `exit` (the exit-code convention's: 32 failed, 48
+/// refused, 49 fatal findings), and its stderr is the golden `case.format`.
 fn assert_golden(case: &str, format: &str, exit: i32, out: &Output) {
     assert_eq!(out.status.code(), Some(exit), "{case}.{format}");
     let path = here().join("tests/errors").join(format!("{case}.{format}"));
@@ -119,14 +119,14 @@ fn a_cli_error_with_a_remedy() {
     let spec = spec();
     check(
         "domain-required",
-        20,
+        48,
         &["scaffold", "python", "-I", &spec, "--src", "s"],
         &["io/angzarr/examples/v1/player.proto"],
         &[],
     );
     check(
         "language-malformed",
-        20,
+        48,
         &strs(&app(&["--language", "player"])),
         BLACKJACK,
         &[],
@@ -137,7 +137,7 @@ fn a_cli_error_with_a_remedy() {
 fn a_cli_error_without_a_remedy() {
     check(
         "expose-malformed",
-        20,
+        48,
         &strs(&app(&["--expose", "table"])),
         BLACKJACK,
         &[],
@@ -148,14 +148,14 @@ fn a_cli_error_without_a_remedy() {
 fn a_build_error_and_the_generators_nested_in_one() {
     check(
         "protoc",
-        10,
+        32,
         &strs(&rust(&[])),
         &["buyin/v1/absent.proto"],
         &[],
     );
     check(
         "app-refused",
-        10,
+        32,
         &strs(&app(&[
             "--language",
             "player=python",
@@ -190,7 +190,7 @@ fn lint_warnings_and_the_lints_error() {
     let spec = spec();
     check(
         "lints",
-        21,
+        49,
         &["lint", "app", "-I", &spec],
         BLACKJACK,
         &[("angzarr.yaml", LINTED)],
@@ -202,7 +202,7 @@ fn a_config_that_does_not_read_nests_another_crates_cause() {
     let spec = spec();
     check(
         "app-config",
-        10,
+        32,
         &["lint", "app", "-I", &spec],
         BLACKJACK,
         &[("angzarr.yaml", "schema_version: 1\ncomponent: 7\n")],
@@ -219,6 +219,6 @@ fn an_output_that_cannot_be_written() {
             .open(Path::new("/dev/full"))
             .unwrap();
         let out = run(&["version"], format, &[], Stdio::from(full));
-        assert_golden("fmt-write", format, 10, &out);
+        assert_golden("fmt-write", format, 32, &out);
     }
 }

@@ -26,7 +26,7 @@ angzarr-presentation = { git = "https://github.com/angzarr-io/angzarr", rev = "7
 # codes (the exit-code convention), its failure and the printers of failures
 # and notices, and the argument readers. Pinned by full commit; it is on the
 # angzarr core above.
-cli-support = { git = "https://github.com/benjaminabbitt/rust-support", rev = "d543b4e903371d89e87e504d9ebb8ea212330673" }
+cli-support = { git = "https://github.com/benjaminabbitt/rust-support", rev = "fea46b99ab2b44beeb3d76c05a9f0d4239844451" }
 # angzarr-embedded is pinned by full commit; bumps are deliberate commits.
 angzarr-embedded-host-config = { git = "https://github.com/angzarr-io/angzarr", rev = "71b453a4c0ee43bf9de3659f1a9339c110f6ae59" }
 angzarr-embedded-host = { git = "https://github.com/angzarr-io/angzarr", rev = "71b453a4c0ee43bf9de3659f1a9339c110f6ae59" }

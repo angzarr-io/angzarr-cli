@@ -15,7 +15,7 @@ here: `Failure` (a diagnostic with the `Exit` it ends the command with; an
 error says its own with `ExitClass`), `Failure::say` (the failure on stderr,
 its `fix` where the catalog has `<code>-fix`), `say_notices` (warnings),
 `usage_exit` (the parser's error as an exit) and the exit-code convention
-(`Exit`: 10 failed, 20 declined, 21 fatal findings). Formats and the message
+(`Exit`: 0 for every success, 16-31 under `--detailed-exitcode`; 32 failed, 48 refused, 49 fatal findings). Formats and the message
 catalog are angzarr core's `angzarr-presentation`, on the same core as
 `angzarr-diagnostic`, so the lock holds one. The CLI reads no environment
 and no project directory of its own (`std::env` is touched only by the
